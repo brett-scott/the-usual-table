@@ -1,0 +1,11 @@
+{
+  "name": "@casual/server", "version": "0.2.0", "private": true, "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --ip 127.0.0.1 --port 8787",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "@casual/engine": "*", "@casual/protocol": "*", "zod": "4.6.7" },
+  "devDependencies": { "wrangler": "4.154.0", "@cloudflare/workers-types": "5.20261028.1", "vitest": "4.1.12", "@cloudflare/vitest-plugin": "1.4.9" }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "the-casual-table-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-28",
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "TableRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TableRoom"] }],
+  "vars": { "ALLOWED_ORIGINS": "http://127.0.0.1:5173,http://localhost:5173" },
+  "ratelimits": [{ "name": "ENTRY_LIMITER", "namespace_id": "102801", "simple": { "limit": 120, "period": 60 } }],
+  "observability": { "enabled": false }
+}

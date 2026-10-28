@@ -1,0 +1,32 @@
+{
+  "name": "the-casual-table",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm run dev -w @casual/server",
+    "dev:practice": "npm run dev -w @casual/web",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @casual/server",
+    "lint": "eslint .",
+    "test": "vitest run && npm run test -w @casual/server",
+    "test:e2e": "playwright test",
+    "build": "npm run typecheck && npm run build -w @casual/web && npm run build -w @casual/server",
+    "build:pages": "node scripts/build-pages.mjs",
+    "check:api": "node scripts/check-api.mjs",
+    "deploy:worker": "node scripts/deploy-worker.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.13.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
+  }
+}

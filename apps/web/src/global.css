@@ -1,0 +1,15 @@
+* { box-sizing: border-box; }
+:root { font-family: 'Segoe UI', Arial, sans-serif; color: #eae9dc; background: #101b18; font-synthesis: none; -webkit-font-smoothing: antialiased; }
+body { margin: 0; min-width: 320px; }
+button, input { font: inherit; }
+button, a, input { -webkit-tap-highlight-color: transparent; }
+button { min-height: 44px; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .4; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #ead594; outline-offset: 4px; }
+button { touch-action: manipulation; }
+button, a { transition: background .15s, border-color .15s, transform .15s; }
+button:not(:disabled):hover { filter: brightness(1.12); }
+input { min-height: 48px; min-width: 0; }
+button, input, a { color: inherit; }
+::selection { background: #c6ab6b; color: #102d27; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

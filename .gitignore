@@ -1,0 +1,15 @@
+node_modules/
+.npm-cache/
+dist/
+.env
+.env.local
+.env.*
+!.env.example
+.dev.vars*
+.wrangler/
+test-results/
+playwright-report/
+*.tsbuildinfo
+*.log
+docs/
+BLACKJACK_AGENT_HANDOFF.md
