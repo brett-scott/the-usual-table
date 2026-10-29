@@ -1,5 +1,5 @@
 import { createRoom, expireDecision, GameError, project, transition, type RandomIndex, type RoomState } from '@casual/engine';
-import type { Action, ActionType, Command, Snapshot } from '@casual/protocol';
+import { RESULTS_DURATION_MS, resultsRevealDelay, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
 
 export const RESERVATION_MS = 60_000;
 export const PRESENCE_MS = 30_000;
@@ -13,6 +13,7 @@ export interface OnlineRoom {
   schema: 2; id: string; revision: number; managerId: string; engine: RoomState;
   members: Record<string, Member>; locked: Record<string, 'ready' | 'out'>;
   bettingDeadline: number | null; insuranceDeadline: number | null; lastActivity: number;
+  roundDeadline?: number | null;
   tickets: { hash: string; playerId: string; expires: number; claimId: string; claimVersion: number }[];
   receipts: { id: string; playerId: string; revision: number }[];
   commandRates: Record<string, { start: number; count: number }>;
@@ -27,10 +28,16 @@ export function newRoom(id: string, playerId: string, name: string, hash: string
   const engine = createRoom(name, random, now); engine.players[0]!.id = playerId;
   return { schema: 2, id, revision: 0, managerId: playerId, engine,
     members: { [playerId]: newMember(hash, now) },
-    locked: {}, bettingDeadline: null, insuranceDeadline: null, lastActivity: now, tickets: [], receipts: [], commandRates: {} };
+    locked: {}, bettingDeadline: null, insuranceDeadline: null, roundDeadline: null, lastActivity: now, tickets: [], receipts: [], commandRates: {} };
+}
+export function resultsDeadline(room: OnlineRoom) {
+  return room.engine.phase === 'ROUND_COMPLETE' ? room.roundDeadline === undefined ? room.engine.updatedAt + RESULTS_DURATION_MS : room.roundDeadline : null;
 }
 function core(room: OnlineRoom, playerId: string, action: Action, random: RandomIndex, now: number, handId?: string) {
+  const wasComplete = room.engine.phase === 'ROUND_COMPLETE'; const deadline = resultsDeadline(room);
+  const before = project(room.engine, playerId);
   room.engine = transition(room.engine, { protocol: 1, id: `core-${room.revision}-${room.engine.revision}`, revision: room.engine.revision, roundId: room.engine.roundId, playerId, handId, action }, random, now);
+  room.roundDeadline = room.engine.phase === 'ROUND_COMPLETE' ? wasComplete ? deadline : now + resultsRevealDelay(before, project(room.engine, playerId)) + RESULTS_DURATION_MS : null;
   if (room.engine.phase === 'INSURANCE' && room.insuranceDeadline === null) room.insuranceDeadline = now + 15_000;
   if (room.engine.phase !== 'INSURANCE') room.insuranceDeadline = null;
 }
@@ -71,7 +78,7 @@ export function roomActions(room: OnlineRoom, playerId: string): ActionType[] {
 export function roomSnapshot(room: OnlineRoom, playerId: string): Snapshot {
   assertRule(room.members[playerId], 'SESSION_INVALID', 'Your guest session is no longer valid.');
   const snapshot = project(room.engine, playerId);
-  return { ...snapshot, revision: room.revision, legalActions: roomActions(room, playerId),
+  return { ...snapshot, revision: room.revision, roundDeadline: resultsDeadline(room), legalActions: roomActions(room, playerId),
     room: { inviteId: room.id, managerPlayerId: room.managerId, bettingOpen: room.bettingDeadline !== null, bettingDeadline: room.bettingDeadline, insuranceDeadline: room.insuranceDeadline, claimVersion: room.members[playerId]!.claimVersion },
     players: snapshot.players.map(p => ({ ...p, connected: room.members[p.id]!.connected, reservationDeadline: room.members[p.id]!.reservationDeadline, leavingAfterRound: room.members[p.id]!.leaveAfterRound, ready: room.locked[p.id] === 'ready', sittingOut: room.locked[p.id] === 'out' })) };
 }
@@ -101,13 +108,27 @@ export function applyCommand(previous: OnlineRoom, command: Command, random: Ran
 }
 export function expireRoomDecisions(previous: OnlineRoom, random: RandomIndex, now: number): OnlineRoom {
   const room = structuredClone(previous); let changed = false;
+  const deadline = resultsDeadline(room);
+  if (deadline !== null && now >= deadline) {
+    room.roundDeadline = null;
+    const starter = room.engine.players.find(p => room.members[p.id]?.connected && !room.members[p.id]?.leaveAfterRound);
+    if (starter) { core(room, starter.id, { type: 'NextRound' }, random, now); openBetting(room, now); }
+    changed = true;
+  }
   if (room.bettingDeadline !== null && now >= room.bettingDeadline) { dealLocked(room, random, now); changed = true; }
   if (room.insuranceDeadline !== null && now >= room.insuranceDeadline) {
     for (const p of room.engine.players) if (room.engine.insurance[p.id] && !room.engine.insurance[p.id]!.decided) core(room, p.id, { type: 'InsuranceDecision', amount: 0 }, random, now);
     changed = true;
   }
   const engine = expireDecision(room.engine, now);
-  if (engine !== room.engine) { room.engine = engine; changed = true; }
+  if (engine !== room.engine) {
+    const completed = room.engine.phase !== 'ROUND_COMPLETE' && engine.phase === 'ROUND_COMPLETE';
+    if (completed) {
+      const id = engine.players[0]!.id;
+      room.roundDeadline = now + resultsRevealDelay(project(room.engine, id), project(engine, id)) + RESULTS_DURATION_MS;
+    }
+    room.engine = engine; changed = true;
+  }
   if (!changed) return previous;
   room.revision++; room.lastActivity = now; return room;
 }
@@ -149,7 +170,7 @@ export function collectSeats(room: OnlineRoom, now: number) {
   return changed;
 }
 export function nextAlarm(room: OnlineRoom) {
-  const deadlines: (number | null)[] = [room.bettingDeadline, room.insuranceDeadline, room.engine.decisionDeadline];
+  const deadlines: (number | null)[] = [room.bettingDeadline, room.insuranceDeadline, room.engine.decisionDeadline, resultsDeadline(room)];
   for (const member of Object.values(room.members)) deadlines.push(member.presenceDeadline, member.reservationDeadline);
   if (!Object.values(room.members).some(member => member.connected)) deadlines.push(room.lastActivity + ROOM_IDLE_MS);
   const pending = deadlines.filter((value): value is number => value !== null);

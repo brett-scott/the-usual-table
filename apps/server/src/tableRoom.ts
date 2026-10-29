@@ -1,13 +1,14 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
-import { commandSchema, displayNameSchema, type Command, type ServerEvent } from '@casual/protocol';
+import { CHAT_CAPABILITY, chatCommandSchema, commandSchema, displayNameSchema, type Command, type ServerEvent } from '@casual/protocol';
+import { addChat, restoreChat } from './tableChat';
 import { GameError } from '@casual/engine';
 import { applyCommand, assertRule, collectSeats, disconnectMember, expireRoomDecisions, newMember, newRoom, nextAlarm, PRESENCE_MS, ROOM_IDLE_MS, roomSnapshot, type OnlineRoom } from './roomState';
 import { restoreRoom } from './roomStorage';
 import { errorResponse, hashSecret, originAllowed, randomSecret, readJson, secureRandomIndex } from './security';
 import type { Env } from './env';
 
-interface Attachment { playerId: string; controllerId: string }
+interface Attachment { playerId: string; controllerId: string; chat?: boolean }
 const guestBody = z.object({ name: displayNameSchema }).strict();
 const ticketBody = z.object({ claimId: z.string().uuid(), controllerId: z.string().uuid().optional(), claimVersion: z.number().int().nonnegative() }).strict();
 
@@ -48,13 +49,18 @@ export class TableRoom extends DurableObject<Env> {
       this.send(ws, { type: 'snapshot', snapshot: roomSnapshot(room, attachment.playerId), serverTime: Date.now() });
     }
   }
+  private async chatHistory(ws: WebSocket) {
+    if (!(ws.deserializeAttachment() as Attachment).chat) return;
+    try { this.send(ws, { type: 'chat', messages: restoreChat(await this.ctx.storage.get('chat')).messages }); }
+    catch { this.send(ws, { type: 'error', code: 'CHAT_UNAVAILABLE', message: 'Table chat is unavailable. Your game can continue.' }); }
+  }
   private async catchUp(room: OnlineRoom) {
     const now = Date.now();
     const next = expireRoomDecisions(room, secureRandomIndex, now);
     const changed = collectSeats(next, now);
     if (changed) next.revision++;
     if (!Object.values(next.members).some(m => m.connected) && now >= next.lastActivity + ROOM_IDLE_MS) {
-      await this.ctx.storage.transaction(async storage => { await storage.delete('room'); await storage.deleteAlarm(); });
+      await this.ctx.storage.transaction(async storage => { await storage.delete('room'); await storage.delete('chat'); await storage.deleteAlarm(); });
       for (const ws of this.ctx.getWebSockets()) { this.send(ws, { type: 'error', code: 'ROOM_EXPIRED', message: 'This table has expired. Create a new table.' }); ws.close(4004, 'Table expired'); }
       throw new GameError('ROOM_EXPIRED', 'This table has expired. Create a new table.');
     }
@@ -117,8 +123,9 @@ export class TableRoom extends DurableObject<Env> {
           await this.save(room);
           for (const previous of this.ctx.getWebSockets(playerId)) { this.send(previous, { type: 'replaced', message: 'This seat is now controlled by another tab.' }); previous.close(4001, 'Seat opened in another tab'); }
           const pair = new WebSocketPair(); const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
-          server.serializeAttachment({ playerId, controllerId } satisfies Attachment);
+          server.serializeAttachment({ playerId, controllerId, chat: protocols.includes(CHAT_CAPABILITY) } satisfies Attachment);
           this.ctx.acceptWebSocket(server, [playerId]); this.send(server, { type: 'connected', controllerId, serverTime: Date.now() }); this.broadcast(room);
+          await this.chatHistory(server);
           return new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': 'casual-v1' } });
         }
         const playerId = await this.authenticate(request, room);
@@ -155,7 +162,25 @@ export class TableRoom extends DurableObject<Env> {
           room.members[playerId]!.presenceDeadline = Date.now() + PRESENCE_MS;
           await this.save(room); this.send(ws, { type: 'pong', serverTime: Date.now() }); return;
         }
-        if (message === 'snapshot') { this.send(ws, { type: 'snapshot', snapshot: roomSnapshot(room, playerId), serverTime: Date.now() }); return; }
+        if (message === 'snapshot') { this.send(ws, { type: 'snapshot', snapshot: roomSnapshot(room, playerId), serverTime: Date.now() }); await this.chatHistory(ws); return; }
+        if (typeof message === 'string' && new TextEncoder().encode(message).length <= 8192 && attachment.chat) {
+          let input: unknown; try { input = JSON.parse(message); } catch { /* Game command handling reports malformed JSON below. */ }
+          if (input && typeof input === 'object' && 'type' in input && input.type === 'chat') {
+            if ('id' in input && typeof input.id === 'string' && input.id.length <= 100) commandId = input.id;
+            const parsed = chatCommandSchema.safeParse(input);
+            assertRule(parsed.success, 'INVALID_CHAT', 'Write a message of 1–300 characters.');
+            const chat = restoreChat(await this.ctx.storage.get('chat'));
+            if (addChat(chat, room, playerId, parsed.data.id, parsed.data.text, Date.now())) {
+              room.lastActivity = Date.now();
+              await this.ctx.storage.transaction(async storage => { await storage.put('chat', chat); await storage.put('room', room); });
+              for (const peer of this.ctx.getWebSockets()) {
+                const target = peer.deserializeAttachment() as Attachment;
+                if (target.chat && room.members[target.playerId]?.connected && room.members[target.playerId]?.controllerId === target.controllerId) this.send(peer, { type: 'chat', messages: chat.messages });
+              }
+            } else await this.chatHistory(ws);
+            this.send(ws, { type: 'ack', commandId: parsed.data.id, revision: room.revision }); return;
+          }
+        }
         const rate = room.commandRates[playerId]; const now = Date.now();
         room.commandRates[playerId] = !rate || now - rate.start >= 10_000 ? { start: now, count: 1 } : { start: rate.start, count: rate.count + 1 };
         await this.save(room); // Count rejected/malformed commands as well as accepted ones.

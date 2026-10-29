@@ -14,10 +14,12 @@ Milestone 5 prepares a reproducible release. It does not mean a site or Worker h
 | Deployment configuration | Explicit Pages base/API, rejection of localhost/HTTP/credential-bearing API URLs, separate production Worker identity/limiter, preserved SQLite migration, narrow HTTPS origin list |
 | Built subpath | Production assets, welcome/practice, actual multiplayer invitation hashes, refresh/resume and recovery under `/casual-check/` using local Worker |
 | HTTP rejection | Bounded streamed request bodies are consumed before forwarding; expired invitations and oversized bodies keep their expected JSON errors without an outstanding forwarded request stream |
+| Table chat | Authenticated room-only messages, server-assigned author/seat/time, duplicate suppression, rate and history bounds, hibernation/reload recovery, safe text rendering, offline drafts, unread counts, mobile fit and unchanged game state/timers |
+| Betting and results | Max Bet, two-card 9/10/11 double boundaries, numeric bust totals, distinct ready/waiting seats, one-second dealer pauses, shared results deadlines, host skipping, replay-safe alarms and legacy deadline restoration |
 
-Local verification: 75 engine/presentation/transport/release tests and 41 Cloudflare runtime/storage tests passed. All 49 browser checks passed against the production bundle under `/casual-check/`. Lint, TypeScript, frontend/Worker builds, isolated production Worker dry run and actionlint workflow checks passed. The browser rerun after the request-stream fix emitted no request-stream exceptions.
+Latest local verification includes 86 engine/presentation/transport/release tests and 48 Cloudflare runtime/storage tests (134 total). All 65 browser checks pass against the production bundle at `/casual-check/`, including chat, Max Bet, doubling limits, numeric bust totals, ready/waiting labels, results and mobile fit. The final run used two workers. Lint, TypeScript and frontend/Worker build validation pass. Earlier workflow actionlint and isolated production Worker dry-run checks remain recorded in the release-preparation evidence.
 
-Rules and asset credits are included in the [deployment guide](DEPLOYMENT.md#rules-and-assets); local setup is in the [README](README.md). [DEPLOYMENT.md](DEPLOYMENT.md) covers configuration, order, smoke testing and rollback limits. GitHub-hosted workflow execution and live API/HTTPS smoke testing have not been performed.
+Rules and asset credits are included in the [deployment guide](DEPLOYMENT.md#rules-and-assets); local setup is in the [README](README.md). [DEPLOYMENT.md](DEPLOYMENT.md) covers configuration, order, smoke testing and rollback limits. These local results do not establish hosted CI or live API/HTTPS smoke-test results for the chat release.
 
 ## Before announcing a public release
 
@@ -26,6 +28,7 @@ Rules and asset credits are included in the [deployment guide](DEPLOYMENT.md#rul
 - [ ] Run GitHub-hosted **Checks** successfully on the release commit. Local validation cannot establish runner permissions or repository/environment settings.
 - [ ] Deploy the Worker, verify its actual URL, then deploy Pages. Confirm the health/protocol/CORS gate and record both deployment identities.
 - [ ] Complete the live four-player, refresh, network-loss, replacement-tab and invitation tests in the deployment guide.
+- [ ] Check table chat delivery, room isolation and reload history on the deployed Worker/frontend pair.
 - [ ] Record remaining Milestone 6 limitations explicitly wherever the release is described.
 
 ## Milestone 6 backlog

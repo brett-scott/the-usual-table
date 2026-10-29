@@ -92,7 +92,7 @@ export function legalActions(state: RoomState, playerId: string): ActionType[] {
   if (state.players[state.activePlayer]?.id !== p.id || !hand || hand.status !== 'playing') return [];
   const actions: ActionType[] = ['Hit', 'Stand'];
   if (hand.cards.length === 2 && p.balance >= hand.wager) {
-    actions.push('Double');
+    if ([9, 10, 11].includes(score(hand.cards).total)) actions.push('Double');
     if (p.hands.length < 4 && !hand.splitAces && hand.cards[0]!.rank === hand.cards[1]!.rank) actions.push('Split');
   }
   return actions;
@@ -224,8 +224,13 @@ export function project(state: RoomState, playerId: string): Snapshot {
   requireRule(state.players.some(p => p.id === playerId), 'SESSION_INVALID', 'Unknown player.');
   return {
     protocol: 1, revision: state.revision, roundId: state.roundId, phase: state.phase, you: playerId,
-    players: state.players.map(p => ({ id: p.id, name: p.name, seat: p.seat, balance: p.balance, bet: p.bet,
-      hands: p.hands.map(h => ({ id: h.id, cards: h.cards.map(c => ({ id: c.id, rank: c.rank, suit: c.suit })), total: score(h.cards).total, soft: score(h.cards).soft, wager: h.wager, status: h.status, timedOut: h.timedOut, outcome: h.outcome, returned: h.returned })) })),
+    players: state.players.map(p => {
+      const insurance = state.insurance[p.id];
+      const net = p.hands.reduce((sum, h) => sum + (h.returned ?? 0) - h.wager, 0) + (insurance ? insurance.returned - insurance.wager : 0);
+      return { id: p.id, name: p.name, seat: p.seat, balance: p.balance, bet: p.bet,
+        hands: p.hands.map(h => ({ id: h.id, cards: h.cards.map(c => ({ id: c.id, rank: c.rank, suit: c.suit })), total: score(h.cards).total, soft: score(h.cards).soft, wager: h.wager, status: h.status, timedOut: h.timedOut, outcome: h.outcome, returned: h.returned })),
+        ...(state.phase === 'ROUND_COMPLETE' ? { roundResult: { net, outcome: !p.hands.length ? 'out' as const : net > 0 ? 'won' as const : net < 0 ? 'lost' as const : 'even' as const } } : {}) };
+    }),
     dealer: state.dealer.map((c, i) => i === 1 && !state.revealed ? { hidden: true as const } : { id: c.id, rank: c.rank, suit: c.suit }),
     dealerTotal: state.revealed ? score(state.dealer).total : null,
     activePlayerId: state.phase === 'PLAYER_TURNS' ? state.players[state.activePlayer]!.id : null,

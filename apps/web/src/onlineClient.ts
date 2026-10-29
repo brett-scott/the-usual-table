@@ -1,4 +1,4 @@
-import { serverEventSchema, sessionResponseSchema, snapshotSchema, type Action, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
+import { CHAT_CAPABILITY, chatTextSchema, serverEventSchema, sessionResponseSchema, snapshotSchema, type Action, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || `${location.protocol}//${location.hostname}:8787`).replace(/\/$/, '');
 export class ApiError extends Error {
@@ -45,9 +45,10 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   const { session } = initial;
   try { localStorage.setItem(`casual-room:${session.inviteId}`, JSON.stringify(session)); } catch { /* The live seat still works without persistent browser storage. */ }
   let snapshot = initial.snapshot;
+  let chat: ChatFeed = { messages: [], available: false };
   let connection: ConnectionInfo = { status: 'connecting', message: 'Connecting to your table…' };
   const listeners = new Set<() => void>();
-  const pending = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  const pending = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; chat?: boolean }>();
   const claimId = crypto.randomUUID();
   const claimVersion = initial.snapshot.room?.claimVersion ?? 0;
   let controllerId: string | undefined;
@@ -58,7 +59,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   function notify() { for (const listener of listeners) listener(); }
   function setConnection(status: ConnectionInfo['status'], message: string) { connection = { ...connection, status, message }; notify(); }
   function rejectPending(message: string) {
-    for (const task of pending.values()) { clearTimeout(task.timer); task.reject(new Error(message)); }
+    for (const task of pending.values()) { clearTimeout(task.timer); task.reject(new Error(task.chat ? 'Message delivery is unconfirmed. Check table chat after reconnecting before sending again.' : message)); }
     pending.clear();
   }
   function acceptSnapshot(value: unknown) {
@@ -104,7 +105,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
       if (disposed || terminal || version !== generation) return;
       if (!/^[a-f0-9]{64}$/.test(response.ticket)) { fail('CLIENT_INCOMPATIBLE', 'The table returned an invalid connection response. Refresh to reconnect.'); return; }
       const url = new URL(`${apiBase}/api/v1/rooms/${session.inviteId}/socket`); url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      const current = new WebSocket(url, ['casual-v1', `ticket.${response.ticket}`]); socket = current;
+      const current = new WebSocket(url, ['casual-v1', `ticket.${response.ticket}`, CHAT_CAPABILITY]); socket = current;
       const active = () => !disposed && !terminal && socket === current && version === generation;
       handshakeTimer = setTimeout(() => { if (active()) lost('The connection timed out. Retrying…'); }, 10_000);
       current.onmessage = event => {
@@ -112,6 +113,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
         try {
           const message = serverEventSchema.parse(JSON.parse(String(event.data)));
           lastReceived = Date.now();
+          if (message.type === 'chat') { chat = { messages: message.messages, available: true }; notify(); return; }
           if (message.type === 'connected') { controllerId = message.controllerId; return; }
           if (message.type === 'pong') { connection = { ...connection, clockOffsetMs: message.serverTime - Date.now() }; return; }
           if (message.type === 'snapshot') {
@@ -123,6 +125,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
             const task = pending.get(message.commandId);
             if (task) { clearTimeout(task.timer); pending.delete(message.commandId); task.resolve(); }
           } else if (message.type === 'error') {
+            if (message.code === 'CHAT_UNAVAILABLE') { chat = { ...chat, available: false, problem: message.message }; notify(); }
             if (['SESSION_INVALID', 'SESSION_EXPIRED', 'SESSION_REPLACED', 'ROOM_EXPIRED', 'CLIENT_INCOMPATIBLE', 'ROOM_VERSION_UNSUPPORTED', 'ROOM_STATE_INVALID'].includes(message.code)) { fail(message.code, message.message); return; }
             if (message.snapshot) acceptSnapshot(message.snapshot);
             const task = message.commandId ? pending.get(message.commandId) : undefined;
@@ -153,7 +156,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   window.addEventListener('offline', wentOffline); window.addEventListener('online', wentOnline); window.addEventListener('focus', focused);
   void connect();
   return {
-    getSnapshot: () => snapshot, getConnection: () => connection,
+    getSnapshot: () => snapshot, getConnection: () => connection, getChat: () => chat,
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     send(action: Action) {
       if (disposed || connection.status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return Promise.reject(new Error('Reconnect before playing. Your action was not sent.'));
@@ -164,6 +167,21 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
         pending.set(id, { resolve, reject, timer });
         try { socket!.send(JSON.stringify({ protocol: 1, id, revision: snapshot.revision, roundId: snapshot.roundId, playerId: session.playerId, handId: snapshot.activeHandId ?? undefined, action })); }
         catch { clearTimeout(timer); pending.delete(id); reject(new Error('Your action could not be sent. Please reconnect.')); }
+      });
+    },
+    sendChat(text: string) {
+      const parsed = chatTextSchema.safeParse(text);
+      if (!parsed.success) return Promise.reject(new Error('Write a message of 1–300 characters.'));
+      if (disposed || !chat.available || connection.status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return Promise.reject(new Error('Reconnect to table chat before sending.'));
+      const id = crypto.randomUUID(); const target = socket; const version = generation;
+      return new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id); reject(new Error('Message delivery is unconfirmed. Check chat before sending again.'));
+          if (target === socket && version === generation) lost('Reconnecting to check the table…');
+        }, 10_000);
+        pending.set(id, { resolve, reject, timer, chat: true });
+        try { target.send(JSON.stringify({ type: 'chat', protocol: 1, id, text: parsed.data })); }
+        catch { clearTimeout(timer); pending.delete(id); reject(new Error('Your message could not be sent. Reconnect and try again.')); }
       });
     },
     reconnect() { if (!disposed && !terminal && connection.status !== 'connected') void connect(); },

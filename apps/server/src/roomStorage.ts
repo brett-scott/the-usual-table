@@ -24,11 +24,13 @@ const common = {
   locked: z.record(id, z.enum(['ready', 'out'])), bettingDeadline: time, insuranceDeadline: time, lastActivity: integer,
   receipts: z.array(z.object({ id, playerId: id, revision: integer })).max(128),
   commandRates: z.record(id, z.object({ start: integer, count: integer })),
+  roundDeadline: time.optional(),
 };
 const currentSchema = z.object({ ...common, schema: z.literal(2), members: z.record(id, member), tickets: z.array(z.object({ hash, playerId: id, expires: integer, claimId: id, claimVersion: integer })).max(4) });
 const legacySchema = z.object({ ...common, schema: z.literal(1), members: z.record(id, oldMember), tickets: z.array(z.object({ hash, playerId: id, expires: integer })).max(4) });
 const physicalCards = new Map(createDecks().map(card => [card.id, card]));
 function validateInvariants(room: OnlineRoom) {
+  if (room.roundDeadline != null && room.engine.phase !== 'ROUND_COMPLETE') return false;
   const players = room.engine.players;
   if (new Set(players.map(p => p.id)).size !== players.length || new Set(players.map(p => p.seat)).size !== players.length) return false;
   if (Object.keys(room.members).length !== players.length || players.some(p => !room.members[p.id])) return false;

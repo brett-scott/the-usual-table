@@ -17,7 +17,7 @@ export function useTablePresentation(snapshot: Snapshot) {
     setStored({ timeline, reducedMotion });
   }
   const [now, setNow] = useState(Date.now);
-  const ticking = snapshot.decisionDeadline !== null || (snapshot.room?.bettingDeadline ?? null) !== null || (snapshot.room?.insuranceDeadline ?? null) !== null || snapshot.players.some(p => !p.connected && p.reservationDeadline != null && p.reservationDeadline > now) || now < timeline.endsAt;
+  const ticking = snapshot.decisionDeadline !== null || (snapshot.roundDeadline ?? null) !== null || (snapshot.room?.bettingDeadline ?? null) !== null || (snapshot.room?.insuranceDeadline ?? null) !== null || snapshot.players.some(p => !p.connected && p.reservationDeadline != null && p.reservationDeadline > now) || now < timeline.endsAt;
   useEffect(() => {
     if (!ticking) return;
     const timer = setInterval(() => setNow(Date.now()), 100);

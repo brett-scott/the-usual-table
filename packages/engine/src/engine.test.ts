@@ -127,9 +127,14 @@ describe('double and split', () => {
     expect(p(done).hands[0]!.cards).toHaveLength(3); expect(p(done).balance).toBe(2040);
   });
   it('disallows double after a hit and without enough funds', () => {
-    const state = deal('2', '10', '3', '7', '2'); p(state).balance = 19;
+    const state = deal('4', '10', '5', '7', '2'); p(state).balance = 19;
     expect(legalActions(state, id)).not.toContain('Double'); expect(() => act(state, { type: 'Double' })).toThrow();
     p(state).balance = 100; const hit = act(state, { type: 'Hit' }); expect(legalActions(hit, id)).not.toContain('Double');
+  });
+  it.each([['4', '5', true], ['4', '6', true], ['5', '6', true], ['4', '4', false], ['6', '6', false], ['10', '8', false], ['A', '8', false]] as const)('allows a two-card %s + %s double only on 9, 10 or 11', (first, second, allowed) => {
+    const state = deal(first, '10', second, '7', 'K');
+    expect(legalActions(state, id).includes('Double')).toBe(allowed);
+    if (!allowed) { const before = JSON.stringify(state); expect(() => act(state, { type: 'Double' })).toThrow(); expect(JSON.stringify(state)).toBe(before); }
   });
   it('requires identical ranks rather than any two ten-value cards', () => {
     const state = deal('K', '10', 'Q', '7'); expect(legalActions(state, id)).not.toContain('Split');

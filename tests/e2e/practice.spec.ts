@@ -87,7 +87,7 @@ test('Hit resets the 20-second clock and expiry stands automatically', async ({ 
   await page.getByRole('button', { name: /^Hit/ }).click(); await expect(remaining).toHaveText('20s');
   await page.clock.runFor(19_000); await expect(remaining).toHaveText('1s');
   await page.clock.runFor(1000);
-  await expect(page.getByRole('timer')).toHaveCount(0);
+  await expect(page.getByRole('timer', { name: 'Time remaining for this hand' })).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Time up. Your hand stood automatically.');
   await expect(page.getByRole('button', { name: 'Next round' })).toBeEnabled();
   expect(await page.evaluate(() => document.getAnimations().filter(a => a.id.startsWith('card-')).length)).toBe(0);
@@ -105,7 +105,7 @@ test('each split hand receives its own timer and background recovery respects ex
   await expect(page.getByRole('timer').locator('strong')).toHaveText('20s');
   await page.clock.setSystemTime(new Date(instant.getTime() + 90_000));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect(page.getByRole('timer')).toHaveCount(0);
+  await expect(page.getByRole('timer', { name: 'Time remaining for this hand' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Next round' })).toBeEnabled();
   await expect(page.getByRole('status')).toContainText('Time up.');
 });

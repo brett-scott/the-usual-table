@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:5173**. The Worker runs at **http://127.0.0.1:8787**. Enter a display name and choose **Create a table with friends**, then use **Invite** to share the room link. Invitees enter a name and take one of four seats. The host selects **Open betting**; everyone places a wager and selects **Ready** or **Sit out**. Betting closes after 30 seconds, or early when every eligible seat has decided. The host opens the next round after settlement.
+Open **http://127.0.0.1:5173**. The Worker runs at **http://127.0.0.1:8787**. Enter a display name and choose **Create a table with friends**, then use **Invite** to share the room link. Invitees enter a name and take one of four seats. The host selects **Open betting**; everyone places a wager and selects **Ready** or **Sit out**. Betting closes after 30 seconds, or early when every eligible seat has decided. After the dealer reveal, results stay visible for 10 seconds and betting opens automatically. The host can select Next round to skip the pause.
 
 To try four devices on one computer, use four independent browser profiles/contexts. A second tab in the same profile restores the same guest and replaces its previous controlling connection. Duplicate names are allowed; seat numbers distinguish players. A fifth guest receives a Table full message.
 
@@ -23,9 +23,13 @@ Names and table themes are remembered when browser storage is available. Online 
 
 On phones, the table and actions fit the visible screen in portrait and landscape. Split hands use tabs that follow the playing hand automatically; tap another tab to inspect it. Opponent seats show compact hand totals, and long hands overlap their cards to stay on one row. The layout adjusts to browser bars and safe areas without scrolling the game page.
 
+Shared tables include **Chat** in the header. Messages show the sender's name, seat and local time, with unread counts while chat is closed. The latest 50 messages are saved for guests joining/reconnecting to that table and are removed when the room expires. Messages allow up to 300 characters, with five sends per guest every 10 seconds. Chat is text only and does not change bets, turn order or hand deadlines. The mobile chat panel keeps its message list inside the screen; if your hand is playing, a countdown and **Back to hand** button remain visible. Solo practice has no table chat.
+
 Disconnected seats are reserved for **60 seconds after the server detects the disconnect**. Reconnecting within that time restores the same seat, hand, balance and shoe. Expired seats become available only after their locked wager/current hands have settled. The table host transfers to a connected guest when needed. Offline actions are disabled; uncertain actions are checked through a fresh snapshot rather than replayed. A newer tab takes control of the seat, and older tabs stay displaced.
 
 Cards deal from the shoe and flip face up one at a time. The dealer's hole card stays face down until reveal. Each active hand has a **20-second countdown**; every accepted **Hit resets it to 20 seconds**. Expiry stands the hand automatically, and the next split hand receives a fresh timer. Reduced-motion preferences show cards immediately.
+
+**Max Bet** selects the highest legal base wager your balance supports, up to 100 chips in 10-chip steps. Double is available only on an initial two-card total of **9, 10 or 11**, including eligible split hands. Busted hands keep their numeric total visible. Ready and waiting seats have distinct labels and outlines. Dealer draws pause for one second after each card finishes flipping; results show who won, lost or broke even, including their net chip change. A shared **10-second results countdown** follows the reveal before the next betting window opens. The host can select **Next round** immediately to skip the reveal/pause; solo practice also supports automatic progression and skipping.
 
 ## Commands
 
@@ -53,6 +57,7 @@ Keep ports 5173 and 8787 free before starting `npm run dev`. Optional shell vari
 
 - `apps/web`: React UI, CSS Modules, original SVG cards, practice and online `GameClient` adapters.
 - `apps/server`: Worker routes, hibernating room WebSockets, guest authentication, SQLite-backed state, command receipts and durable alarms.
+- Shared-table chat uses the existing authenticated connection and separate bounded durable history; no additional service or deployment variable is required.
 - `packages/engine`: pure shoe, scoring, transitions, actions and settlement. Randomness/time are injected.
 - `packages/protocol`: versioned public DTOs, Zod commands, and shared adapter interface.
 - `tests/e2e`: round, split/double/hit, insurance, keyboard, and responsive checks.

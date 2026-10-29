@@ -93,3 +93,27 @@ it('an offline event stops actions immediately and resumes only on the current c
   network.onLine = true; browserWindow.dispatchEvent(new Event('online')); await vi.advanceTimersByTimeAsync(0);
   const replacement = FakeSocket.instances.at(-1)!; deliver(replacement, snapshot, 5, controllerTwo); expect(client.getConnection().status).toBe('connected');
 });
+
+it('receives chat without changing game state and acknowledges messages independently', async () => {
+  const { client, socket } = await start(); const before = client.getSnapshot();
+  socket.emit({ type: 'chat', messages: [] });
+  const task = client.sendChat!('  Hello table  ');
+  const command = JSON.parse(socket.sent.at(-1)!) as { id: string; type: string; text: string };
+  expect(command).toMatchObject({ type: 'chat', text: 'Hello table' });
+  socket.emit({ type: 'chat', messages: [{ id: crypto.randomUUID(), playerId: 'practice-player', name: 'Guest', seat: 0, text: 'Hello table', sentAt: Date.now() }] });
+  socket.emit({ type: 'ack', commandId: command.id, revision: before.revision }); await task;
+  expect(client.getSnapshot()).toBe(before); expect(client.getChat!().messages).toHaveLength(1);
+  await expect(client.sendChat!(' ')).rejects.toThrow('1–300');
+  socket.emit({ type: 'error', code: 'CHAT_UNAVAILABLE', message: 'Chat unavailable' });
+  expect(client.getChat!().available).toBe(false); expect(client.getConnection().status).toBe('connected');
+});
+
+it('does not replay unconfirmed chat after reconnect or send from a displaced client', async () => {
+  const { client, socket, snapshot } = await start(); socket.emit({ type: 'chat', messages: [] });
+  const task = client.sendChat!('Only once'); const rejected = expect(task).rejects.toThrow('unconfirmed');
+  socket.close(); await rejected; await vi.advanceTimersByTimeAsync(600);
+  const replacement = FakeSocket.instances.at(-1)!; deliver(replacement, snapshot, 5, controllerTwo);
+  expect(replacement.sent).toEqual([]);
+  replacement.emit({ type: 'replaced', message: 'A newer tab controls this seat.' });
+  await expect(client.sendChat!('No')).rejects.toThrow('Reconnect');
+});

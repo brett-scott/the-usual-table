@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { createDecks, createRoom, project, transition } from '@casual/engine';
-import type { Action, Rank } from '@casual/protocol';
+import { resultsRevealDelay, type Action, type Rank } from '@casual/protocol';
 import { DEAL_MS, FLIP_MS, dealerKey, planCards, playerCardKey } from './cardTimeline';
 
 const rng = (max: number) => max - 1;
@@ -30,7 +30,23 @@ it('reveals the existing hole card before dealing additional dealer cards', () =
   const hole = next.cues[dealerKey(1, 1)]!; const extra = next.cues[dealerKey(1, 2)]!;
   expect(hole.dealAt).toBe(first.cues[dealerKey(1, 1)]!.dealAt);
   expect(hole.revealAt).toBe(4000); expect(extra.dealAt).toBeGreaterThanOrEqual(hole.readyAt);
+  expect(extra.dealAt - hole.readyAt).toBe(1000);
   expect(extra.readyAt).toBe(extra.revealAt! + FLIP_MS);
+});
+it('clears pending dealer animation when the host skips to betting', () => {
+  const game = setup(['10', '6', '8', '10', '5']);
+  const first = planCards(null, game.send({ type: 'Ready' }), 1000, false);
+  const done = planCards(first, game.send({ type: 'Stand' }), 4000, false);
+  expect(done.endsAt).toBeGreaterThan(4000);
+  const betting = planCards(done, game.send({ type: 'NextRound' }), 4100, false);
+  expect(betting.endsAt).toBe(0); expect(betting.cues).toEqual({});
+});
+it('waits a full second after each additional dealer flip and budgets the same reveal window as the server', () => {
+  const game = setup(['10', '2', '8', '2', '2', '2', '2', '2', '2', '3']);
+  const dealt = game.send({ type: 'Ready' }); const first = planCards(null, dealt, 1000, false);
+  const done = game.send({ type: 'Stand' }); const timeline = planCards(first, done, 4000, false);
+  for (let index = 2; index < done.dealer.length; index++) expect(timeline.cues[dealerKey(1, index)]!.dealAt - timeline.cues[dealerKey(1, index - 1)]!.readyAt).toBe(1000);
+  expect(timeline.endsAt - 4000).toBe(resultsRevealDelay(dealt, done));
 });
 it('does not replay existing cards when hitting, splitting or switching themes', () => {
   const game = setup(['8', '10', '8', '7', '3', '2', '2']);

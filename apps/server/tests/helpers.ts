@@ -18,11 +18,11 @@ export async function create(name = 'Alex') { const response = await http('', un
 export async function join(invite: string, name = 'Alex') { const response = await http(`/${invite}/join`, undefined, { name }); expect(response.status).toBe(201); return response.json<SessionResponse>(); }
 export async function snapshot(session: GuestSession) { const response = await http(`/${session.inviteId}/snapshot`, session, undefined, 'GET'); expect(response.status).toBe(200); return (await response.json<{ snapshot: Snapshot }>()).snapshot; }
 export interface Peer { ws: WebSocket; events: ServerEvent[]; session: GuestSession; claimId: string; last(): Promise<Snapshot>; send(action: Command['action'], overrides?: Partial<Command>): Promise<ServerEvent> }
-export async function connect(session: GuestSession, claim: { claimId: string; controllerId?: string } = { claimId: crypto.randomUUID() }): Promise<Peer> {
+export async function connect(session: GuestSession, claim: { claimId: string; controllerId?: string } = { claimId: crypto.randomUUID() }, chat = false): Promise<Peer> {
   const claimVersion = await inspect(session.inviteId, room => room.members[session.playerId]!.claimVersion);
   const ticketResponse = await http(`/${session.inviteId}/ticket`, session, { ...claim, claimVersion }); expect(ticketResponse.status).toBe(200);
   const { ticket } = await ticketResponse.json<{ ticket: string }>();
-  const response = await SELF.fetch(`https://example.test/api/v1/rooms/${session.inviteId}/socket`, { headers: { Origin: origin, Upgrade: 'websocket', 'Sec-WebSocket-Protocol': `casual-v1, ticket.${ticket}` } });
+  const response = await SELF.fetch(`https://example.test/api/v1/rooms/${session.inviteId}/socket`, { headers: { Origin: origin, Upgrade: 'websocket', 'Sec-WebSocket-Protocol': `casual-v1, ticket.${ticket}${chat ? ', casual-chat-v1' : ''}` } });
   expect(response.status).toBe(101); const ws = response.webSocket!; ws.accept();
   const events: ServerEvent[] = []; ws.addEventListener('message', event => { events.push(JSON.parse(String(event.data)) as ServerEvent); });
   return { ws, events, session, claimId: claim.claimId, last: () => snapshot(session),
