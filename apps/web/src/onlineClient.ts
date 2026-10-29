@@ -1,4 +1,4 @@
-import { CHAT_CAPABILITY, chatTextSchema, serverEventSchema, sessionResponseSchema, snapshotSchema, type Action, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
+import { CHAT_CAPABILITY, chatTextSchema, serverEventSchema, sessionResponseSchema, snapshotSchema, type PlayerIcon, type Action, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || `${location.protocol}//${location.hostname}:8787`).replace(/\/$/, '');
 export class ApiError extends Error {
@@ -28,8 +28,8 @@ function parseSession(value: unknown) {
   if (!result.success) throw new ApiError('CLIENT_INCOMPATIBLE', 'This app version cannot read the table response. Refresh and try again.');
   return result.data;
 }
-export async function createGuest(name: string) { return parseSession(await request('', { body: { name } })); }
-export async function joinGuest(invite: string, name: string) { return parseSession(await request(`/${invite}/join`, { body: { name } })); }
+export async function createGuest(name: string, icon?: PlayerIcon) { return parseSession(await request('', { body: { name, icon } })); }
+export async function joinGuest(invite: string, name: string, icon?: PlayerIcon) { return parseSession(await request(`/${invite}/join`, { body: { name, icon } })); }
 export async function resumeGuest(session: GuestSession, signal?: AbortSignal): Promise<SessionResponse> {
   const response = await request(`/${session.inviteId}/resume`, { session, signal }) as { snapshot: unknown };
   const parsed = snapshotSchema.safeParse(response.snapshot);
@@ -118,9 +118,12 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
             // Count arrivals before notifying React: consecutive history/live frames
             // may be rendered together, but must not erase unread messages.
             const known = new Set(chat.messages.map(entry => entry.id));
-            const fresh = hasChatHistory ? message.messages.filter(entry => entry.playerId !== session.playerId && !known.has(entry.id)).length : 0;
+            const arrivals = hasChatHistory ? message.messages.filter(entry => !known.has(entry.id)) : [];
+            const fresh = arrivals.filter(entry => entry.playerId !== session.playerId).length;
             hasChatHistory = true;
-            chat = { messages: message.messages, available: true, unread: Math.min(50, chat.unread + fresh) };
+            const now = Date.now(); const serverNow = now + (connection.clockOffsetMs ?? 0);
+            const liveMessages = [...(chat.liveMessages ?? []).filter(entry => entry.receivedAt + 5000 > now), ...arrivals.filter(entry => entry.sentAt >= serverNow - 5000).map(message => ({ message, receivedAt: now }))].slice(-20);
+            chat = { messages: message.messages, available: true, unread: Math.min(50, chat.unread + fresh), liveMessages };
             notify(); return;
           }
           if (message.type === 'connected') { controllerId = message.controllerId; return; }

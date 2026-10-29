@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
-import { CHAT_CAPABILITY, chatCommandSchema, commandSchema, displayNameSchema, type Command, type ServerEvent } from '@casual/protocol';
+import { CHAT_CAPABILITY, chatCommandSchema, commandSchema, displayNameSchema, playerIconSchema, type Command, type ServerEvent } from '@casual/protocol';
 import { addChat, restoreChat } from './tableChat';
 import { GameError } from '@casual/engine';
 import { applyCommand, assertRule, collectSeats, disconnectMember, expireRoomDecisions, newMember, newRoom, nextAlarm, PRESENCE_MS, ROOM_IDLE_MS, roomSnapshot, type OnlineRoom } from './roomState';
@@ -9,7 +9,7 @@ import { errorResponse, hashSecret, originAllowed, randomSecret, readJson, secur
 import type { Env } from './env';
 
 interface Attachment { playerId: string; controllerId: string; chat?: boolean }
-const guestBody = z.object({ name: displayNameSchema }).strict();
+const guestBody = z.object({ name: displayNameSchema, icon: playerIconSchema.optional() }).strict();
 const ticketBody = z.object({ claimId: z.string().uuid(), controllerId: z.string().uuid().optional(), claimVersion: z.number().int().nonnegative() }).strict();
 
 export class TableRoom extends DurableObject<Env> {
@@ -89,7 +89,7 @@ export class TableRoom extends DurableObject<Env> {
           assertRule(!(await this.ctx.storage.get('room')), 'INVALID_REQUEST', 'This table already exists.');
           const body = guestBody.safeParse(await readJson(request)); assertRule(body.success, 'INVALID_NAME', 'Enter a display name of 1–24 characters.');
           const credential = randomSecret(); const playerId = crypto.randomUUID(); const inviteId = request.headers.get('X-Room-Id')!;
-          const room = newRoom(inviteId, playerId, body.data.name, await hashSecret(credential), secureRandomIndex, Date.now());
+          const room = newRoom(inviteId, playerId, body.data.name, await hashSecret(credential), secureRandomIndex, Date.now(), body.data.icon);
           await this.save(room);
           return Response.json({ session: { inviteId, playerId, credential }, snapshot: roomSnapshot(room, playerId) }, { status: 201 });
         }
@@ -100,7 +100,7 @@ export class TableRoom extends DurableObject<Env> {
           const credential = randomSecret(); const playerId = crypto.randomUUID();
           const seat = [0, 1, 2, 3].find(index => !room.engine.players.some(p => p.seat === index))!;
           const activePlayerId = room.engine.players[room.engine.activePlayer]?.id;
-          room.engine.players.push({ id: playerId, name: body.data.name, seat, balance: 2000, bet: room.engine.phase === 'BETTING' ? 20 : 0, hands: [] });
+          room.engine.players.push({ id: playerId, name: body.data.name, ...(body.data.icon ? { icon: body.data.icon } : {}), seat, balance: 2000, bet: room.engine.phase === 'BETTING' ? 20 : 0, hands: [] });
           room.engine.players.sort((a, b) => a.seat - b.seat);
           if (activePlayerId) room.engine.activePlayer = room.engine.players.findIndex(p => p.id === activePlayerId);
           room.members[playerId] = newMember(await hashSecret(credential), Date.now());

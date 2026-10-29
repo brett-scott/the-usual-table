@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const PROTOCOL_VERSION = 1;
 export const RESULTS_DURATION_MS = 10_000;
-export const DEALER_REVEAL_STEP_MS = 1_000;
+export const DEALER_REVEAL_STEP_MS = 500;
 export const CARD_DEAL_MS = 280;
 export const CARD_FLIP_MS = 320;
 export const INITIAL_CARD_STEP_MS = 360;
@@ -13,8 +13,20 @@ export const chatTextSchema = z.string().trim().min(1, 'Write a message first.')
 export const chatCommandSchema = z.object({ type: z.literal('chat'), protocol: z.literal(1), id: z.string().uuid(), text: chatTextSchema }).strict();
 export const chatMessageSchema = z.object({ id: z.string().uuid(), playerId: z.string().min(1).max(100), name: z.string().min(1).max(24), seat: z.number().int().min(0).max(3), text: chatTextSchema, sentAt: z.number().int().nonnegative().safe() });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
-export interface ChatFeed { messages: ChatMessage[]; available: boolean; unread: number; problem?: string }
+export interface ChatFeed { messages: ChatMessage[]; available: boolean; unread: number; problem?: string; liveMessages?: { message: ChatMessage; receivedAt: number }[] }
 export const displayNameSchema = z.string().trim().min(1, 'Enter your name.').max(24, 'Use at most 24 characters.');
+export const PLAYER_ICONS = [
+  { emoji: '😎', label: 'Sunglasses' }, { emoji: '🦊', label: 'Fox' },
+  { emoji: '🐱', label: 'Cat' }, { emoji: '🐶', label: 'Dog' },
+  { emoji: '🐼', label: 'Panda' }, { emoji: '🐸', label: 'Frog' },
+  { emoji: '🦁', label: 'Lion' }, { emoji: '🦉', label: 'Owl' },
+  { emoji: '🦄', label: 'Unicorn' }, { emoji: '🐙', label: 'Octopus' },
+  { emoji: '🤖', label: 'Robot' }, { emoji: '👽', label: 'Alien' },
+  { emoji: '🎩', label: 'Top hat' }, { emoji: '🍀', label: 'Clover' },
+  { emoji: '🔥', label: 'Fire' }, { emoji: '⭐', label: 'Star' },
+] as const;
+export const playerIconSchema = z.enum(PLAYER_ICONS.map(icon => icon.emoji), { error: 'Choose an available player icon.' });
+export type PlayerIcon = z.infer<typeof playerIconSchema>;
 const amount = z.number().int().nonnegative();
 const actions = z.discriminatedUnion('type', [
   z.object({ type: z.literal('PlaceBet'), amount }),
@@ -48,7 +60,7 @@ export interface PublicHand {
   id: string; cards: Card[]; total: number; soft: boolean; wager: number;
   status: 'playing' | 'stood' | 'bust'; timedOut?: boolean; outcome?: Outcome; returned?: number;
 }
-export interface PublicPlayer { id: string; name: string; seat: number; balance: number; bet: number; hands: PublicHand[]; connected?: boolean; ready?: boolean; sittingOut?: boolean; reservationDeadline?: number | null; leavingAfterRound?: boolean; roundResult?: { net: number; outcome: 'won' | 'lost' | 'even' | 'out' } }
+export interface PublicPlayer { id: string; name: string; icon?: PlayerIcon; seat: number; balance: number; bet: number; hands: PublicHand[]; connected?: boolean; ready?: boolean; sittingOut?: boolean; reservationDeadline?: number | null; leavingAfterRound?: boolean; roundResult?: { net: number; outcome: 'won' | 'lost' | 'even' | 'out' } }
 export interface RoomInfo { inviteId: string; managerPlayerId: string; bettingOpen: boolean; bettingDeadline: number | null; insuranceDeadline: number | null; claimVersion?: number }
 /** All monetary fields use integer half-chip units: 20 = 10 displayed chips. */
 export interface Snapshot {
@@ -102,7 +114,7 @@ const handSchema = z.object({ id: z.string(), cards: z.array(cardSchema), total:
 export const snapshotSchema = z.object({
   protocol: z.literal(1), revision: amount, roundId: amount, phase: z.enum(['BETTING', 'INSURANCE', 'PLAYER_TURNS', 'ROUND_COMPLETE']), you: z.string(),
   room: z.object({ inviteId: z.string(), managerPlayerId: z.string(), bettingOpen: z.boolean(), bettingDeadline: z.number().nullable(), insuranceDeadline: z.number().nullable(), claimVersion: amount.optional() }).optional(),
-  players: z.array(z.object({ id: z.string(), name: z.string(), seat: z.number().int(), balance: amount, bet: amount, hands: z.array(handSchema), connected: z.boolean().optional(), ready: z.boolean().optional(), sittingOut: z.boolean().optional(), reservationDeadline: z.number().nullable().optional(), leavingAfterRound: z.boolean().optional(), roundResult: z.object({ net: z.number().int(), outcome: z.enum(['won', 'lost', 'even', 'out']) }).optional() })).max(4),
+  players: z.array(z.object({ id: z.string(), name: z.string(), icon: playerIconSchema.optional(), seat: z.number().int(), balance: amount, bet: amount, hands: z.array(handSchema), connected: z.boolean().optional(), ready: z.boolean().optional(), sittingOut: z.boolean().optional(), reservationDeadline: z.number().nullable().optional(), leavingAfterRound: z.boolean().optional(), roundResult: z.object({ net: z.number().int(), outcome: z.enum(['won', 'lost', 'even', 'out']) }).optional() })).max(4),
   dealer: z.array(z.union([cardSchema, z.object({ hidden: z.literal(true) })])), dealerTotal: z.number().nullable(),
   activePlayerId: z.string().nullable(), activeHandId: z.string().nullable(), decisionDeadline: z.number().nullable(), legalActions: z.array(z.enum(['PlaceBet', 'Ready', 'Hit', 'Stand', 'Double', 'Split', 'InsuranceDecision', 'NextRound', 'Refill', 'StartBetting', 'SitOut', 'Leave'])),
   roundDeadline: z.number().nullable().optional(),

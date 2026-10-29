@@ -1,7 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectOneScreen } from './fixtures';
 
-async function chat(page: Page) { await page.getByRole('button', { name: /^Table chat/ }).click(); return page.getByRole('dialog', { name: 'Table chat', exact: true }); }
+async function chat(page: Page) {
+  const sidebar = page.getByRole('region', { name: 'Table chat', exact: true });
+  if (await sidebar.isVisible()) return sidebar;
+  await page.getByRole('button', { name: /^Table chat/ }).click(); return page.getByRole('dialog', { name: 'Table chat', exact: true });
+}
 
 test('table chat shares safe text, stays private to the room, survives reload and leaves the mobile game on screen', async ({ page, browser }, testInfo) => {
   const context = await browser.newContext({ viewport: page.viewportSize()!, reducedMotion: 'reduce' }); const peer = await context.newPage();
@@ -12,15 +16,17 @@ test('table chat shares safe text, stays private to the room, survives reload an
     await peer.goto(page.url()); await peer.getByLabel('What should we call you?').fill('Alex'); await peer.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     // The table renders from HTTP before its socket/history handshake completes.
-    await expect(peer.getByRole('button', { name: /^Table chat/ })).toHaveAttribute('data-chat-ready', 'true');
+    await expect(peer.locator('[data-chat-ready]')).toHaveAttribute('data-chat-ready', 'true');
     const sender = await chat(page);
     await sender.getByRole('textbox').fill('Hello <img src=x onerror="window.chatInjected=true">');
     await sender.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(sender.getByRole('textbox')).toHaveValue('');
-    await expect(peer.getByRole('button', { name: 'Table chat, 1 unread message' })).toBeVisible();
-    // Hidden-panel scroll restoration must not mark an unread message as read.
-    await peer.locator('[role="log"][aria-label="Table messages"]').dispatchEvent('scroll');
-    await expect(peer.getByRole('button', { name: 'Table chat, 1 unread message' })).toBeVisible();
+    if (testInfo.project.name !== 'desktop') {
+      await expect(peer.getByRole('button', { name: 'Table chat, 1 unread message' })).toBeVisible();
+      // Hidden-panel scroll restoration must not mark an unread message as read.
+      await peer.locator('[role="log"][aria-label="Table messages"]').dispatchEvent('scroll');
+      await expect(peer.getByRole('button', { name: 'Table chat, 1 unread message' })).toBeVisible();
+    }
     const receiver = await chat(peer);
     await expect(receiver.getByRole('log')).toContainText('Hello <img src=x onerror="window.chatInjected=true">');
     expect(await peer.evaluate(() => 'chatInjected' in window)).toBe(false); await expect(receiver.locator('img')).toHaveCount(0);
@@ -39,7 +45,13 @@ test('table chat shares safe text, stays private to the room, survives reload an
       }).toBeLessThanOrEqual(Math.min(450, viewport.height));
       await page.setViewportSize(viewport);
     }
-    await sender.getByRole('button', { name: 'Close table chat' }).click(); await expect(page.getByRole('button', { name: 'Table chat', exact: true })).toBeFocused();
+    if (testInfo.project.name !== 'desktop') {
+      await sender.getByRole('button', { name: 'Close table chat' }).click(); await expect(page.getByRole('button', { name: 'Table chat', exact: true })).toBeFocused();
+    } else {
+      const table = await page.getByRole('region', { name: 'Blackjack table' }).boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(table!.x + table!.width);
+      await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
+    }
     if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
     await peer.reload(); await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     const restored = await chat(peer); await expect(restored.getByRole('log').locator('article')).toHaveCount(2);
@@ -47,6 +59,7 @@ test('table chat shares safe text, stays private to the room, survives reload an
     await restored.getByRole('textbox').fill('Keep my draft'); await expect(restored.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
     await context.setOffline(false); await expect(peer.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
     await expect(restored.getByRole('textbox')).toHaveValue('Keep my draft'); await expect(restored.getByRole('log').locator('article')).toHaveCount(2);
-    await peer.keyboard.press('Escape'); await expect(restored).not.toBeVisible();
+    await peer.keyboard.press('Escape');
+    if (testInfo.project.name === 'desktop') await expect(restored).toBeVisible(); else await expect(restored).not.toBeVisible();
   } finally { await context.close(); }
 });

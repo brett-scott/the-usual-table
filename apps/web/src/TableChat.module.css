@@ -24,6 +24,9 @@
 .notice, .error { flex-shrink: 0; margin: 0; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .notice { color: var(--muted); }
 .error { color: #ffb5a8; }
+.sidebar { position: fixed; right: max(16px, calc((100vw - 1500px) / 2 + 16px)); top: 116px; bottom: 20px; width: 300px; padding: 16px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); z-index: 2; }
+.sidebar .send { min-height: 44px; padding: 8px 14px; background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.sidebar .newMessages { flex: 0 0 auto; min-width: 44px; padding: 8px; color: var(--accent); }
 @media (max-width: 640px), (max-height: 500px) {
   .panel { padding: 12px; width: calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right))); height: min(580px, calc(var(--chat-view-height, 100dvh) - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)))); max-height: calc(var(--chat-view-height, 100dvh) - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom))); }
   .panel[open] { gap: 8px; }

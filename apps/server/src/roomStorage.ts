@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createDecks, GameError } from '@casual/engine';
+import { playerIconSchema } from '@casual/protocol';
 import { newMember, PRESENCE_MS, type OnlineRoom } from './roomState';
 
 const integer = z.number().int().nonnegative().safe();
@@ -10,7 +11,7 @@ const card = z.object({ id, rank: z.enum(['A', '2', '3', '4', '5', '6', '7', '8'
 const hand = z.object({ id, cards: z.array(card).max(22), wager: integer, naturalEligible: z.boolean(), splitAces: z.boolean(), status: z.enum(['playing', 'stood', 'bust']), timedOut: z.boolean().optional(), outcome: z.enum(['blackjack', 'win', 'push', 'loss']).optional(), returned: integer.optional() });
 const engine = z.object({
   schema: z.literal(1), revision: integer, roundId: integer, phase: z.enum(['BETTING', 'INSURANCE', 'PLAYER_TURNS', 'ROUND_COMPLETE']),
-  players: z.array(z.object({ id, name: z.string().min(1).max(24), seat: integer.max(3), balance: integer, bet: integer.max(200), hands: z.array(hand).max(4) })).max(4),
+  players: z.array(z.object({ id, name: z.string().min(1).max(24), icon: playerIconSchema.optional(), seat: integer.max(3), balance: integer, bet: integer.max(200), hands: z.array(hand).max(4) })).max(4),
   dealer: z.array(card).max(22), revealed: z.boolean(), activePlayer: integer.max(3), activeHand: integer.max(3), decisionDeadline: time,
   insurance: z.record(id, z.object({ wager: integer, decided: z.boolean(), returned: integer })),
   shoe: z.object({ cards: z.array(card).length(312), cursor: integer.max(312), number: integer.min(1) }),

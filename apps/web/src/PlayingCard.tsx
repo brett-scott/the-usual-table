@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { useContext, useLayoutEffect, useRef, type RefObject } from 'react';
+import { CardAppearance } from './cardAppearance';
 import type { VisibleCard } from '@casual/protocol';
 import { DEAL_MS, FLIP_MS, type CardCue } from './cardTimeline';
 import s from './App.module.css';
@@ -10,6 +11,7 @@ export function PlayingCard({ card, cue, shoeRef, reducedMotion = false }: {
   const travel = useRef<HTMLDivElement>(null);
   const flipper = useRef<HTMLDivElement>(null);
   const hidden = 'hidden' in card;
+  const { face, back } = useContext(CardAppearance);
   const dealAt = cue?.dealAt;
   const revealAt = cue?.revealAt;
   useLayoutEffect(() => {
@@ -33,15 +35,20 @@ export function PlayingCard({ card, cue, shoeRef, reducedMotion = false }: {
     ], { id: 'card-flip', duration: FLIP_MS, delay: revealAt - Date.now(), easing: 'ease-in-out', fill: 'both' });
     return () => animation.cancel();
   }, [hidden, revealAt, reducedMotion]);
-  return <div className={s.card} role="img" aria-label={hidden ? 'Face-down dealer card' : `${card.rank} of ${card.suit}`} data-deal-at={dealAt} data-reveal-at={revealAt ?? undefined}>
+  return <div className={s.card} role="img" aria-label={hidden ? 'Face-down dealer card' : `${card.rank} of ${card.suit}`} data-face={face} data-back={back} data-deal-at={dealAt} data-reveal-at={revealAt ?? undefined}>
     <div ref={travel} className={s.cardTravel}>
       <div ref={flipper} className={s.cardFlipper} style={{ transform: hidden ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
-        <div className={s.cardBack} aria-hidden="true"><span>♣</span></div>
+        <div className={`${s.cardBack} ${back === 'geometric' ? s.geometricBack : ''}`} aria-hidden="true"><span>{back === 'geometric' ? '◇' : '♣'}</span></div>
         {!hidden && <svg className={`${s.cardFace} ${card.suit === 'hearts' || card.suit === 'diamonds' ? s.red : ''}`} viewBox="0 0 76 106" aria-hidden="true">
           <rect x=".5" y=".5" width="75" height="105" rx="6" fill="var(--card-paper)" stroke="#d8d2c3" />
-          <text x="9" y="21" fontSize="18" fontWeight="700">{card.rank}</text><text x="9" y="36" fontSize="15">{suits[card.suit]}</text>
-          <text x="38" y="66" textAnchor="middle" fontSize="36">{suits[card.suit]}</text>
-          <g transform="rotate(180 38 53)"><text x="9" y="21" fontSize="18" fontWeight="700">{card.rank}</text><text x="9" y="36" fontSize="15">{suits[card.suit]}</text></g>
+          {face === 'large-index' ? <>
+            <text x="6" y="32" fontSize={card.rank === '10' ? 30 : 34} fontWeight="800" fontFamily="Arial, sans-serif">{card.rank}</text><text x="9" y="55" fontSize="25">{suits[card.suit]}</text>
+            <g transform="rotate(180 38 53)"><text x="6" y="32" fontSize={card.rank === '10' ? 30 : 34} fontWeight="800" fontFamily="Arial, sans-serif">{card.rank}</text><text x="9" y="55" fontSize="25">{suits[card.suit]}</text></g>
+          </> : <>
+            <text x="9" y="21" fontSize="18" fontWeight="700">{card.rank}</text><text x="9" y="36" fontSize="15">{suits[card.suit]}</text>
+            <text x="38" y="66" textAnchor="middle" fontSize="36">{suits[card.suit]}</text>
+            <g transform="rotate(180 38 53)"><text x="9" y="21" fontSize="18" fontWeight="700">{card.rank}</text><text x="9" y="36" fontSize="15">{suits[card.suit]}</text></g>
+          </>}
         </svg>}
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 The frontend is a static GitHub Pages site. Multiplayer runs separately on a Cloudflare Worker with one SQLite-backed Durable Object per room. GitHub Pages cannot run that server. Local development needs neither cloud credentials nor a production deployment.
 
-The remaining appearance selectors, accessibility audit and Safari/device validation are **Milestone 6**. They do not block the Milestone 5 release-preparation work, but remain explicit release limitations. See the [README](README.md) and [release checks](RELEASE_CHECKLIST.md).
+Card appearance selectors are implemented. The remaining accessibility audit and Safari/device validation are **Milestone 6**. They do not block the Milestone 5 release-preparation work, but remain explicit release limitations. See the [README](README.md) and [release checks](RELEASE_CHECKLIST.md).
 
 ## Workflows
 
@@ -78,7 +78,10 @@ To validate production Worker configuration offline, set the documented Worker v
 
 - Open the actual Pages URL: title, scripts, styles and card assets load with no 404s. Enter practice, finish a round, and refresh under the repository path.
 - Create an online room; open its copied `#/room/…` invitation in independent browser profiles/devices. Play with four guests; confirm a fifth is rejected and duplicate names remain distinct seats.
+- Choose different optional emoji Player icons when creating/joining. Verify every guest sees the correct seat icons on desktop and phone, reload restores them, and skipping the picker uses the player's initial.
 - Open **Chat**, exchange messages, check unread counts while closed, then reload a guest and confirm the recent messages return. Check a different table sees none of those messages. On a phone, close chat and confirm the game still fits on one screen; while your hand is active, chat should show its remaining time and a return button.
+- On a wide desktop, check chat stays beside the table and game controls remain usable while chatting. A new message should produce a bounded five-second preview above its sender; old history must not generate bubbles after reload. Check full 300-character messages remain in chat despite the 80-character/three-line table preview.
+- Change card face/back independently during a live hand and reload to verify saved choices. Another guest must retain their own appearance. Check chip stacks match actual wagers and settlements, animate placement/collection/payout, and honor reduced motion. Dealer pauses are now 500ms, with the server using the same reveal allowance before the results window.
 - Open betting, lock wagers, play and settle; all clients agree on cards and balances. Hit resets the 20-second timer, expiry stands once, and the dealer hole card stays private until reveal.
 - Check Max Bet uses available funds and the 100-chip cap, Double is restricted to initial totals of 9–11, bust totals stay visible, and Ready/waiting seats are distinct. Results should show each guest's outcome/net chips, then automatically open betting after a shared 10-second window. Check the host can skip it immediately without a late alarm resetting the next wager window.
 - Reload a participating guest and test temporary network loss/recovery without extra seats, wagers or a new shoe. Open a second controlling tab and confirm the first stays displaced.
@@ -86,6 +89,8 @@ To validate production Worker configuration offline, set the documented Worker v
 - Check CORS for the actual frontend origin and confirm an unrelated origin cannot open a WebSocket. Never copy guest credentials, socket tickets or private room state into screenshots, logs or issue reports.
 
 ## Rollback and state limits
+
+Player icons add an optional validated `icon` field to guest create/join requests and public/stored players. Existing guests without an icon keep their initial; no storage migration, binding or configuration variable is added. Deploy the Worker before Pages: older Workers reject the new icon request field. Older frontends can continue using the updated Worker. Rolling back to an older Worker can discard icon metadata when it rewrites room storage.
 
 Chat is an additive feature on protocol 1: new clients offer the `casual-chat-v1` capability on their authenticated socket. The Worker sends chat events only to clients that offer that capability, so older clients can continue playing during rollout. Deploy the Worker first, then the frontend. Older backends can still serve the game to the new frontend, but chat remains unavailable until the backend is updated. No new variables, bindings or Durable Object migration are needed. Chat history has its own bounded storage key/schema and is deleted with the expired room; it is not part of the game-state schema or a backup system.
 
@@ -103,7 +108,7 @@ The game uses six physical 52-card decks and half-chip integer accounting. Deale
 
 Only identical ranks split, up to four hands; split aces get one additional card and cannot resplit. Split 21 is an ordinary win. Double only on an initial two-card total of 9, 10 or 11, including after a split; it requires an equal extra wager and receives exactly one card. Each active hand gets 20 seconds; every accepted Hit resets it. Expiry stands automatically. The same shoe persists across rounds and reshuffles only before a deal at the cut/safety-reserve boundary. Disconnected guests get a 60-second reservation; committed hands settle before seat reuse.
 
-Card faces in `apps/web/src/PlayingCard.tsx` are original inline SVG. Card backs, chips, felt texture and brand mark use original CSS/Unicode. System fonts are Georgia, Segoe UI, Arial and generic fallbacks. No downloaded art, generated raster image, third-party font or asset hotlink is bundled; no additional artwork/font licence is required. Dependency licences remain with their packages.
+Classic/large-index card faces in `apps/web/src/PlayingCard.tsx` and denomination chips in `apps/web/src/WagerChips.tsx` are original inline SVG. Traditional/geometric card backs, felt texture and brand mark use original CSS/Unicode. System fonts are Georgia, Segoe UI, Arial and generic fallbacks. No downloaded art, generated raster image, third-party font or asset hotlink is bundled; no additional artwork/font licence is required. Dependency licences remain with their packages.
 
 ## Provider references
 

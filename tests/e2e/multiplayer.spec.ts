@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@casual/protocol';
 import { expectOneScreen } from './fixtures';
 
-test('four guests share a real round; a fifth is rejected and reload resumes the same seat', async ({ browser, page, baseURL }, testInfo) => {
+test('four guests share icons and a real round; a fifth is rejected and reload resumes the same seat', async ({ browser, page, baseURL }, testInfo) => {
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const contexts = await Promise.all(Array.from({ length: 4 }, () => browser.newContext({ viewport: page.viewportSize()!, reducedMotion: 'reduce' })));
@@ -29,14 +29,18 @@ test('four guests share a real round; a fifth is rejected and reload resumes the
   }
   try {
     await page.goto(baseURL!); await page.getByLabel('What should we call you?').fill('Alex');
+    await page.getByLabel('Player icon', { exact: false }).selectOption('🦊');
     await page.getByRole('button', { name: 'Create a table with friends' }).click();
     await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     const invite = page.url(); expect(invite).toMatch(/#\/room\/[a-f0-9]{32}$/);
     for (let i = 1; i < 4; i++) {
       const peer = pages[i]!; await peer.goto(invite); await peer.getByLabel('What should we call you?').fill(i === 1 ? 'Alex' : `Guest ${i + 1}`);
+      if (i < 3) await peer.getByLabel('Player icon', { exact: false }).selectOption(i === 1 ? '🤖' : '🍀');
       await peer.getByRole('button', { name: 'Join table', exact: true }).click(); await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     }
     await synced();
+    expect(latest.get(page)!.players.map(player => player.icon)).toEqual(['🦊', '🤖', '🍀', undefined]);
+    for (const peer of pages) for (const name of ['Fox', 'Robot', 'Clover']) await expect(peer.getByRole('img', { name: `${name} player icon`, exact: true })).toBeVisible();
     if (testInfo.project.name === 'iphone16') for (const peer of pages) await peer.locator('[data-connection]').evaluate(el => {
       (el as HTMLElement).style.setProperty('--safe-top', '47px'); (el as HTMLElement).style.setProperty('--safe-bottom', '34px');
     });
@@ -66,7 +70,7 @@ test('four guests share a real round; a fifth is rejected and reload resumes the
     }
     const final = latest.get(page)!; expect(final.phase).toBe('ROUND_COMPLETE');
     for (const peer of pages) {
-      await expect(peer.getByRole('status')).toContainText('chips');
+      await expect(peer.getByRole('region', { name: 'Game controls' }).getByRole('status')).toContainText('chips');
       expect(latest.get(peer)!.players).toEqual(final.players); expect(latest.get(peer)!.dealer).toEqual(final.dealer);
       expect(latest.get(peer)!.shoe).toEqual(final.shoe);
       expect(frames.get(peer)!.join('\n')).not.toContain('credential'); expect(frames.get(peer)!.join('\n')).not.toContain('cursor');
@@ -77,11 +81,12 @@ test('four guests share a real round; a fifth is rejected and reload resumes the
     await page.reload(); await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible(); await synced(final.revision + 1);
     expect(latest.get(page)!.you).toBe(identities[0]); expect(latest.get(page)!.players).toHaveLength(4);
     expect(latest.get(page)!.shoe).toEqual(final.shoe);
+    await expect(page.getByRole('region', { name: 'Your seat' }).getByRole('img', { name: 'Fox player icon' })).toBeVisible();
     const replacement = await page.context().newPage();
     try {
       await replacement.goto(invite);
       await expect(replacement.getByRole('heading', { name: 'The shared table' })).toBeVisible();
-      await expect(page.getByRole('status')).toContainText('another tab');
+      await expect(page.getByRole('region', { name: 'Game controls' }).getByRole('status')).toContainText('another tab');
       await page.evaluate(() => { window.dispatchEvent(new Event('online')); window.dispatchEvent(new Event('focus')); });
       await expect(page.locator('[data-connection]')).toHaveAttribute('data-connection', 'replaced');
       await expect(replacement.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');

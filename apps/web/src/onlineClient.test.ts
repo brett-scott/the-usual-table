@@ -146,3 +146,12 @@ it('counts messages missed during reconnect once and ignores the old connection'
   replacement.emit({ type: 'chat', messages: [old, missed] }); expect(client.getChat!().unread).toBe(1);
   expect(client.getChat!().messages).toEqual([old, missed]);
 });
+it('offers only new recent arrivals for table bubbles, without replaying initial history or duplicate frames', async () => {
+  const { client, socket } = await start();
+  const old = { id: crypto.randomUUID(), playerId: 'other', name: 'Guest', seat: 1, text: 'History', sentAt: Date.now() };
+  socket.emit({ type: 'chat', messages: [old] }); expect(client.getChat!().liveMessages).toEqual([]);
+  const fresh = { ...old, id: crypto.randomUUID(), text: 'Live' }; const stale = { ...old, id: crypto.randomUUID(), text: 'Missed ages ago', sentAt: Date.now() - 60_000 };
+  socket.emit({ type: 'chat', messages: [old, fresh, stale] }); expect(client.getChat!().liveMessages?.map(entry => entry.message.text)).toEqual(['Live']);
+  socket.emit({ type: 'chat', messages: [old, fresh, stale] }); expect(client.getChat!().liveMessages).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(5001); socket.emit({ type: 'chat', messages: [old, fresh, stale] }); expect(client.getChat!().liveMessages).toEqual([]);
+});

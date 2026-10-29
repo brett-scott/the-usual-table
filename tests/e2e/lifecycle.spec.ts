@@ -30,7 +30,7 @@ test('offline and reload restore the same committed hand, balance, shoe and time
   const before = await current(page);
   await context.setOffline(true);
   await expect(table(page)).toHaveAttribute('data-connection', 'offline');
-  await expect(page.getByRole('status')).toContainText('offline');
+  await expect(page.getByRole('region', { name: 'Game controls' }).getByRole('status')).toContainText('offline');
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('offline-reservation.png'), fullPage: true });
   const stand = page.getByRole('button', { name: 'Stand', exact: true }); if (await stand.isVisible()) await expect(stand).toBeDisabled();

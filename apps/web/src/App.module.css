@@ -65,6 +65,16 @@
 .seatStatus[data-state='waiting'] { color: #f1cf9b; }
 .seatStatus[data-state='lost'], .roundOutcome[data-state='lost'] { color: #ffc2b5; }
 .roundOutcome { font-size: 10px; color: var(--accent); }
+.seat { position: relative; }
+.chatBubble { position: absolute; left: 50%; top: 2px; transform: translate(-50%, -100%); width: max-content; max-width: min(180px, calc(100% - 8px)); padding: 8px 10px; border: 1px solid var(--accent); border-radius: 12px 12px 12px 3px; background: var(--panel); color: var(--text); box-shadow: 0 4px 14px #0005; font-size: 12px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; z-index: 4; pointer-events: none; text-align: left; }
+.chatBubble > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.geometricBack { background: conic-gradient(from 45deg, #477b99 25%, #1d354d 0 50%, #355f71 0 75%, #142c40 0) 0 0 / 18px 18px; }
+.geometricBack span { border-radius: 4px; border-color: #d0e5ef; color: #e3f1f6; background: #193347cc; }
+.cardStyles label { display: block; font-size: 13px; color: var(--accent); margin: 16px 0 7px; }
+.cardStyles select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 16px; background: var(--bg); color: var(--text); }
+.cardStyles .dialogHeading h2 { margin: 0; font-size: 25px; }
+.stylePreview { display: flex; gap: 20px; justify-content: center; padding: 8px 0; }
+.stylePreview .card { width: 76px; height: 106px; margin: 0; transform: none; }
 .handTabs, .opponentSummary { display: none; }
 .hand { min-width: 0; padding: 5px 4px 4px; border: 1px solid transparent; border-radius: 7px; }
 .hands:has(> :nth-child(2)) .hand { flex: 1 1 100px; }
@@ -132,6 +142,11 @@
 .nameForm { display: flex; flex-direction: column; text-align: left; gap: 10px; margin: 28px auto 15px; width: min(100%, 330px); }
 .nameForm label { font-size: 12px; }
 .nameForm input { background: #15261e; border: 1px solid #495c4b; border-radius: 6px; padding: 12px 14px; color: #f0efe2; font-size: 16px; }
+.iconPicker { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.iconPicker label { flex-shrink: 0; }
+.iconPicker small { color: #c0c9bb; font-size: 10px; }
+.iconPicker select { width: 155px; min-width: 0; min-height: 44px; padding: 8px; color: #f0efe2; background: #15261e; border: 1px solid #495c4b; border-radius: 6px; font-size: 16px; }
+.avatar[data-emoji='true'] { font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif; font-size: 20px; line-height: 1; }
 .nameForm .primary { margin-top: 2px; }
 .nameForm > p { color: #ffb5a8; font-size: 12px; margin: 0; }
 .secondary { background: transparent; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; padding: 12px 15px; }
@@ -218,8 +233,9 @@
   .emptySeat > span:last-child { margin-top: 2px; font-size: 7px; }
   .otherSeat { min-height: 0; padding: 4px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
   .otherSeat .avatar, .otherSeat .hands, .otherSeat > .smallNote:not(:last-child) { display: none; }
+  .otherSeat .avatar[data-emoji='true'] { display: grid; width: 18px; height: 20px; font-size: 16px; border: none; }
   .otherSeat .playerHead { min-width: 0; width: 100%; margin: 0; }
-  .otherSeat .playerHead > div { width: 100%; min-width: 0; }
+  .otherSeat .playerHead > div { flex: 1; min-width: 0; }
   .otherSeat .playerHead strong { position: relative; padding-right: 24px; font-size: 10px; text-align: left; }
   .otherSeat .playerHead small { position: absolute; right: 0; top: 2px; margin: 0; font-size: 6px; }
   .otherSeat .playerHead div > span { font-size: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -337,6 +353,25 @@
   .ownSeat .playerHead .seatStatus:not([data-state='playing']):not([data-state='offline']) { display: block; font-size: 8px; }
   .ownSeat { --hand-overhead: 94px; }
   .ownSeat:has(.handTabs) { --hand-overhead: 144px; }
+}
+@media (min-width: 1200px) and (min-height: 600px) {
+  .app[data-online='true'] .main { padding-right: 336px; }
+  .app[data-online='true'] .header .practiceBadge { display: none; }
+}
+@media (max-width: 640px), (max-width: 1024px) and (max-height: 500px) {
+  .ownSeat { --hand-overhead: 92px; }
+  .ownSeat:has(.handTabs) { --hand-overhead: 142px; }
+  .opponentSummary [data-chip-amount], .opponentSummary [data-chip-amount] > span { padding: 0; background: transparent; border-radius: 0; flex: 0 0 auto; }
+  .opponentSummary > .seatStatus { padding: 2px 0; font-size: 9px; }
+  .chatBubble { max-width: min(170px, calc(100% - 6px)); padding: 6px 7px; font-size: 10px; line-height: 1.25; }
+  .stylePreview .card { width: 57px; height: 80px; }
+}
+@media (min-width: 641px) and (max-width: 1024px) and (max-height: 500px) {
+  .ownSeat { --hand-overhead: 102px; }
+  .ownSeat:has(.handTabs) { --hand-overhead: 152px; }
+  .cardStyles .stylePreview { float: right; width: 35%; padding-top: 25px; }
+  .cardStyles label, .cardStyles select { width: 60%; }
+  .cardStyles p { margin-block: 5px; font-size: 11px; }
 }
 @media (max-width: 640px) and (max-height: 500px) {
   .welcome { padding: 8px 16px; }

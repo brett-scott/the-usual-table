@@ -1,5 +1,5 @@
 import { createRoom, expireDecision, GameError, project, transition, type RandomIndex } from '@casual/engine';
-import { RESULTS_DURATION_MS, resultsRevealDelay, type GameClient, type Snapshot } from '@casual/protocol';
+import { RESULTS_DURATION_MS, resultsRevealDelay, type PlayerIcon, type GameClient, type Snapshot } from '@casual/protocol';
 
 /** Rejection sampling avoids modulo bias. The same function can live on the Worker. */
 export const secureRandomIndex: RandomIndex = max => {
@@ -10,9 +10,9 @@ export const secureRandomIndex: RandomIndex = max => {
 };
 
 /** Local only: private state lives in this adapter, never in React state or the public DTO. */
-export function createPracticeClient(name: string): GameClient {
+export function createPracticeClient(name: string, icon?: PlayerIcon): GameClient {
   const id = 'practice-player';
-  let state = createRoom(name, secureRandomIndex, Date.now());
+  let state = createRoom(name, secureRandomIndex, Date.now(), icon);
   let snapshot: Snapshot = project(state, id);
   const listeners = new Set<() => void>();
   let disposed = false;

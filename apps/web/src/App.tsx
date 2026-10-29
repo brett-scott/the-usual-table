@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type RefObject } from 'react';
-import { displayNameSchema, type Action, type GameClient, type PublicHand, type PublicPlayer, type VisibleCard } from '@casual/protocol';
+import { displayNameSchema, PLAYER_ICONS, playerIconSchema, type PlayerIcon, type Action, type GameClient, type PublicHand, type PublicPlayer, type VisibleCard } from '@casual/protocol';
 import { createPracticeClient } from './practiceClient';
 import { ApiError, createGuest, createOnlineClient, joinGuest, resumeGuest, savedSession } from './onlineClient';
 import { PlayingCard } from './PlayingCard';
@@ -7,6 +7,11 @@ import { dealerKey, playerCardKey, type CardTimeline } from './cardTimeline';
 import { useTablePresentation } from './useTablePresentation';
 import { useCompactLayout } from './useCompactLayout';
 import { TableChat } from './TableChat';
+import { CardAppearance, savedAppearance } from './cardAppearance';
+import { CardStylePicker } from './CardStylePicker';
+import { ChatBubble } from './ChatBubble';
+import { WagerChips } from './WagerChips';
+import { PlayerAvatar } from './PlayerAvatar';
 import s from './App.module.css';
 
 const money = (units: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(units / 2);
@@ -30,7 +35,7 @@ function Hand({ hand, active, deadline, presentation, shoeRef, selected = true }
   const seconds = Math.min(20, Math.max(0, Math.ceil(((deadline ?? 0) - now) / 1000)));
   return <div id={`hand-${hand.id}`} data-selected={selected} className={`${s.hand} ${active ? s.activeHand : ''}`} aria-label={`Hand total ${hand.total}${active ? ', active hand' : ''}`}>
     <Cards cards={hand.cards} timeline={timeline} shoeRef={shoeRef} reducedMotion={reducedMotion} />
-    <div className={s.handInfo}><span className={s.total}>{ready ? <>{hand.soft && hand.total <= 21 ? 'Soft ' : ''}{hand.total > 21 ? `${hand.total} · Bust` : hand.total}</> : 'Dealing…'}</span><span>{money(hand.wager)} chips</span>{hand.outcome && !presenting && <strong>{hand.outcome === 'blackjack' ? 'Blackjack!' : hand.outcome === 'win' ? 'Win' : hand.outcome === 'push' ? 'Push' : 'Lost'}</strong>}{hand.timedOut && <span className={s.turnLabel}>Time up · stood</span>}{active && <span className={s.turnLabel}>▶ Playing</span>}</div>
+    <div className={s.handInfo}><span className={s.total}>{ready ? <>{hand.soft && hand.total <= 21 ? 'Soft ' : ''}{hand.total > 21 ? `${hand.total} · Bust` : hand.total}</> : 'Dealing…'}</span><WagerChips amount={hand.wager} returned={hand.returned} settled={!!hand.outcome && !presenting} reducedMotion={presentation.reducedMotion} /><span>{money(hand.wager)} chips</span>{hand.outcome && !presenting && <strong>{hand.outcome === 'blackjack' ? 'Blackjack!' : hand.outcome === 'win' ? 'Win' : hand.outcome === 'push' ? 'Push' : 'Lost'}</strong>}{hand.timedOut && <span className={s.turnLabel}>Time up · stood</span>}{active && <span className={s.turnLabel}>▶ Playing</span>}</div>
     {active && deadline !== null && <div className={`${s.countdown} ${seconds <= 5 ? s.countdownUrgent : ''}`} role="timer" aria-label="Time remaining for this hand" aria-live="off"><div><strong>{seconds}s</strong><span>Hit resets to 20s</span></div><progress max={20_000} value={Math.max(0, Math.min(20_000, deadline - now))} aria-label="Hand time remaining" /></div>}
   </div>;
 }
@@ -40,6 +45,7 @@ export function App() {
   const [invite, setInvite] = useState(invitation);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(() => readLocal('casual-name'));
+  const [icon, setIcon] = useState<PlayerIcon | ''>(() => playerIconSchema.safeParse(readLocal('casual-player-icon')).data ?? '');
   const [error, setError] = useState('');
   const [entryErrorCode, setEntryErrorCode] = useState('');
   function showEntryError(e: unknown) {
@@ -60,12 +66,12 @@ export function App() {
   async function enter(event: FormEvent) {
     event.preventDefault(); const result = displayNameSchema.safeParse(name);
     if (!result.success) { setError(result.error.issues[0]!.message); return; }
-    writeLocal('casual-name', result.data); setError(''); setEntryErrorCode('');
+    writeLocal('casual-name', result.data); writeLocal('casual-player-icon', icon); setError(''); setEntryErrorCode('');
     const mode = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('value') ?? (invite ? 'join' : 'practice');
-    if (mode === 'practice') { history.replaceState(null, '', `${location.pathname}${location.search}#`); setInvite(''); setClient(createPracticeClient(result.data)); return; }
+    if (mode === 'practice') { history.replaceState(null, '', `${location.pathname}${location.search}#`); setInvite(''); setClient(createPracticeClient(result.data, icon || undefined)); return; }
     setBusy(true);
     try {
-      const response = mode === 'join' ? await joinGuest(invite, result.data) : await createGuest(result.data);
+      const response = mode === 'join' ? await joinGuest(invite, result.data, icon || undefined) : await createGuest(result.data, icon || undefined);
       history.replaceState(null, '', `${location.pathname}${location.search}#/room/${response.session.inviteId}`);
       setInvite(response.session.inviteId); setClient(createOnlineClient(response));
     } catch (e) { showEntryError(e); }
@@ -85,6 +91,7 @@ export function App() {
       <form onSubmit={enter} className={s.nameForm}>
         <label htmlFor="guest-name">What should we call you?</label>
         <input id="guest-name" autoComplete="nickname" maxLength={24} value={name} onChange={e => setName(e.target.value)} placeholder="Your display name" aria-describedby={error ? 'name-error' : undefined} required disabled={busy} />
+        <div className={s.iconPicker}><label htmlFor="player-icon">Player icon <small>(optional)</small></label><select id="player-icon" value={icon} onChange={event => setIcon(event.target.value as PlayerIcon | '')} disabled={busy}><option value="">Use my initial</option>{PLAYER_ICONS.map(choice => <option key={choice.emoji} value={choice.emoji}>{choice.emoji} {choice.label}</option>)}</select></div>
         {error && (entryErrorCode ? <div id="name-error" className={s.entryProblem} role="alert" data-error-code={entryErrorCode}><h2>{entryErrorCode === 'TABLE_FULL' ? 'Table full' : entryErrorCode === 'ROOM_EXPIRED' ? 'Table expired' : ['SESSION_INVALID', 'SESSION_EXPIRED'].includes(entryErrorCode) ? 'Seat unavailable' : entryErrorCode === 'OFFLINE' ? 'Connection unavailable' : 'Couldn’t open this table'}</h2><p>{error}</p><span>You can create a new table below.</span></div> : <p id="name-error" role="alert">{error}</p>)}
         {invite ? <button className={s.primary} type="submit" value="join" disabled={busy}>{busy ? 'Connecting…' : 'Join table'} <span aria-hidden="true">↗</span></button> : <button className={s.primary} type="submit" value="practice" disabled={busy}>Take a practice seat <span>↗</span></button>}
         <button className={s.secondary} type="submit" value="online" disabled={busy}>{busy ? 'Connecting…' : 'Create a table with friends'}</button>
@@ -118,6 +125,7 @@ function Table({ client, onLeave }: { client: GameClient; onLeave: (forgetCreden
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const [theme, setTheme] = useState(() => readLocal('casual-theme') === 'midnight' ? 'midnight' : 'classic');
+  const [appearance, setAppearance] = useState(savedAppearance);
   const rulesRef = useRef<HTMLDialogElement>(null);
   const rulesButton = useRef<HTMLButtonElement>(null);
   const viewingOtherHand = compact && ownTurn && selectedHand !== ownActive;
@@ -162,7 +170,7 @@ function Table({ client, onLeave }: { client: GameClient; onLeave: (forgetCreden
   const dealerReady = state.dealer.every((_, i) => (timeline.cues[dealerKey(state.roundId, i)]?.readyAt ?? 0) <= now);
   const phaseDeadline = state.roundDeadline ?? state.room?.bettingDeadline ?? state.room?.insuranceDeadline;
   const phaseSeconds = phaseDeadline ? Math.min(complete ? 10 : Infinity, Math.max(0, Math.ceil((phaseDeadline - (connection.clockOffsetMs ?? 0) - now) / 1000))) : null;
-  return <div className={s.app} data-theme={theme} data-revision={state.revision} data-connection={connection.status}>
+  return <CardAppearance.Provider value={appearance}><div className={s.app} data-theme={theme} data-card-face={appearance.face} data-card-back={appearance.back} data-online={!!state.room} data-revision={state.revision} data-connection={connection.status}>
     <header className={s.header}>
       <a href="#" className={s.brand} aria-label="The Casual Table"><span className={s.brandMark}>♣</span><span>The Casual Table<small>A LITTLE BLACKJACK. A LITTLE DOWNTIME.</small></span></a>
       <div className={s.headerActions}>
@@ -170,6 +178,7 @@ function Table({ client, onLeave }: { client: GameClient; onLeave: (forgetCreden
         {state.room && <TableChat client={client} ownTurn={ownTurn} seconds={localDeadline === null ? null : Math.max(0, Math.ceil((localDeadline - now) / 1000))} />}
         {state.room && <button onClick={() => { void navigator.clipboard.writeText(location.href).then(() => setError('Invitation link copied.')).catch(() => setError(`Share this link: ${location.href}`)); }}>Invite</button>}
         <button ref={rulesButton} onClick={() => rulesRef.current?.showModal()}>Rules <span aria-hidden="true">↗</span></button>
+        <CardStylePicker {...appearance} onChange={next => { setAppearance(next); writeLocal('casual-card-face', next.face); writeLocal('casual-card-back', next.back); }} />
         <button onClick={() => { const value = theme === 'classic' ? 'midnight' : 'classic'; setTheme(value); writeLocal('casual-theme', value); }} aria-label={`Switch to ${theme === 'classic' ? 'Midnight' : 'Classic'} table`}>◐ <span className={s.themeText}>Themes</span></button>
       </div>
     </header>
@@ -182,7 +191,8 @@ function Table({ client, onLeave }: { client: GameClient; onLeave: (forgetCreden
           <div className={s.feltLettering} aria-hidden="true"><span>THE CASUAL TABLE</span><h2>Blackjack</h2><p>PAYS 3 TO 2</p><div>INSURANCE PAYS 2 TO 1</div></div>
           <div className={s.seats}>
             <section className={`${s.seat} ${s.ownSeat}`} data-state={seatState(player)} aria-label="Your seat">
-              <div className={s.playerHead}><span className={s.avatar}>{player.name.slice(0, 1).toUpperCase()}</span><div><strong>{player.name} <small>YOU · SEAT {player.seat + 1}</small></strong><span className={s.seatStatus} data-state={seatState(player)}>{seatLabel(player)}</span></div></div>
+              {state.room && <ChatBubble client={client} playerId={player.id} name={player.name} />}
+              <div className={s.playerHead}><PlayerAvatar player={player} /><div><strong>{player.name} <small>YOU · SEAT {player.seat + 1}</small></strong><span className={s.seatStatus} data-state={seatState(player)}>{seatLabel(player)}</span></div></div>
               {player.hands.length ? <div className={s.ownHands}>
                 {compact && player.hands.length > 1 && <div className={s.handTabs} role="tablist" aria-label="Your hands">{player.hands.map((h, index) => <button key={h.id} role="tab" aria-selected={h.id === selectedHand} aria-controls={`hand-${h.id}`} aria-label={`Hand ${index + 1}, total ${h.total}${h.id === ownActive ? ', playing' : ''}`} onClick={() => setHandView({ active: ownActive, selected: h.id })} onKeyDown={event => {
                   const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']; if (!keys.includes(event.key)) return;
@@ -190,14 +200,14 @@ function Table({ client, onLeave }: { client: GameClient; onLeave: (forgetCreden
                   setHandView({ active: ownActive, selected: player.hands[next]!.id }); (event.currentTarget.parentElement?.children[next] as HTMLButtonElement | undefined)?.focus();
                 }}><span>{h.id === ownActive ? '▶ ' : ''}Hand {index + 1}</span><strong>{h.total > 21 ? `${h.total} Bust` : h.total}</strong></button>)}</div>}
                 <div className={s.hands}>{player.hands.map(h => <Hand key={h.id} hand={h} selected={h.id === selectedHand} active={h.id === state.activeHandId} deadline={localDeadline} presentation={presentation} shoeRef={shoeRef} />)}</div>
-              </div> : <div className={s.yourEmpty}><span className={s.chipIcon}>♣</span><span>Your next good hand<br />starts here.</span></div>}
+              </div> : <div className={s.yourEmpty}>{(!state.room || player.ready) ? <WagerChips amount={player.bet} reducedMotion={reducedMotion} /> : <span className={s.chipIcon}>♣</span>}<span>Your next good hand<br />starts here.</span></div>}
             </section>
             {[0, 1, 2, 3].filter(seat => seat !== player.seat).map(seat => {
               const other = state.players.find(p => p.seat === seat);
-              return other ? <section className={`${s.seat} ${s.otherSeat}`} data-state={seatState(other)} key={seat} aria-label={`Seat ${seat + 1}: ${other.name}`}>
-                <div className={s.playerHead}><span className={s.avatar}>{other.name.slice(0, 1).toUpperCase()}</span><div><strong>{other.name} <small>SEAT {seat + 1}</small></strong><span className={s.seatStatus} data-state={seatState(other)}>{state.phase === 'BETTING' || complete ? seatLabel(other) : other.leavingAfterRound ? 'Finishing committed hand' : other.connected === false ? other.reservationDeadline ? `Disconnected · ${Math.max(0, Math.ceil((other.reservationDeadline - (connection.clockOffsetMs ?? 0) - now) / 1000))}s reserved` : 'Disconnected' : other.ready ? 'Wager locked' : other.sittingOut ? 'Sitting out' : state.activePlayerId === other.id ? '▶ Playing' : 'At the table'}</span></div></div>
+              return other ? <section className={`${s.seat} ${s.otherSeat}`} data-state={seatState(other)} key={seat} aria-label={`Seat ${seat + 1}: ${other.name}`}><ChatBubble client={client} playerId={other.id} name={other.name} />
+                <div className={s.playerHead}><PlayerAvatar player={other} /><div><strong>{other.name} <small>SEAT {seat + 1}</small></strong><span className={s.seatStatus} data-state={seatState(other)}>{state.phase === 'BETTING' || complete ? seatLabel(other) : other.leavingAfterRound ? 'Finishing committed hand' : other.connected === false ? other.reservationDeadline ? `Disconnected · ${Math.max(0, Math.ceil((other.reservationDeadline - (connection.clockOffsetMs ?? 0) - now) / 1000))}s reserved` : 'Disconnected' : other.ready ? 'Wager locked' : other.sittingOut ? 'Sitting out' : state.activePlayerId === other.id ? '▶ Playing' : 'At the table'}</span></div></div>
                 {other.hands.length ? <div className={s.hands}>{other.hands.map(h => <Hand key={h.id} hand={h} active={h.id === state.activeHandId} deadline={localDeadline} presentation={presentation} shoeRef={shoeRef} />)}</div> : <p className={s.smallNote}>Waiting for the next hand</p>}
-                <div className={s.opponentSummary} aria-label={`${other.name}'s hands`}>{complete && !presenting && <strong className={s.roundOutcome} data-state={seatState(other)}>{seatLabel(other)}</strong>}{state.phase === 'BETTING' ? <span className={s.seatStatus} data-state={seatState(other)}>{seatLabel(other)}</span> : other.hands.length ? other.hands.map((h, index) => <span key={h.id} className={h.id === state.activeHandId ? s.summaryActive : ''} aria-label={`Hand ${index + 1}, ${h.total > 21 ? `${h.total}, bust` : h.total}${h.outcome ? `, ${h.outcome}` : ''}`}>{h.id === state.activeHandId ? '▶ ' : ''}{h.total > 21 ? `${h.total} Bust` : h.total}{h.outcome === 'win' || h.outcome === 'blackjack' ? ' ✓' : ''}</span>) : <span>Next round</span>}</div>
+                <div className={s.opponentSummary} aria-label={`${other.name}'s hands`}>{complete && !presenting && <strong className={s.roundOutcome} data-state={seatState(other)}>{seatLabel(other)}</strong>}{state.phase === 'BETTING' && other.ready && <WagerChips amount={other.bet} reducedMotion={reducedMotion} compact />}{state.phase === 'BETTING' ? <span className={s.seatStatus} data-state={seatState(other)}>{seatLabel(other)}</span> : other.hands.length ? other.hands.map((h, index) => <span key={h.id} className={h.id === state.activeHandId ? s.summaryActive : ''} aria-label={`Hand ${index + 1}, ${h.total > 21 ? `${h.total}, bust` : h.total}${h.outcome ? `, ${h.outcome}` : ''}`}><WagerChips amount={h.wager} returned={h.returned} settled={!!h.outcome && !presenting} reducedMotion={reducedMotion} compact />{h.id === state.activeHandId ? '▶ ' : ''}{h.total > 21 ? `${h.total} Bust` : h.total}{h.outcome === 'win' || h.outcome === 'blackjack' ? ' ✓' : ''}</span>) : <span>Next round</span>}</div>
                 <p className={s.smallNote}>{money(other.balance)} chips</p>
               </section> : <section className={`${s.seat} ${s.emptySeat}`} key={seat} aria-label={`Seat ${seat + 1} empty`}><span className={s.emptyAvatar}>+</span><strong>Open seat</strong><span>Seat {seat + 1} · {state.room ? 'Invite a friend' : 'Shared tables available'}</span></section>;
             })}
@@ -228,5 +238,5 @@ function Table({ client, onLeave }: { client: GameClient; onLeave: (forgetCreden
       <footer className={s.footer}><span><i /> All the fun. None of the stakes.</span>{state.room && <button className={s.leaveButton} disabled={pending || connection.status !== 'connected'} onClick={() => void send({ type: 'Leave' })}>Leave table</button>}<span>Play chips only · Round {state.roundId.toString().padStart(2, '0')}</span></footer>
     </main>
     <dialog ref={rulesRef} className={s.dialog} onClose={() => { if (document.activeElement === document.body || rulesRef.current?.contains(document.activeElement)) rulesButton.current?.focus(); }}><div className={s.dialogHeading}><span className={s.eyebrow}>SIX-DECK CLASSIC</span><button autoFocus onClick={() => rulesRef.current?.close()} aria-label="Close rules">✕</button></div><h2>A few table rules.</h2><p>Beat the dealer without going over 21. Aces count as 1 or 11. The dealer stands on every 17, including soft 17.</p><dl><dt>Blackjack</dt><dd>An unsplit ace + ten-value card pays 3:2. Regular wins pay 1:1; a push returns your bet.</dd><dt>Your turn</dt><dd>Each active hand gets 20 seconds. Hit resets the countdown to 20 seconds. If time runs out, your hand stands automatically.</dd><dt>Double</dt><dd>Double only on an initial two-card total of 9, 10 or 11, including after splitting. Receive one card, then stand.</dd><dt>Split</dt><dd>Identical ranks only, up to four hands. Split aces receive one card each, then stand. Split 21 pays 1:1.</dd><dt>Insurance</dt><dd>Offered before the dealer checks an ace. Wager up to half your original bet; pays 2:1 if the dealer has blackjack.</dd><dt>The shoe</dt><dd>Six physical decks, drawn without replacement across rounds. A cut card or safety reserve triggers a shuffle before the next deal.</dd></dl><p className={s.smallNote}>{state.room ? 'This is a shared table. Reload restores your guest seat while its saved credential is available.' : 'This is solo local practice. Reloading starts a fresh table.'} Your display name and table appearance stay saved in this browser.</p></dialog>
-  </div>;
+  </div></CardAppearance.Provider>;
 }

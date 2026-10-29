@@ -1,4 +1,4 @@
-import { commandSchema, displayNameSchema, type ActionType, type Card, type Command, type Outcome, type Phase, type Rank, type Snapshot, type Suit } from '@casual/protocol';
+import { commandSchema, displayNameSchema, playerIconSchema, type PlayerIcon, type ActionType, type Card, type Command, type Outcome, type Phase, type Rank, type Snapshot, type Suit } from '@casual/protocol';
 
 export type { Card, Rank, Suit } from '@casual/protocol';
 export const RULES = { decks: 6, startingBalance: 2000, minBet: 20, maxBet: 200, betStep: 20, maxHands: 4 } as const;
@@ -12,7 +12,7 @@ export interface Hand {
   id: string; cards: Card[]; wager: number; naturalEligible: boolean; splitAces: boolean;
   status: 'playing' | 'stood' | 'bust'; timedOut?: boolean; outcome?: Outcome; returned?: number;
 }
-export interface Player { id: string; name: string; seat: number; balance: number; bet: number; hands: Hand[] }
+export interface Player { id: string; name: string; icon?: PlayerIcon; seat: number; balance: number; bet: number; hands: Hand[] }
 export interface RoomState {
   schema: 1; revision: number; roundId: number; phase: Phase; players: Player[];
   dealer: Card[]; revealed: boolean; activePlayer: number; activeHand: number;
@@ -58,10 +58,10 @@ function draw(state: RoomState) {
   state.shoe.cursor++;
   return card;
 }
-export function createRoom(name: string, random: RandomIndex, now = 0): RoomState {
+export function createRoom(name: string, random: RandomIndex, now = 0, icon?: PlayerIcon): RoomState {
   return {
     schema: 1, revision: 0, roundId: 0, phase: 'BETTING',
-    players: [{ id: 'practice-player', name: displayNameSchema.parse(name), seat: 0, balance: 2000, bet: 20, hands: [] }],
+    players: [{ id: 'practice-player', name: displayNameSchema.parse(name), ...(icon === undefined ? {} : { icon: playerIconSchema.parse(icon) }), seat: 0, balance: 2000, bet: 20, hands: [] }],
     dealer: [], revealed: false, activePlayer: 0, activeHand: 0, decisionDeadline: null, insurance: {},
     shoe: createShoe(random), shuffled: true, settledRound: -1, updatedAt: now, acceptedCommands: [],
   };
@@ -227,7 +227,7 @@ export function project(state: RoomState, playerId: string): Snapshot {
     players: state.players.map(p => {
       const insurance = state.insurance[p.id];
       const net = p.hands.reduce((sum, h) => sum + (h.returned ?? 0) - h.wager, 0) + (insurance ? insurance.returned - insurance.wager : 0);
-      return { id: p.id, name: p.name, seat: p.seat, balance: p.balance, bet: p.bet,
+      return { id: p.id, name: p.name, ...(p.icon ? { icon: p.icon } : {}), seat: p.seat, balance: p.balance, bet: p.bet,
         hands: p.hands.map(h => ({ id: h.id, cards: h.cards.map(c => ({ id: c.id, rank: c.rank, suit: c.suit })), total: score(h.cards).total, soft: score(h.cards).soft, wager: h.wager, status: h.status, timedOut: h.timedOut, outcome: h.outcome, returned: h.returned })),
         ...(state.phase === 'ROUND_COMPLETE' ? { roundResult: { net, outcome: !p.hands.length ? 'out' as const : net > 0 ? 'won' as const : net < 0 ? 'lost' as const : 'even' as const } } : {}) };
     }),

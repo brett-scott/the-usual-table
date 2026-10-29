@@ -1,5 +1,5 @@
 import { createRoom, expireDecision, GameError, project, transition, type RandomIndex, type RoomState } from '@casual/engine';
-import { RESULTS_DURATION_MS, resultsRevealDelay, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
+import { RESULTS_DURATION_MS, resultsRevealDelay, type PlayerIcon, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
 
 export const RESERVATION_MS = 60_000;
 export const PRESENCE_MS = 30_000;
@@ -24,8 +24,8 @@ export function newMember(hash: string, now: number): Member {
 export function assertRule(value: unknown, code: string, message: string): asserts value {
   if (!value) throw new GameError(code, message);
 }
-export function newRoom(id: string, playerId: string, name: string, hash: string, random: RandomIndex, now: number): OnlineRoom {
-  const engine = createRoom(name, random, now); engine.players[0]!.id = playerId;
+export function newRoom(id: string, playerId: string, name: string, hash: string, random: RandomIndex, now: number, icon?: PlayerIcon): OnlineRoom {
+  const engine = createRoom(name, random, now, icon); engine.players[0]!.id = playerId;
   return { schema: 2, id, revision: 0, managerId: playerId, engine,
     members: { [playerId]: newMember(hash, now) },
     locked: {}, bettingDeadline: null, insuranceDeadline: null, roundDeadline: null, lastActivity: now, tickets: [], receipts: [], commandRates: {} };
