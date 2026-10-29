@@ -2,14 +2,14 @@ import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } fro
 import { CHAT_MAX_LENGTH, type ChatFeed, type GameClient } from '@casual/protocol';
 import s from './TableChat.module.css';
 
-const empty: ChatFeed = { messages: [], available: false };
+const empty: ChatFeed = { messages: [], available: false, unread: 0 };
 export function TableChat({ client, ownTurn, seconds }: { client: GameClient; ownTurn: boolean; seconds: number | null }) {
   const feed = useSyncExternalStore(client.subscribe, () => client.getChat?.() ?? empty);
   const connection = useSyncExternalStore(client.subscribe, client.getConnection);
   const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null);
   const log = useRef<HTMLDivElement>(null); const input = useRef<HTMLInputElement>(null);
-  const atBottom = useRef(true); const previous = useRef(new Set<string>()); const initialized = useRef(false);
-  const [open, setOpen] = useState(false); const [unread, setUnread] = useState(0);
+  const atBottom = useRef(true);
+  const [open, setOpen] = useState(false); const unread = feed.unread;
   const [draft, setDraft] = useState(''); const [sending, setSending] = useState(false); const [error, setError] = useState('');
   const inFlight = useRef(false); const you = client.getSnapshot().you;
   useEffect(() => {
@@ -24,20 +24,13 @@ export function TableChat({ client, ownTurn, seconds }: { client: GameClient; ow
     return () => { viewport?.removeEventListener('resize', fit); viewport?.removeEventListener('scroll', fit); window.removeEventListener('resize', fit); };
   }, [open]);
   useEffect(() => {
-    const fresh = feed.messages.filter(message => !previous.current.has(message.id) && message.playerId !== you).length;
-    previous.current = new Set(feed.messages.map(message => message.id));
-    if (!initialized.current) {
-      initialized.current = feed.available;
-      if (open && log.current) log.current.scrollTop = log.current.scrollHeight;
-      return;
-    }
-    if (open && atBottom.current) {
+    if (open && dialog.current?.open && atBottom.current) {
       if (log.current) log.current.scrollTop = log.current.scrollHeight;
-      setUnread(0);
-    } else if (fresh) setUnread(count => Math.min(50, count + fresh));
-  }, [feed, open, you]);
+      client.markChatRead?.();
+    }
+  }, [client, feed, open]);
   function show() {
-    dialog.current?.showModal(); setOpen(true); setUnread(0); atBottom.current = true;
+    dialog.current?.showModal(); setOpen(true); client.markChatRead?.(); atBottom.current = true;
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
     input.current?.focus();
   }
@@ -46,15 +39,18 @@ export function TableChat({ client, ownTurn, seconds }: { client: GameClient; ow
     if (inFlight.current || !draft.trim() || !client.sendChat) return;
     inFlight.current = true; setSending(true); setError('');
     try {
-      await client.sendChat(draft); setDraft(''); atBottom.current = true; setUnread(0);
-      if (log.current) log.current.scrollTop = log.current.scrollHeight;
+      await client.sendChat(draft); setDraft(''); atBottom.current = true;
+      if (dialog.current?.open) {
+        client.markChatRead?.();
+        if (log.current) log.current.scrollTop = log.current.scrollHeight;
+      }
     }
     catch (problem) { setError(problem instanceof Error ? problem.message : 'Your message could not be sent.'); }
     finally { inFlight.current = false; setSending(false); input.current?.focus(); }
   }
   const connected = connection.status === 'connected' && feed.available;
   return <>
-    <button ref={trigger} onClick={show} aria-haspopup="dialog" aria-label={`Table chat${unread ? `, ${unread} unread ${unread === 1 ? 'message' : 'messages'}` : ''}`}>Chat{unread > 0 && <span className={s.badge}>{unread}</span>}</button>
+    <button ref={trigger} onClick={show} aria-haspopup="dialog" data-chat-ready={feed.available && connection.status === 'connected'} aria-label={`Table chat${unread ? `, ${unread} unread ${unread === 1 ? 'message' : 'messages'}` : ''}`}>Chat{unread > 0 && <span className={s.badge}>{unread}</span>}</button>
     <dialog ref={dialog} className={s.panel} aria-labelledby="table-chat-title" onClose={() => {
       setOpen(false);
       // Native dialogs usually restore focus themselves. A queued close event
@@ -65,7 +61,7 @@ export function TableChat({ client, ownTurn, seconds }: { client: GameClient; ow
       {ownTurn && seconds !== null && <button className={s.turn} onClick={() => dialog.current?.close()}>Your hand · {seconds}s left — Back to hand</button>}
       <div ref={log} className={s.messages} role="log" aria-label="Table messages" aria-live={open ? 'polite' : 'off'} aria-relevant="additions" tabIndex={0} onScroll={() => {
         const node = log.current; atBottom.current = !!node && node.scrollHeight - node.scrollTop - node.clientHeight < 48;
-        if (atBottom.current) setUnread(0);
+        if (dialog.current?.open && atBottom.current) client.markChatRead?.();
       }}>
         {!feed.messages.length && <p className={s.empty}>Say hello to the table.</p>}
         {feed.messages.map(message => <article key={message.id} className={message.playerId === you ? s.own : undefined}>

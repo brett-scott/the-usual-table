@@ -117,3 +117,32 @@ it('does not replay unconfirmed chat after reconnect or send from a displaced cl
   replacement.emit({ type: 'replaced', message: 'A newer tab controls this seat.' });
   await expect(client.sendChat!('No')).rejects.toThrow('Reconnect');
 });
+
+it('counts live chat independently of rendered frames, ignores history/self messages and clears only on read', async () => {
+  const { client, socket } = await start(); const before = client.getSnapshot();
+  const entry = (playerId: string, text: string) => ({ id: crypto.randomUUID(), playerId, name: 'Guest', seat: 1, text, sentAt: Date.now() });
+  const old = entry('other', 'History'); const incoming = entry('other', 'New message'); const own = entry(before.you, 'My reply');
+  // No UI snapshot is read between the initial history and subsequent live frames.
+  socket.emit({ type: 'chat', messages: [old] });
+  socket.emit({ type: 'chat', messages: [old, incoming] });
+  socket.emit({ type: 'chat', messages: [old, incoming, own] });
+  expect(client.getChat!().unread).toBe(1);
+  socket.emit({ type: 'chat', messages: [old, incoming, own] }); expect(client.getChat!().unread).toBe(1);
+  client.markChatRead!(); expect(client.getChat!().unread).toBe(0);
+  socket.emit({ type: 'chat', messages: [old, incoming, own] }); expect(client.getChat!().unread).toBe(0);
+  const batch = Array.from({ length: 50 }, (_, index) => entry('other', `New ${index}`));
+  socket.emit({ type: 'chat', messages: batch }); expect(client.getChat!().unread).toBe(50);
+  expect(client.getSnapshot()).toBe(before); expect(socket.sent).toEqual([]);
+});
+
+it('counts messages missed during reconnect once and ignores the old connection', async () => {
+  const { client, socket, snapshot } = await start();
+  const old = { id: crypto.randomUUID(), playerId: 'other', name: 'Guest', seat: 1, text: 'History', sentAt: Date.now() };
+  socket.emit({ type: 'chat', messages: [old] }); socket.close(); await vi.advanceTimersByTimeAsync(600);
+  const replacement = FakeSocket.instances.at(-1)!; deliver(replacement, snapshot, 5, controllerTwo);
+  const missed = { ...old, id: crypto.randomUUID(), text: 'While disconnected' };
+  replacement.emit({ type: 'chat', messages: [old, missed] }); expect(client.getChat!().unread).toBe(1);
+  socket.emit({ type: 'chat', messages: [{ ...old, id: crypto.randomUUID(), text: 'Stale' }] });
+  replacement.emit({ type: 'chat', messages: [old, missed] }); expect(client.getChat!().unread).toBe(1);
+  expect(client.getChat!().messages).toEqual([old, missed]);
+});

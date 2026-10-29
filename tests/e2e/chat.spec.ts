@@ -11,10 +11,15 @@ test('table chat shares safe text, stays private to the room, survives reload an
     await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     await peer.goto(page.url()); await peer.getByLabel('What should we call you?').fill('Alex'); await peer.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+    // The table renders from HTTP before its socket/history handshake completes.
+    await expect(peer.getByRole('button', { name: /^Table chat/ })).toHaveAttribute('data-chat-ready', 'true');
     const sender = await chat(page);
     await sender.getByRole('textbox').fill('Hello <img src=x onerror="window.chatInjected=true">');
     await sender.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(sender.getByRole('textbox')).toHaveValue('');
+    await expect(peer.getByRole('button', { name: 'Table chat, 1 unread message' })).toBeVisible();
+    // Hidden-panel scroll restoration must not mark an unread message as read.
+    await peer.locator('[role="log"][aria-label="Table messages"]').dispatchEvent('scroll');
     await expect(peer.getByRole('button', { name: 'Table chat, 1 unread message' })).toBeVisible();
     const receiver = await chat(peer);
     await expect(receiver.getByRole('log')).toContainText('Hello <img src=x onerror="window.chatInjected=true">');

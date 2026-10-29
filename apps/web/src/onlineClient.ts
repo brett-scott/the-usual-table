@@ -45,7 +45,8 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   const { session } = initial;
   try { localStorage.setItem(`casual-room:${session.inviteId}`, JSON.stringify(session)); } catch { /* The live seat still works without persistent browser storage. */ }
   let snapshot = initial.snapshot;
-  let chat: ChatFeed = { messages: [], available: false };
+  let chat: ChatFeed = { messages: [], available: false, unread: 0 };
+  let hasChatHistory = false;
   let connection: ConnectionInfo = { status: 'connecting', message: 'Connecting to your table…' };
   const listeners = new Set<() => void>();
   const pending = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; chat?: boolean }>();
@@ -113,7 +114,15 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
         try {
           const message = serverEventSchema.parse(JSON.parse(String(event.data)));
           lastReceived = Date.now();
-          if (message.type === 'chat') { chat = { messages: message.messages, available: true }; notify(); return; }
+          if (message.type === 'chat') {
+            // Count arrivals before notifying React: consecutive history/live frames
+            // may be rendered together, but must not erase unread messages.
+            const known = new Set(chat.messages.map(entry => entry.id));
+            const fresh = hasChatHistory ? message.messages.filter(entry => entry.playerId !== session.playerId && !known.has(entry.id)).length : 0;
+            hasChatHistory = true;
+            chat = { messages: message.messages, available: true, unread: Math.min(50, chat.unread + fresh) };
+            notify(); return;
+          }
           if (message.type === 'connected') { controllerId = message.controllerId; return; }
           if (message.type === 'pong') { connection = { ...connection, clockOffsetMs: message.serverTime - Date.now() }; return; }
           if (message.type === 'snapshot') {
@@ -157,6 +166,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   void connect();
   return {
     getSnapshot: () => snapshot, getConnection: () => connection, getChat: () => chat,
+    markChatRead() { if (chat.unread) { chat = { ...chat, unread: 0 }; notify(); } },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     send(action: Action) {
       if (disposed || connection.status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return Promise.reject(new Error('Reconnect before playing. Your action was not sent.'));

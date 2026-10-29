@@ -13,7 +13,7 @@ export const chatTextSchema = z.string().trim().min(1, 'Write a message first.')
 export const chatCommandSchema = z.object({ type: z.literal('chat'), protocol: z.literal(1), id: z.string().uuid(), text: chatTextSchema }).strict();
 export const chatMessageSchema = z.object({ id: z.string().uuid(), playerId: z.string().min(1).max(100), name: z.string().min(1).max(24), seat: z.number().int().min(0).max(3), text: chatTextSchema, sentAt: z.number().int().nonnegative().safe() });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
-export interface ChatFeed { messages: ChatMessage[]; available: boolean; problem?: string }
+export interface ChatFeed { messages: ChatMessage[]; available: boolean; unread: number; problem?: string }
 export const displayNameSchema = z.string().trim().min(1, 'Enter your name.').max(24, 'Use at most 24 characters.');
 const amount = z.number().int().nonnegative();
 const actions = z.discriminatedUnion('type', [
@@ -80,6 +80,7 @@ export interface GameClient {
   getConnection(): ConnectionInfo;
   reconnect?(): void;
   getChat?(): ChatFeed;
+  markChatRead?(): void;
   sendChat?(text: string): Promise<void>;
   dispose(): void;
 }
