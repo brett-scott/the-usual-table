@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@casual/protocol';
 import { expectOneScreen, rigShoe } from './fixtures';
 
@@ -43,10 +43,18 @@ test('double is unavailable on 12 and Next round can skip an unfinished dealer r
 test('guests see ready and waiting states, shared results and the host skipping the pause', async ({ page, browser }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const context = await browser.newContext({ viewport: page.viewportSize()!, reducedMotion: 'reduce' }); const guest = await context.newPage();
-  let latest: Snapshot | undefined;
-  page.on('websocket', socket => socket.on('framereceived', event => {
-    const data = JSON.parse(String(event.payload)) as { type: string; snapshot?: Snapshot }; if (data.type === 'snapshot') latest = data.snapshot;
+  const latest = new Map<Page, Snapshot>();
+  for (const peer of [page, guest]) peer.on('websocket', socket => socket.on('framereceived', event => {
+    const data = JSON.parse(String(event.payload)) as { type: string; snapshot?: Snapshot };
+    if (data.type === 'snapshot' && data.snapshot) latest.set(peer, data.snapshot);
   }));
+  async function sharedState(accept: (snapshot: Snapshot) => boolean) {
+    await expect.poll(() => {
+      const host = latest.get(page); const visitor = latest.get(guest);
+      return !!host && !!visitor && host.revision === visitor.revision && accept(host) && accept(visitor);
+    }, { message: 'Both guests must receive the expected table state before the next action' }).toBe(true);
+    return latest.get(page)!;
+  }
   try {
     await page.goto('./'); await page.getByLabel('What should we call you?').fill('Host'); await page.getByRole('button', { name: 'Create a table with friends' }).click();
     await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
@@ -63,12 +71,20 @@ test('guests see ready and waiting states, shared results and the host skipping 
     if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
     await page.screenshot({ path: testInfo.outputPath('ready-and-waiting.png'), fullPage: true });
     await guest.getByRole('button', { name: /^Ready/ }).click();
-    await expect.poll(() => latest?.phase).not.toBe('BETTING');
-    if (latest?.phase === 'INSURANCE') for (const peer of [page, guest]) await peer.getByRole('button', { name: 'No insurance' }).click();
-    for (let turns = 0; latest?.phase !== 'ROUND_COMPLETE' && turns < 4; turns++) {
-      const actor = latest?.activePlayerId === latest?.you ? page : guest;
-      const revision = latest!.revision; await actor.getByRole('button', { name: 'Stand', exact: true }).click(); await expect.poll(() => latest!.revision).toBeGreaterThan(revision);
+    let state = await sharedState(snapshot => snapshot.phase !== 'BETTING');
+    if (state.phase === 'INSURANCE') for (const peer of [page, guest]) {
+      const revision = state.revision; const decidingPlayer = latest.get(peer)!.you;
+      await peer.getByRole('button', { name: 'No insurance' }).click();
+      // The final decision can settle a dealer blackjack without any player turn.
+      state = await sharedState(snapshot => snapshot.revision > revision && (snapshot.you !== decidingPlayer || !snapshot.legalActions.includes('InsuranceDecision')));
     }
+    for (let turns = 0; state.phase === 'PLAYER_TURNS' && turns < 4; turns++) {
+      const actor = state.activePlayerId === state.you ? page : guest;
+      const hand = state.activeHandId;
+      await actor.getByRole('button', { name: 'Stand', exact: true }).click();
+      state = await sharedState(snapshot => snapshot.phase !== 'PLAYER_TURNS' || snapshot.activeHandId !== hand);
+    }
+    expect(state.phase).toBe('ROUND_COMPLETE');
     await expect(page.getByRole('timer', { name: 'Next round countdown' })).toContainText('Next round in');
     await expect(guest.getByRole('timer', { name: 'Next round countdown' })).toContainText('Next round in');
     await expect(host.getByText(/^(✓ Won|✕ Lost|Even)/).filter({ visible: true })).toHaveCount(1);
@@ -76,6 +92,7 @@ test('guests see ready and waiting states, shared results and the host skipping 
     await page.screenshot({ path: testInfo.outputPath('shared-results.png'), fullPage: true });
     await expect(guest.getByRole('button', { name: 'Next round' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Next round' }).click();
+    await sharedState(snapshot => snapshot.phase === 'BETTING');
     for (const peer of [page, guest]) await expect(peer.getByRole('button', { name: /^Ready/ })).toBeEnabled();
   } finally { await context.close(); }
 });

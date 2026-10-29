@@ -2,7 +2,7 @@ import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'c
 import { expect, it } from 'vitest';
 import { expireRoomDecisions, resultsDeadline } from '../src/roomState';
 import { restoreRoom } from '../src/roomStorage';
-import { bindings, close, connect, create, edit, inspect, rigShoe } from './helpers';
+import { bindings, close, connect, create, edit, inspect, join, rigShoe } from './helpers';
 
 async function settled() {
   const guest = await create(); const peer = await connect(guest.session);
@@ -10,6 +10,28 @@ async function settled() {
   await peer.send({ type: 'StartBetting' }); await peer.send({ type: 'Ready' }); await peer.send({ type: 'Stand' });
   return { guest, peer };
 }
+it('settles dealer blackjack after the last insurance decision without offering a player turn', async () => {
+  const host = await create('Host'); const guest = await join(host.session.inviteId, 'Guest');
+  const a = await connect(host.session); const b = await connect(guest.session);
+  try {
+    await rigShoe(host.session.inviteId, ['K', 'K', 'A', 'K', '7', 'Q']);
+    await a.send({ type: 'StartBetting' }); await a.send({ type: 'PlaceBet', amount: 200 });
+    await a.send({ type: 'Ready' }); await b.send({ type: 'Ready' });
+    expect((await a.last()).phase).toBe('INSURANCE');
+    expect(await a.send({ type: 'InsuranceDecision', amount: 0 })).toMatchObject({ type: 'ack' });
+    const before = await a.last(); expect(before.phase).toBe('INSURANCE');
+    expect(await b.send({ type: 'InsuranceDecision', amount: 0 })).toMatchObject({ type: 'ack' });
+    const after = await a.last(); const other = await b.last();
+    expect(after.revision).toBeGreaterThan(before.revision); expect(after.phase).toBe('ROUND_COMPLETE');
+    expect(other.phase).toBe(after.phase); expect(other.revision).toBe(after.revision); expect(other.roundDeadline).toBe(after.roundDeadline);
+    expect(after.activePlayerId).toBeNull(); expect(after.activeHandId).toBeNull();
+    expect(after.legalActions).not.toContain('Stand'); expect(other.legalActions).not.toContain('Stand');
+    expect(after.players.map(player => player.roundResult)).toEqual([{ net: -200, outcome: 'lost' }, { net: -20, outcome: 'lost' }]);
+    expect(after.roundDeadline).toBeGreaterThan(Date.now());
+    expect(await a.send({ type: 'NextRound' })).toMatchObject({ type: 'ack' });
+    for (const peer of [a, b]) { const state = await peer.last(); expect(state.phase).toBe('BETTING'); expect(state.legalActions).toContain('Ready'); }
+  } finally { await close(a, b); }
+});
 it('persists a shared ten-second results window, then opens betting exactly once', async () => {
   const { guest, peer } = await settled();
   try {
