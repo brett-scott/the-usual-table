@@ -32,18 +32,34 @@ it('reserves disconnected seats for 60 seconds and restores the same guest befor
 });
 
 it('releases an expired uncommitted seat and invalidates its old credential', async () => {
-  const first = await create(); const a = await connect(first.session); await close(a);
-  await overdue(first.session.inviteId, 'reservation', first.session.playerId);
-  expect((await http(`/${first.session.inviteId}/resume`, first.session)).status).toBe(401);
-  const replacement = await join(first.session.inviteId, 'New guest');
-  expect(replacement.session.playerId).not.toBe(first.session.playerId); expect(replacement.snapshot.players[0]).toMatchObject({ seat: 0, balance: 2000 });
-  expect(replacement.snapshot.shoe.remaining).toBe(312);
+  const first = await create(); const second = await join(first.session.inviteId);
+  const a = await connect(first.session); const b = await connect(second.session); await close(a);
+  try {
+    await overdue(first.session.inviteId, 'reservation', first.session.playerId);
+    expect((await http(`/${first.session.inviteId}/resume`, first.session)).status).toBe(401);
+    const replacement = await join(first.session.inviteId, 'New guest');
+    expect(replacement.session.playerId).not.toBe(first.session.playerId); expect(replacement.snapshot.players[0]).toMatchObject({ seat: 0, balance: 2000 });
+    expect(replacement.snapshot.shoe.remaining).toBe(312);
+  } finally { await close(b); }
 });
 
-it('also releases a seat created by HTTP that never connected', async () => {
+it('deletes a table whose only HTTP-created seat never connected', async () => {
   const first = await create(); await overdue(first.session.inviteId, 'reservation', first.session.playerId);
-  expect(await inspect(first.session.inviteId, room => room.engine.players.length)).toBe(0);
-  expect((await join(first.session.inviteId)).snapshot.players).toHaveLength(1);
+  expect(await runInDurableObject(bindings.ROOMS.getByName(first.session.inviteId), (_instance, state) => state.storage.get('room'))).toBeUndefined();
+  expect((await http(`/${first.session.inviteId}/join`, undefined, { name: 'Late' })).status).toBe(404);
+});
+
+it('closes invitations immediately after the last player leaves during a hand, then deletes after settlement', async () => {
+  const first = await create(); const a = await connect(first.session);
+  try {
+    await rigShoe(first.session.inviteId, ['2', '10', '3', '7']);
+    await a.send({ type: 'StartBetting' }); await a.send({ type: 'Ready' });
+    expect(await a.send({ type: 'Leave' })).toMatchObject({ type: 'ack' });
+    expect(await inspect(first.session.inviteId, room => room.engine.players[0]!.hands[0]!.wager)).toBe(20);
+    expect((await http(`/${first.session.inviteId}/join`, undefined, { name: 'Late' })).status).toBe(404);
+    await overdue(first.session.inviteId, 'hand');
+    expect(await runInDurableObject(bindings.ROOMS.getByName(first.session.inviteId), async (_instance, state) => ({ room: await state.storage.get('room'), alarm: await state.storage.getAlarm() }))).toEqual({ room: undefined, alarm: null });
+  } finally { await close(a); }
 });
 
 it('detects silent connection loss and does not restart grace on repeated alarms', async () => {
@@ -62,10 +78,12 @@ it('keeps an expired seat through every unresolved split hand, then releases it 
   await rigShoe(first.session.inviteId, ['8', '10', '8', '7', '8', '8', '8', '8', '3', '2']);
   await a.send({ type: 'StartBetting' }); await a.send({ type: 'Ready' });
   for (let index = 0; index < 3; index++) await a.send({ type: 'Split' });
+  // Another reserved seat keeps this table open while the departed split hands finish.
+  await join(first.session.inviteId);
   await close(a); await overdue(first.session.inviteId, 'reservation', first.session.playerId);
   expect(await inspect(first.session.inviteId, room => room.members[first.session.playerId]!.leaveAfterRound)).toBe(true);
   expect(await inspect(first.session.inviteId, room => room.engine.players[0]!.hands.length)).toBe(4);
-  await join(first.session.inviteId); await join(first.session.inviteId); await join(first.session.inviteId);
+  await join(first.session.inviteId); await join(first.session.inviteId);
   expect((await http(`/${first.session.inviteId}/join`, undefined, { name: 'Too early' })).status).toBe(409);
   expect((await http(`/${first.session.inviteId}/resume`, first.session)).status).toBe(401);
   for (let index = 0; index < 4; index++) await overdue(first.session.inviteId, 'hand');
@@ -163,14 +181,11 @@ it('recovers a process restart with lost sockets without resetting the game', as
   finally { await close(a, resumed); }
 });
 
-it('does not extend idle expiry with cleanup alarms and atomically removes an expired room/alarm', async () => {
+it('deletes an empty room and its alarm as soon as the last reservation expires', async () => {
   const first = await create(); const activity = Date.now() - ROOM_IDLE_MS + 90_000;
   await edit(first.session.inviteId, room => { room.lastActivity = activity; room.members[first.session.playerId]!.reservationDeadline = Date.now() - 1; });
   const stub = bindings.ROOMS.getByName(first.session.inviteId);
   await runDurableObjectAlarm(stub); await runDurableObjectAlarm(stub);
-  expect(await inspect(first.session.inviteId, room => room.lastActivity)).toBe(activity);
-  const alarm = await runInDurableObject(stub, (_instance, state) => state.storage.getAlarm()); expect(alarm).toBe(activity + ROOM_IDLE_MS);
-  await edit(first.session.inviteId, room => { room.lastActivity = Date.now() - ROOM_IDLE_MS - 1; }); await runDurableObjectAlarm(stub);
   expect((await http(`/${first.session.inviteId}/join`, undefined, { name: 'Late' })).status).toBe(404);
   expect(await runInDurableObject(stub, async (_instance, state) => ({ value: await state.storage.get('room'), alarm: await state.storage.getAlarm() }))).toEqual({ value: undefined, alarm: null });
 });

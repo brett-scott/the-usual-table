@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expectOneScreen, rigShoe } from './fixtures';
+import { openTableEntry, expectOneScreen, rigShoe } from './fixtures';
 async function openChat(page: Page) {
   const sidebar = page.getByRole('region', { name: 'Table chat', exact: true });
   if (await sidebar.isVisible()) return sidebar;
@@ -8,7 +8,7 @@ async function openChat(page: Page) {
 
 test('card face and back are independent, remembered and preserve the live cards', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' }); await rigShoe(page, ['5', '6', '6', '10', 'K', '3']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Card collector'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Card collector'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Deal me in' }).click();
   const card = page.getByRole('region', { name: 'Your seat' }).getByRole('img').first(); const handle = await card.elementHandle();
   const before = await page.locator('[data-revision]').getAttribute('data-revision'); const dealAt = await card.getAttribute('data-deal-at');
@@ -31,7 +31,7 @@ test('card face and back are independent, remembered and preserve the live cards
 
 test('chips place, double and pay out from game amounts and honor reduced motion', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' }); await rigShoe(page, ['5', '6', '6', '10', 'K', '3', '10', '10', '6', '7', 'K']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Chip player'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Chip player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Increase bet' }).click();
   await expect.poll(() => page.evaluate(() => document.getAnimations().some(animation => animation.id === 'chips-place'))).toBe(true);
   await page.getByRole('button', { name: 'Deal me in' }).click();
@@ -56,7 +56,7 @@ test('desktop chat is beside the game and table bubbles expire without replaying
   const context = await browser.newContext({ viewport: page.viewportSize()!, reducedMotion: 'reduce' }); const peer = await context.newPage();
   try {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('./'); await page.getByLabel('What should we call you?').fill('Host'); await page.getByRole('button', { name: 'Create a table with friends' }).click();
+    await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Host'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     await peer.goto(page.url()); await peer.getByLabel('What should we call you?').fill('Guest'); await peer.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(peer.locator('[data-chat-ready]')).toHaveAttribute('data-chat-ready', 'true');

@@ -35,6 +35,6 @@ export async function readJson(request: Request) {
 export function errorResponse(error: unknown) {
   const known = error instanceof GameError;
   const code = known ? error.code : 'INTERNAL_ERROR';
-  const status = ['SESSION_INVALID', 'SESSION_EXPIRED', 'TICKET_INVALID'].includes(code) ? 401 : code === 'ORIGIN_DENIED' ? 403 : code === 'ROOM_EXPIRED' ? 404 : ['TABLE_FULL', 'STALE_STATE', 'SESSION_REPLACED', 'ROOM_VERSION_UNSUPPORTED'].includes(code) ? 409 : code === 'ROOM_STATE_INVALID' ? 503 : code === 'RATE_LIMITED' ? 429 : known ? 400 : 500;
+  const status = ['SESSION_INVALID', 'SESSION_EXPIRED', 'TICKET_INVALID', 'ACCOUNT_REQUIRED', 'ACCOUNT_SESSION_INVALID'].includes(code) ? 401 : code === 'ORIGIN_DENIED' ? 403 : ['ROOM_EXPIRED', 'WALLET_NOT_FOUND'].includes(code) ? 404 : ['TABLE_FULL', 'STALE_STATE', 'SESSION_REPLACED', 'ROOM_VERSION_UNSUPPORTED'].includes(code) ? 409 : ['ROOM_STATE_INVALID', 'AUTH_UNAVAILABLE', 'WALLET_NOT_CONNECTED', 'WALLET_UNAVAILABLE'].includes(code) ? 503 : code === 'RATE_LIMITED' ? 429 : known ? 400 : 500;
   return Response.json({ code, message: known ? error.message : 'The table service could not complete this request. Please try again.' }, { status, headers: { 'Cache-Control': 'no-store' } });
 }

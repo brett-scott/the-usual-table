@@ -28,9 +28,9 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
     }, { timeout: 15_000 }).toBe(true);
   }
   try {
-    await page.goto(baseURL!); await page.getByLabel('What should we call you?').fill('Alex');
+    await page.goto(`${baseURL}#/games/blackjack`); await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await page.getByLabel('What should we call you?').fill('Alex');
     await page.getByLabel('Player icon', { exact: false }).selectOption('🦊');
-    await page.getByRole('button', { name: 'Create a table with friends' }).click();
+    await page.getByRole('button', { name: 'Create table', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     const invite = page.url(); expect(invite).toMatch(/#\/room\/[a-f0-9]{32}$/);
     for (let i = 1; i < 4; i++) {
@@ -48,7 +48,7 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
     const identities = pages.map(peer => latest.get(peer)!.you); expect(new Set(identities).size).toBe(4);
     await fifth.goto(invite); await fifth.getByLabel('What should we call you?').fill('Fifth'); await fifth.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(fifth.getByRole('alert')).toContainText('four players already');
-    await expect(fifth.getByRole('button', { name: 'Create a table with friends' })).toBeVisible();
+    await expect(fifth.getByRole('link', { name: 'Find or create another table' })).toBeVisible();
     let revision = latest.get(page)!.revision;
     await page.getByRole('button', { name: 'Open betting' }).click(); await synced(revision + 1);
     for (const peer of pages) {
@@ -91,7 +91,7 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
       await expect(page.locator('[data-connection]')).toHaveAttribute('data-connection', 'replaced');
       await expect(replacement.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
       await page.getByRole('button', { name: 'Create another table', exact: true }).click();
-      await expect(page.getByLabel('What should we call you?')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Find a Table', exact: true })).toBeVisible();
       // Leaving the displaced view must not erase the controlling tab's credential.
       await replacement.reload(); await expect(replacement.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     } finally { await replacement.close(); }

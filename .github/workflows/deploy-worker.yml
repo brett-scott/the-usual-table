@@ -20,6 +20,8 @@ jobs:
       CLOUDFLARE_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME }}
       CLOUDFLARE_RATE_LIMIT_NAMESPACE_ID: ${{ vars.CLOUDFLARE_RATE_LIMIT_NAMESPACE_ID }}
       ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:

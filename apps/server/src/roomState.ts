@@ -1,5 +1,6 @@
 import { createRoom, expireDecision, GameError, project, transition, type RandomIndex, type RoomState } from '@casual/engine';
-import { RESULTS_DURATION_MS, resultsRevealDelay, type PlayerIcon, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
+import { RESULTS_DURATION_MS, resultsRevealDelay, type LobbyVisibility, type PlayerIcon, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
+import { recordWalletRound, sealWalletSeat, walletActions, walletHasFunds, type RoomWallet } from './roomWallet';
 
 export const RESERVATION_MS = 60_000;
 export const PRESENCE_MS = 30_000;
@@ -10,10 +11,12 @@ export interface Member {
   claimId: string | null; claimVersion: number; retiredClaims: string[];
 }
 export interface OnlineRoom {
-  schema: 2; id: string; revision: number; managerId: string; engine: RoomState;
+  schema: 2 | 3; id: string; revision: number; managerId: string; engine: RoomState;
+  wallet?: RoomWallet;
   members: Record<string, Member>; locked: Record<string, 'ready' | 'out'>;
   bettingDeadline: number | null; insuranceDeadline: number | null; lastActivity: number;
   roundDeadline?: number | null;
+  gameId?: 'blackjack'; visibility?: LobbyVisibility;
   tickets: { hash: string; playerId: string; expires: number; claimId: string; claimVersion: number }[];
   receipts: { id: string; playerId: string; revision: number }[];
   commandRates: Record<string, { start: number; count: number }>;
@@ -37,6 +40,7 @@ function core(room: OnlineRoom, playerId: string, action: Action, random: Random
   const wasComplete = room.engine.phase === 'ROUND_COMPLETE'; const deadline = resultsDeadline(room);
   const before = project(room.engine, playerId);
   room.engine = transition(room.engine, { protocol: 1, id: `core-${room.revision}-${room.engine.revision}`, revision: room.engine.revision, roundId: room.engine.roundId, playerId, handId, action }, random, now);
+  recordWalletRound(room);
   room.roundDeadline = room.engine.phase === 'ROUND_COMPLETE' ? wasComplete ? deadline : now + resultsRevealDelay(before, project(room.engine, playerId)) + RESULTS_DURATION_MS : null;
   if (room.engine.phase === 'INSURANCE' && room.insuranceDeadline === null) room.insuranceDeadline = now + 15_000;
   if (room.engine.phase !== 'INSURANCE') room.insuranceDeadline = null;
@@ -55,7 +59,7 @@ function openBetting(room: OnlineRoom, now: number) {
     if (!room.members[p.id]!.connected || p.balance < 20 || room.members[p.id]!.leaveAfterRound) room.locked[p.id] = 'out';
   }
 }
-export function roomActions(room: OnlineRoom, playerId: string): ActionType[] {
+function baseRoomActions(room: OnlineRoom, playerId: string): ActionType[] {
   const p = room.engine.players.find(p => p.id === playerId);
   if (!p || room.members[playerId]?.leaveAfterRound) return [];
   const actions: ActionType[] = ['Leave'];
@@ -75,11 +79,14 @@ export function roomActions(room: OnlineRoom, playerId: string): ActionType[] {
   }
   return [...actions, ...project(room.engine, playerId).legalActions];
 }
+export function roomActions(room: OnlineRoom, playerId: string): ActionType[] {
+  return walletActions(room, playerId, baseRoomActions(room, playerId));
+}
 export function roomSnapshot(room: OnlineRoom, playerId: string): Snapshot {
   assertRule(room.members[playerId], 'SESSION_INVALID', 'Your guest session is no longer valid.');
   const snapshot = project(room.engine, playerId);
   return { ...snapshot, revision: room.revision, roundDeadline: resultsDeadline(room), legalActions: roomActions(room, playerId),
-    room: { inviteId: room.id, managerPlayerId: room.managerId, bettingOpen: room.bettingDeadline !== null, bettingDeadline: room.bettingDeadline, insuranceDeadline: room.insuranceDeadline, claimVersion: room.members[playerId]!.claimVersion },
+    room: { inviteId: room.id, gameId: room.gameId ?? 'blackjack', visibility: room.visibility ?? 'private', managerPlayerId: room.managerId, bettingOpen: room.bettingDeadline !== null, bettingDeadline: room.bettingDeadline, insuranceDeadline: room.insuranceDeadline, claimVersion: room.members[playerId]!.claimVersion },
     players: snapshot.players.map(p => ({ ...p, connected: room.members[p.id]!.connected, reservationDeadline: room.members[p.id]!.reservationDeadline, leavingAfterRound: room.members[p.id]!.leaveAfterRound, ready: room.locked[p.id] === 'ready', sittingOut: room.locked[p.id] === 'out' })) };
 }
 export function applyCommand(previous: OnlineRoom, command: Command, random: RandomIndex, now: number): OnlineRoom {
@@ -127,7 +134,7 @@ export function expireRoomDecisions(previous: OnlineRoom, random: RandomIndex, n
       const id = engine.players[0]!.id;
       room.roundDeadline = now + resultsRevealDelay(project(room.engine, id), project(engine, id)) + RESULTS_DURATION_MS;
     }
-    room.engine = engine; changed = true;
+    room.engine = engine; recordWalletRound(room); changed = true;
   }
   if (!changed) return previous;
   room.revision++; room.lastActivity = now; return room;
@@ -154,6 +161,7 @@ export function collectSeats(room: OnlineRoom, now: number) {
     const lockedWager = room.engine.phase === 'BETTING' && room.bettingDeadline !== null && room.locked[p.id] === 'ready';
     const unresolvedHand = p.hands.length > 0 && room.engine.phase !== 'BETTING' && room.engine.phase !== 'ROUND_COMPLETE';
     if (member.leaveAfterRound && !lockedWager && !unresolvedHand) {
+      if (!sealWalletSeat(room, p.id)) continue;
       room.engine.players = room.engine.players.filter(other => other.id !== p.id);
       delete room.members[p.id]; delete room.locked[p.id]; delete room.commandRates[p.id];
       room.tickets = room.tickets.filter(ticket => ticket.playerId !== p.id);
@@ -172,7 +180,8 @@ export function collectSeats(room: OnlineRoom, now: number) {
 export function nextAlarm(room: OnlineRoom) {
   const deadlines: (number | null)[] = [room.bettingDeadline, room.insuranceDeadline, room.engine.decisionDeadline, resultsDeadline(room)];
   for (const member of Object.values(room.members)) deadlines.push(member.presenceDeadline, member.reservationDeadline);
-  if (!Object.values(room.members).some(member => member.connected)) deadlines.push(room.lastActivity + ROOM_IDLE_MS);
+  if (!Object.values(room.members).some(member => member.connected) && !walletHasFunds(room)) deadlines.push(room.lastActivity + ROOM_IDLE_MS);
+  if (room.wallet?.outbox.length) deadlines.push(room.wallet.retryAt ?? 0);
   const pending = deadlines.filter((value): value is number => value !== null);
   return pending.length ? Math.min(...pending) : null;
 }

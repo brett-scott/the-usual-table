@@ -1,12 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@casual/protocol';
-import { expectOneScreen, rigShoe } from './fixtures';
+import { openTableEntry, expectOneScreen, rigShoe } from './fixtures';
 
 test('Max Bet, double eligibility, numeric bust totals and automatic results countdown', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const now = new Date('2026-10-29T00:00:00Z'); await page.clock.install({ time: now }); await page.clock.pauseAt(now);
   await rigShoe(page, ['4', '10', '5', '7', 'K', '9']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Max player'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Max player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Max Bet', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Max Bet', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Deal me in' }).click();
@@ -30,7 +30,7 @@ test('Max Bet, double eligibility, numeric bust totals and automatic results cou
 test('double is unavailable on 12 and Next round can skip an unfinished dealer reveal', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await rigShoe(page, ['6', '6', '6', '10', '5']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Skip player'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Skip player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Deal me in' }).click();
   await expect(page.getByRole('button', { name: 'Stand', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Double', exact: true })).toBeDisabled();
@@ -56,7 +56,7 @@ test('guests see ready and waiting states, shared results and the host skipping 
     return latest.get(page)!;
   }
   try {
-    await page.goto('./'); await page.getByLabel('What should we call you?').fill('Host'); await page.getByRole('button', { name: 'Create a table with friends' }).click();
+    await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Host'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     await guest.goto(page.url()); await guest.getByLabel('What should we call you?').fill('Guest'); await guest.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(guest.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');

@@ -1,13 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@casual/protocol';
-import { expectOneScreen } from './fixtures';
+import { openTableEntry, expectOneScreen } from './fixtures';
 
 const api = `http://127.0.0.1:${process.env.E2E_API_PORT || '8787'}`;
 const table = (page: Page) => page.locator('[data-connection]');
 async function createTable(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Resuming guest');
-  await page.getByRole('button', { name: 'Create a table with friends' }).click();
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Resuming guest');
+  await page.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(table(page)).toHaveAttribute('data-connection', 'connected');
 }
 async function current(page: Page): Promise<Snapshot> {
@@ -72,16 +72,18 @@ test('expired invitations and invalid saved sessions show recovery actions', asy
   await page.goto(`./#/room/${'0'.repeat(32)}`); await page.getByLabel('What should we call you?').fill('Guest');
   await page.getByRole('button', { name: 'Join table', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Table expired' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create a table with friends' })).toBeEnabled();
+  await expect(page.getByRole('link', { name: 'Find or create another table' })).toBeVisible();
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('expired-invitation.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Create a table with friends' }).click();
+  await page.getByRole('link', { name: 'Find or create another table' }).click();
+  await page.getByRole('button', { name: 'Create a table', exact: true }).click();
+  await page.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(table(page)).toHaveAttribute('data-connection', 'connected');
   await page.evaluate(() => {
     const invite = location.hash.split('/').at(-1)!; const key = `casual-room:${invite}`;
     const session = JSON.parse(localStorage.getItem(key)!) as { credential: string }; session.credential = '0'.repeat(64); localStorage.setItem(key, JSON.stringify(session));
   });
   await page.reload(); await expect(page.getByRole('heading', { name: 'Seat unavailable' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create a table with friends' })).toBeEnabled();
+  await expect(page.getByRole('link', { name: 'Find or create another table' })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('invalid-session.png'), fullPage: true });
 });

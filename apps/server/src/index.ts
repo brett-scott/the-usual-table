@@ -1,7 +1,12 @@
 import { errorResponse, originAllowed, readRequestBody } from './security';
 import { GameError } from '@casual/engine';
+import { GAME_CATALOG, PUBLIC_SUPABASE_CONFIG, supabaseUrlSchema } from '@casual/protocol';
 import type { Env } from './env';
+import { verifyAccountSession } from './accountAuth';
+import { readAccountWallet } from './accountWallet';
+import { supabaseWallet } from './supabaseWallet';
 export { TableRoom } from './tableRoom';
+export { LobbyDirectory } from './lobbyDirectory';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -11,7 +16,34 @@ export default {
       if (!originAllowed(request, env.ALLOWED_ORIGINS, request.headers.get('Upgrade')?.toLowerCase() === 'websocket')) throw new GameError('ORIGIN_DENIED', 'This website is not allowed to connect to the table service.');
       const url = new URL(request.url);
       if (request.method === 'OPTIONS') response = new Response(null, { status: 204 });
-      else if (url.pathname === '/api/v1/health' && request.method === 'GET') response = Response.json({ status: 'ok', protocol: 1 });
+      else if (url.pathname === '/api/v1/health' && request.method === 'GET') {
+        const auth = supabaseUrlSchema.safeParse(env.SUPABASE_URL ?? PUBLIC_SUPABASE_CONFIG.url);
+        response = Response.json({ status: 'ok', protocol: 1, authProjectUrl: auth.success ? auth.data : null });
+      }
+      else if (url.pathname === '/api/v1/games' && request.method === 'GET') response = Response.json({ games: GAME_CATALOG });
+      else if (url.pathname === '/api/v1/account/session' && request.method === 'GET') {
+        if (!(await env.ENTRY_LIMITER.limit({ key: `account:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before reconnecting your account.');
+        response = Response.json(await verifyAccountSession(request, env));
+      }
+      else if (url.pathname === '/api/v1/account/wallet' && ['GET', 'POST'].includes(request.method)) {
+        if (!(await env.ENTRY_LIMITER.limit({ key: `wallet:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before refreshing your wallet.');
+        const account = await verifyAccountSession(request, env);
+        if (request.method === 'POST' && request.body) {
+          const bytes = await readRequestBody(request);
+          if (bytes.length) throw new GameError('INVALID_REQUEST', 'Wallet setup does not accept account IDs, amounts or other fields.');
+        }
+        if (env.WALLET_SERVICE) {
+          if (request.method === 'POST') throw new GameError('WALLET_NOT_CONNECTED', 'Wallet provisioning is not configured for this service.');
+          response = Response.json(await readAccountWallet(account, env.WALLET_SERVICE));
+        } else response = Response.json(await supabaseWallet(request, env, account, request.method === 'POST'));
+      }
+      else if (/^\/api\/v1\/games\/[^/]+\/lobbies$/.test(url.pathname) && request.method === 'GET') {
+        const gameId = url.pathname.split('/')[4];
+        const game = GAME_CATALOG.find(game => game.id === gameId);
+        if (!game || game.status !== 'available') throw new GameError('GAME_UNAVAILABLE', 'This game is not available yet.');
+        if (!(await env.ENTRY_LIMITER.limit({ key: `lobbies:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before refreshing the tables.');
+        response = Response.json({ gameId, lobbies: await env.LOBBIES.getByName(game.id).list() });
+      }
       else {
         const create = url.pathname === '/api/v1/rooms' && request.method === 'POST';
         const match = url.pathname.match(/^\/api\/v1\/rooms\/([a-f0-9]{32})(?:\/(join|resume|ticket|snapshot|socket))?$/);

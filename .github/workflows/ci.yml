@@ -35,7 +35,7 @@ jobs:
       - name: Validate production Worker configuration without deployment
         run: npm run deploy:worker -- --dry-run
         env:
-          CLOUDFLARE_WORKER_NAME: the-casual-table-api-production
+          CLOUDFLARE_WORKER_NAME: the-usual-table-api-production
           CLOUDFLARE_ACCOUNT_ID: '00000000000000000000000000000000'
           CLOUDFLARE_RATE_LIMIT_NAMESPACE_ID: '102802'
           ALLOWED_ORIGINS: https://example.test

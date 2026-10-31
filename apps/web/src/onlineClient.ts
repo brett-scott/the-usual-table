@@ -1,6 +1,7 @@
-import { CHAT_CAPABILITY, chatTextSchema, serverEventSchema, sessionResponseSchema, snapshotSchema, type PlayerIcon, type Action, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
+import { CHAT_CAPABILITY, chatTextSchema, lobbyListSchema, serverEventSchema, sessionResponseSchema, snapshotSchema, type LobbyVisibility, type PlayerIcon, type Action, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || `${location.protocol}//${location.hostname}:8787`).replace(/\/$/, '');
+const temporarySessions = new Map<string, GuestSession>();
 export class ApiError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
@@ -28,7 +29,18 @@ function parseSession(value: unknown) {
   if (!result.success) throw new ApiError('CLIENT_INCOMPATIBLE', 'This app version cannot read the table response. Refresh and try again.');
   return result.data;
 }
-export async function createGuest(name: string, icon?: PlayerIcon) { return parseSession(await request('', { body: { name, icon } })); }
+export async function createGuest(name: string, icon?: PlayerIcon, visibility?: LobbyVisibility) { return parseSession(await request('', { body: { name, icon, visibility } })); }
+export async function listLobbies(signal?: AbortSignal) {
+  const controller = new AbortController(); const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
+  const timeout = setTimeout(abort, 8000);
+  let response: Response;
+  try { response = await fetch(`${apiBase}/api/v1/games/blackjack/lobbies`, { signal: controller.signal, cache: 'no-store' }); }
+  catch { throw new Error('The table browser is unavailable. You can still create a private table or play solo.'); }
+  finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
+  if (!response.ok) throw new Error(response.status === 429 ? 'Please wait a moment before refreshing tables.' : 'The table browser is unavailable. Try again shortly.');
+  return lobbyListSchema.parse(await response.json()).lobbies;
+}
 export async function joinGuest(invite: string, name: string, icon?: PlayerIcon) { return parseSession(await request(`/${invite}/join`, { body: { name, icon } })); }
 export async function resumeGuest(session: GuestSession, signal?: AbortSignal): Promise<SessionResponse> {
   const response = await request(`/${session.inviteId}/resume`, { session, signal }) as { snapshot: unknown };
@@ -38,12 +50,24 @@ export async function resumeGuest(session: GuestSession, signal?: AbortSignal): 
 }
 export function savedSession(invite: string): GuestSession | null {
   try { const value = JSON.parse(localStorage.getItem(`casual-room:${invite}`) ?? 'null') as GuestSession | null;
-    return value?.inviteId === invite && /^[a-f0-9]{64}$/.test(value.credential) && typeof value.playerId === 'string' ? value : null;
-  } catch { return null; }
+    return value?.inviteId === invite && /^[a-f0-9]{64}$/.test(value.credential) && typeof value.playerId === 'string' ? value : temporarySessions.get(invite) ?? null;
+  } catch { return temporarySessions.get(invite) ?? null; }
+}
+export function lastTable(): GuestSession | null {
+  try { const invite = localStorage.getItem('casual-last-room'); return invite && /^[a-f0-9]{32}$/.test(invite) ? savedSession(invite) : null; }
+  catch { return null; }
+}
+export function rememberSession(session: GuestSession) {
+  temporarySessions.set(session.inviteId, session);
+  try { localStorage.setItem(`casual-room:${session.inviteId}`, JSON.stringify(session)); localStorage.setItem('casual-last-room', session.inviteId); } catch { /* The current tab can still play without persistent storage. */ }
+}
+export function forgetSession(invite: string) {
+  temporarySessions.delete(invite);
+  try { localStorage.removeItem(`casual-room:${invite}`); if (localStorage.getItem('casual-last-room') === invite) localStorage.removeItem('casual-last-room'); } catch { /* Best effort. */ }
 }
 export function createOnlineClient(initial: SessionResponse): GameClient {
   const { session } = initial;
-  try { localStorage.setItem(`casual-room:${session.inviteId}`, JSON.stringify(session)); } catch { /* The live seat still works without persistent browser storage. */ }
+  rememberSession(session);
   let snapshot = initial.snapshot;
   let chat: ChatFeed = { messages: [], available: false, unread: 0 };
   let hasChatHistory = false;

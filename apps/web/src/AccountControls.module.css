@@ -1,0 +1,43 @@
+.controls { position: relative; display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
+.trigger { display: flex; align-items: center; border: 1px solid #b7a16e; background: #243d31; color: #f4e7c6; border-radius: 7px; padding: 9px 12px; min-height: 44px; white-space: nowrap; cursor: pointer; }
+.nickname { display: block; max-width: min(24ch, 22vw); overflow: hidden; text-overflow: ellipsis; }
+.profileIcon { display: grid; place-items: center; width: 24px; flex-shrink: 0; margin-right: 7px; font-size: 19px; }
+.menu { position: absolute; top: calc(100% + 7px); right: 0; z-index: 20; width: min(260px, calc(100vw - 28px)); max-height: calc(100dvh - 90px); overflow-y: auto; padding: 6px; background: #172b22; border: 1px solid #9d8d62; border-radius: 10px; box-shadow: 0 8px 24px #0006; color: #f1efe3; }
+.menu button { display: block; width: 100%; min-height: 44px; text-align: left; padding: 10px 12px; font: inherit; font-size: 14px; color: inherit; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+.menu button:hover, .menu button:focus-visible { background: #2b4938; }
+.menu .note { padding: 0 12px; font-size: 11px; line-height: 1.5; color: #bfcdbb; }
+.wallet { border-top: 1px solid #59664e; padding: 14px 12px 4px; margin-top: 6px; font-size: 12px; }
+.wallet > span { display: block; color: #bfcdbb; }
+.wallet > strong { display: block; font-size: 19px; margin-top: 6px; overflow-wrap: anywhere; }
+.wallet small { font-size: 11px; font-weight: 400; color: #bfcdbb; }
+.wallet dl { margin: 12px 0 0; }
+.wallet dl > div { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.wallet dd { margin: 0; }
+.wallet p { color: #f1d4a3; }
+.notice { max-width: 145px; font-size: 10px; color: #f1d4a3; line-height: 1.4; }
+.dialog { width: min(430px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow-y: auto; color: #f1efe3; background: #172b22; border: 1px solid #9d8d62; border-radius: 14px; padding: 22px; }
+.dialog::backdrop { background: #000b; }
+.heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.heading h2 { margin: 0; font: 25px/1.2 Georgia, serif; }
+.dialog button { border: 1px solid #c5b47f; background: #2b4938; color: #f8efda; border-radius: 7px; padding: 11px 14px; min-height: 44px; font: inherit; cursor: pointer; }
+.dialog button:disabled { opacity: .6; cursor: wait; }
+.heading button { min-width: 44px; padding: 5px; font-size: 24px; }
+.dialog p { font-size: 14px; line-height: 1.6; }
+.dialog .note { font-size: 12px; color: #bfcdbb; }
+.providers { display: grid; gap: 10px; margin-block: 20px; }
+.dialog > button { display: block; width: 100%; margin-top: 10px; }
+.dialog .guest { background: transparent; border-color: #768a74; }
+.dialog .error { color: #ffd5c3; }
+.nicknameForm { display: grid; gap: 10px; }
+.nicknameForm label { margin-top: 8px; font-size: 14px; }
+.nicknameForm input, .nicknameForm select { width: 100%; min-height: 46px; padding: 10px 12px; font: inherit; font-size: 16px; border-radius: 7px; border: 1px solid #9d8d62; color: #f1efe3; background: #101e18; }
+.nicknameForm .note { margin-top: 0; }
+.nicknameForm button { width: 100%; }
+.callback { min-height: 100dvh; display: grid; align-content: center; justify-items: center; background: #172b22; color: #f1efe3; padding: 20px; }
+@media (max-width: 700px) {
+  .notice { position: absolute; top: calc(100% + 3px); right: 0; width: 150px; max-width: 150px; z-index: 2; padding: 5px; background: #243d31; border: 1px solid #768a74; border-radius: 5px; }
+  .trigger { padding: 8px; font-size: 11px; }
+  .compact .trigger { max-width: 52px; }
+  .compact .nickname { display: none; }
+  .compact .profileIcon { margin-right: 0; }
+}

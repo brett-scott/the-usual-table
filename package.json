@@ -1,5 +1,5 @@
 {
-  "name": "the-casual-table",
+  "name": "the-usual-table",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -16,6 +16,7 @@
     "build": "npm run typecheck && npm run build -w @casual/web && npm run build -w @casual/server",
     "build:pages": "node scripts/build-pages.mjs",
     "check:api": "node scripts/check-api.mjs",
+    "wallet:prepare": "node scripts/prepare-wallet-sql.mjs",
     "deploy:worker": "node scripts/deploy-worker.mjs"
   },
   "devDependencies": {

@@ -24,6 +24,7 @@
 .seatLabel { font-size: 9px; color: #d5e0cf; letter-spacing: 2px; margin: 0 0 12px; display: flex; align-items: center; justify-content: center; gap: 9px; }
 .dealerNote { display: block; font-size: 10px; color: #d2dfc9b3; margin-top: 12px; }
 .cards { display: flex; justify-content: center; align-items: center; padding: 0 6px; min-width: 0; }
+.dealer .cards { --card-overlap: -8px; }
 .card { width: 64px; height: 90px; flex: 0 0 auto; display: block; color: #24332d; fill: currentColor; border-radius: 6px; margin-left: -16px; transform: rotate(-3deg); perspective: 800px; }
 .cardTravel, .cardFlipper { width: 100%; height: 100%; position: relative; }
 .cardFlipper { transform-style: preserve-3d; }
@@ -131,6 +132,8 @@
 .smallNote { font-size: 11px; color: var(--muted); }
 .welcome { padding: 32px 5% 24px; display: flex; flex-direction: column; background: radial-gradient(ellipse at 50% 35%, #28523d55, transparent 68%), var(--bg); }
 .welcomeBrand { display: flex; align-items: center; gap: 13px; font: 25px Georgia, serif; }
+.welcomeNav { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-shrink: 0; }
+.welcomeNav > a, .browseTables { min-height: 44px; display: inline-flex; align-items: center; padding: 8px; font-size: 12px; color: var(--accent); }
 .welcomeMain { text-align: center; margin: auto; padding: 45px 0 55px; width: min(100%, 680px); }
 .welcomeArt { height: 150px; display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 30px; }
 .welcomeArt .card { height: 142px; width: 102px; transform: rotate(-15deg); }
@@ -194,7 +197,7 @@
   .cardSpaces { gap: 7px; }
   .cardSpaces span { width: 44px; height: clamp(48px, 8.5dvh, 78px); }
   .cards { container-type: inline-size; width: 100%; max-width: 100%; min-height: 0; padding: 4px 0; flex-wrap: nowrap; }
-  .cards .card { --card-width: calc(var(--card-height, 72px) * 76 / 106); width: var(--card-width); height: var(--card-height, 72px); margin-left: calc(-1 * max(12px, (var(--card-count, 2) * var(--card-width) - 100cqw + 12px) / max(1, var(--card-count, 2) - 1))); }
+  .cards .card { --card-width: calc(var(--card-height, 72px) * 76 / 106); width: var(--card-width); height: var(--card-height, 72px); margin-left: calc(-1 * max(var(--card-overlap, 12px), (var(--card-count, 2) * var(--card-width) - 100cqw + 12px) / max(1, var(--card-count, 2) - 1))); }
   .cards .card:first-child { margin-left: 0; }
   .cardBack { padding: 2px; border-width: 3px; }
   .cardBack span { width: 24px; height: 31px; font-size: 19px; }
@@ -272,6 +275,9 @@
   .dialog h2 { font-size: 25px; }
   .welcome { height: 100dvh; min-height: 0; padding: max(12px, env(safe-area-inset-top)) 20px max(12px, env(safe-area-inset-bottom)); }
   .welcomeBrand { flex-shrink: 0; font-size: 20px; gap: 9px; }
+  .welcomeNav { gap: 5px; flex-wrap: wrap; }
+  .welcomeNav > :last-child { margin-left: auto; }
+  .welcomeNav > a { min-height: 32px; padding: 5px; font-size: 10px; }
   .welcomeMain { flex: 1; min-height: 0; width: 100%; margin: 0 auto; padding: 6px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
   .welcomeArt { flex-shrink: 0; height: clamp(55px, 12dvh, 100px); margin: 0 0 6px; }
   .welcomeArt .card { height: clamp(55px, 12dvh, 100px); width: clamp(40px, 8.6dvh, 72px); }
@@ -381,4 +387,62 @@
   .nameForm label, .nameForm input, .nameForm > p, .entryProblem { grid-column: 1 / -1; }
   .nameForm > button:last-child:nth-of-type(3) { grid-column: 1 / -1; }
   .nameForm button { font-size: 11px; }
+}
+/* Desktop allocates the visible height to the table, controls and footer. */
+@media (min-width: 641px) and (min-height: 501px) {
+  .app { height: 100dvh; min-height: 0; display: flex; flex-direction: column; --table-header-height: 76px; }
+  .app .header { flex: 0 0 var(--table-header-height); min-height: 0; width: 100%; margin: 0 auto; padding: 10px 3%; gap: 10px; }
+  .app .brand { min-width: 0; font-size: 22px; }
+  .app .brand > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app .brand small { display: none; }
+  .app .headerActions { flex-shrink: 0; gap: 6px; }
+  .app .headerActions button { min-height: 44px; padding: 8px 12px; }
+  .app .practiceBadge { padding-right: 0; font-size: 10px; }
+  .app .main { flex: 1; min-height: 0; width: 100%; margin: 0 auto; padding: 10px 3% 8px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 10px; }
+  .app .tableHeading { margin: 0; gap: 10px; }
+  .app .tableHeading .eyebrow { margin-bottom: 4px; }
+  .app .tableHeading h1 { font-size: 24px; }
+  .app .roomMeta span { margin-top: 3px; }
+  .app .table { min-height: 0; border-width: 6px; padding: 5px; border-radius: 100px 100px 65px 65px; }
+  .app .tableInner { height: 100%; min-height: 0; width: 100%; padding: 14px 20px; border-radius: 85px 85px 52px 52px; display: grid; grid-template-rows: minmax(86px, .6fr) auto minmax(0, 1.4fr); gap: 8px; align-items: stretch; }
+  /* Inline-size containment on card rows requires an allocated parent width. */
+  .app .dealer { min-height: 0; min-width: 0; width: min(80%, 720px); justify-self: center; align-self: center; }
+  .app .dealerNote { margin-top: 5px; }
+  .app .seatLabel { margin-bottom: 5px; }
+  .app .shoe { right: 8%; top: 22px; }
+  .app .feltLettering { margin: 0; width: max-content; max-width: 100%; justify-self: center; }
+  .app .feltLettering h2 { font-size: 30px; }
+  .app .feltLettering > div { margin-top: 5px; padding-block: 4px; }
+  .app .seats { min-height: 0; align-self: stretch; align-items: end; gap: 10px; margin: 0; }
+  .app .ownSeat { padding: 8px 6px; }
+  .app .playerHead { margin-bottom: 6px; }
+  .app .emptySeat { padding-bottom: 8px; }
+  .app .hands { gap: 4px; }
+  .app .hand { padding: 3px 2px; flex: 1 1 0; }
+  .app .cards { container-type: inline-size; }
+  .app .card { width: calc(var(--card-height) * 76 / 106); height: var(--card-height); --card-height: clamp(44px, 8dvh, 86px); margin-left: calc(-1 * max(var(--card-overlap, 12px), (var(--card-count, 2) * var(--card-height) * 76 / 106 - 100cqw + 12px) / max(1, var(--card-count, 2) - 1))); }
+  .app .card:first-child { margin-left: 0; }
+  .app .hands:has(> :nth-child(2)) .card { --card-height: clamp(38px, 6dvh, 60px); }
+  .app .otherSeat .card { --card-height: clamp(38px, 6dvh, 62px); }
+  .app .handInfo { margin-top: 4px; gap: 3px; }
+  .app .countdown { margin-top: 4px; }
+  .app .cardSpaces span { height: clamp(48px, 8dvh, 86px); width: clamp(34px, 5.7dvh, 61px); }
+  .app .controls { margin: 0; padding: 10px 14px; grid-template-columns: minmax(100px, .8fr) minmax(0, 3fr); gap: 12px; }
+  .app .betLimits { display: none; }
+  .app .status { margin-bottom: 7px; font-size: 11px; }
+  .app .buttons { gap: 6px; }
+  .app .buttons > button { min-height: 44px; padding: 8px 12px; }
+  .app .balance strong { font-size: 23px; }
+  .app .betControl button { min-height: 44px; }
+  .app .footer { padding: 0 2px; min-height: 28px; align-items: center; }
+  .app .leaveButton { min-height: 28px; }
+  .app .error { margin: 0; grid-column: 1 / -1; }
+}
+@media (min-width: 641px) and (min-height: 501px) and (max-height: 900px) {
+  .app .feltLettering { display: none; }
+  .app .tableInner { grid-template-rows: minmax(86px, .6fr) minmax(0, 1.4fr); }
+  .app .shoeIcon, .app .shoe small { display: none; }
+}
+@media (min-width: 641px) and (max-width: 1199px) and (min-height: 501px) {
+  .app .practiceBadge { display: none; }
 }

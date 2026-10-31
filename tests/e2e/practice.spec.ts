@@ -1,21 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expectOneScreen, openTableEntry, installEngineFixture, rigShoe } from './fixtures';
+import { expect, test } from '@playwright/test';
 
-async function rigShoe(page: Page, ranks: string[]) {
-  // Browser-only fixture: construct a desired physical shoe, then invert Fisher–Yates.
-  // Production has no seed control or fixture endpoint.
-  const cards = Array.from({ length: 6 }, (_, deck) => ['spades', 'hearts', 'diamonds', 'clubs'].flatMap(suit => ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'].map(rank => ({ id: `${deck}-${suit}-${rank}`, rank })))).flat();
-  const unused = [...cards];
-  const prefix = ranks.map(rank => unused.splice(unused.findIndex(c => c.rank === rank), 1)[0]!);
-  const desired = [...prefix, ...unused]; const current = [...cards]; const indices: number[] = [];
-  for (let i = 311; i > 0; i--) { const j = current.findIndex(c => c.id === desired[i]!.id); indices.push(j); [current[i], current[j]] = [current[j]!, current[i]!]; }
-  await page.addInitScript(values => {
-    let cursor = 0;
-    Object.defineProperty(crypto, 'getRandomValues', { value: (array: Uint32Array) => { array[0] = values[cursor++] ?? 0; return array; } });
-  }, indices);
-}
+test.beforeEach(async ({ page }) => { await installEngineFixture(page); });
 
 test('guest plays repeated complete rounds; themes preserve the hand', async ({ page }, testInfo) => {
-  await page.goto('./');
+  await openTableEntry(page);
   await page.screenshot({ path: testInfo.outputPath('welcome.png'), fullPage: true });
   await page.getByLabel('What should we call you?').fill('River');
   await page.getByRole('button', { name: 'Take a practice seat' }).click();
@@ -42,10 +31,14 @@ test('guest plays repeated complete rounds; themes preserve the hand', async ({ 
 
 test('split hands, double, and hit are usable', async ({ page }, testInfo) => {
   await rigShoe(page, ['8', '6', '8', '10', '8', '8', '8', '8', '3', '2', '2', 'K', '5']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Split player'); await page.getByRole('button', { name: 'Take a practice seat' }).click();
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Split player'); await page.getByRole('button', { name: 'Take a practice seat' }).click();
   await page.getByRole('button', { name: 'Deal me in' }).click();
   for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Split', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Split', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Double', exact: true })).toBeEnabled();
+  if (testInfo.project.name === 'desktop') for (const [width, height] of [[1440, 900], [1366, 768], [1280, 720], [1024, 768]]) {
+    await page.setViewportSize({ width: width!, height: height! }); await expectOneScreen(page);
+  }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('four-hands.png'), fullPage: true });
   await page.getByRole('button', { name: 'Double', exact: true }).click();
@@ -55,7 +48,7 @@ test('split hands, double, and hit are usable', async ({ page }, testInfo) => {
 });
 
 test('name form and controls work with the keyboard', async ({ page }) => {
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Keyboard player'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Keyboard player'); await page.keyboard.press('Enter');
   const rules = page.getByRole('button', { name: 'Rules' }); await rules.focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape');
   await expect(rules).toBeFocused();
@@ -65,7 +58,7 @@ test('name form and controls work with the keyboard', async ({ page }) => {
 
 test('insurance is offered before peek and pays with simultaneous naturals', async ({ page }) => {
   await rigShoe(page, ['A', 'A', 'K', 'Q']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Ace player'); await page.getByRole('button', { name: 'Take a practice seat' }).click();
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Ace player'); await page.getByRole('button', { name: 'Take a practice seat' }).click();
   await page.getByRole('button', { name: 'Deal me in' }).click();
   await expect(page.getByRole('img', { name: 'Face-down dealer card' })).toBeVisible();
   await page.getByRole('button', { name: 'Insure for 5' }).click();
@@ -79,7 +72,7 @@ test('Hit resets the 20-second clock and expiry stands automatically', async ({ 
   const instant = new Date('2026-10-28T00:00:00Z');
   await page.clock.install({ time: instant }); await page.clock.pauseAt(new Date(instant.getTime() + 1000));
   await rigShoe(page, ['2', '10', '3', '7', '2']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Timer player'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Timer player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Deal me in' }).click();
   const remaining = page.getByRole('timer').locator('strong');
   await expect(remaining).toHaveText('20s');
@@ -98,7 +91,7 @@ test('each split hand receives its own timer and background recovery respects ex
   const instant = new Date('2026-10-28T00:00:00Z');
   await page.clock.install({ time: instant }); await page.clock.pauseAt(new Date(instant.getTime() + 1000));
   await rigShoe(page, ['8', '10', '8', '7', '3', '2']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Split timer'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Split timer'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Deal me in' }).click(); await page.getByRole('button', { name: 'Split', exact: true }).click();
   await page.clock.runFor(15_000); await expect(page.getByRole('timer').locator('strong')).toHaveText('5s');
   await page.getByRole('button', { name: 'Stand', exact: true }).click();
@@ -113,7 +106,7 @@ test('each split hand receives its own timer and background recovery respects ex
 test('deal and flip order is staggered and the dealer hole card flips in place', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await rigShoe(page, ['10', '6', '8', '10', '5']);
-  await page.goto('./'); await page.getByLabel('What should we call you?').fill('Animation player'); await page.keyboard.press('Enter');
+  await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Animation player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Deal me in' }).click();
   const own = page.getByRole('group', { name: 'Player hand cards' }).locator('[data-deal-at]');
   const dealer = page.getByRole('group', { name: 'Dealer cards' }).locator('[data-deal-at]');

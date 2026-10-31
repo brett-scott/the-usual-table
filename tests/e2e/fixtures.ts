@@ -1,7 +1,42 @@
 import { expect, type Page } from '@playwright/test';
+import { build } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'node:path';
+
+let engineBundle: Promise<Map<string, string>> | undefined;
+const enginePages = new WeakSet<Page>();
+export async function installEngineFixture(page: Page) {
+  if (enginePages.has(page)) return;
+  enginePages.add(page);
+  const base = process.env.E2E_BASE_PATH || '/'; const fixtureBase = `${base}__engine_fixture/`;
+  engineBundle ??= build({ configFile: false, plugins: [react()], base: fixtureBase, logLevel: 'error', define: { 'process.env.NODE_ENV': '"production"' },
+    build: { write: false, minify: true, lib: { entry: resolve('tests/e2e/engineFixture.tsx'), formats: ['es'], fileName: 'fixture', cssFileName: 'fixture' },
+      rolldownOptions: { output: { codeSplitting: false } } },
+  }).then(result => {
+    const bundles = Array.isArray(result) ? result : [result];
+    return new Map(bundles.flatMap(bundle => {
+      if (!('output' in bundle)) throw new Error('Unexpected fixture bundle');
+      return bundle.output.map(file => [file.fileName, file.type === 'chunk' ? file.code : String(file.source)] as [string, string]);
+    }));
+  });
+  const files = await engineBundle;
+  await page.route(url => url.pathname.startsWith(fixtureBase) || url.pathname === base, async route => {
+    const name = new URL(route.request().url()).pathname.slice(fixtureBase.length);
+    const source = files.get(name);
+    if (source !== undefined) { await route.fulfill({ body: source, contentType: name.endsWith('.css') ? 'text/css' : 'text/javascript' }); return; }
+    await route.fulfill({ contentType: 'text/html', body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="${fixtureBase}fixture.css"></head><body><div id="root"></div><script type="module" src="${fixtureBase}fixture.js"></script></body></html>` });
+  });
+}
+
+export async function openTableEntry(page: Page) {
+  await page.goto('./#/games/blackjack');
+  const create = page.getByRole('button', { name: 'Create a table', exact: true });
+  if (!enginePages.has(page)) await create.click();
+}
 
 /** Changes browser RNG only; production has no seed control or fixture endpoint. */
 export async function rigShoe(page: Page, ranks: string[]) {
+  await installEngineFixture(page);
   const cards = Array.from({ length: 6 }, (_, deck) => ['spades', 'hearts', 'diamonds', 'clubs'].flatMap(suit => ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'].map(rank => ({ id: `${deck}-${suit}-${rank}`, rank })))).flat();
   const unused = [...cards];
   const prefix = ranks.map(rank => unused.splice(unused.findIndex(c => c.rank === rank), 1)[0]!);

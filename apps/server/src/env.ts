@@ -1,2 +1,4 @@
 import type { TableRoom } from './tableRoom';
-export interface Env { ROOMS: DurableObjectNamespace<TableRoom>; ALLOWED_ORIGINS: string; ENTRY_LIMITER: RateLimit }
+import type { LobbyDirectory } from './lobbyDirectory';
+import type { WalletGateway } from './roomWallet';
+export interface Env { ROOMS: DurableObjectNamespace<TableRoom>; LOBBIES: DurableObjectNamespace<LobbyDirectory>; ALLOWED_ORIGINS: string; ENTRY_LIMITER: RateLimit; WALLET_SERVICE?: WalletGateway; SUPABASE_URL?: string; SUPABASE_PUBLISHABLE_KEY?: string }

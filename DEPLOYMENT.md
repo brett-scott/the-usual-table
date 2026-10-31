@@ -1,6 +1,10 @@
-# Deploying The Casual Table
+# Deploying The Usual Table
 
 The frontend is a static GitHub Pages site. Multiplayer runs separately on a Cloudflare Worker with one SQLite-backed Durable Object per room. GitHub Pages cannot run that server. Local development needs neither cloud credentials nor a production deployment.
+
+Google/Discord login, saved nickname/icon editing, automatic account-name/icon Blackjack entry and Worker session verification are implemented locally. Deploy the Worker before Pages so account verification and the wallet GET/POST routes are available. The shared public Supabase configuration already selects the user's project; [authentication deployment notes](AUTHENTICATION.md) cover optional overrides and live provider acceptance. The Pages API gate also verifies the Auth project and unauthenticated account/wallet rejection.
+
+The virtual-chip wallet and internal Blackjack funding/result/return integration are tested locally but account-funded browser seats are not enabled. The profile menu now connects to caller-scoped Supabase summary/first-wallet setup functions. Apply [supabase/wallet-setup.sql](supabase/wallet-setup.sql) through the SQL Editor using the [wallet setup guide](WALLET_SETUP.md). The configured project needs no new public variables or administrative keys for this path. Until SQL is installed it shows Not connected yet; after setup a new wallet receives one 10,000-chip welcome grant. Existing wallets are preserved without top-ups. Existing guest rooms keep schema 2; internally funded test rooms use schema 3 with preserved financial records. The SQL has not been applied to the hosted project, and deployment scripts do not apply it. Full profile schema/RLS, private account/seat/controller authorization, daily/activity chip grants and the trusted financial-command backend remain for account-funded play; see [wallet integration boundaries](WALLET_STORAGE.md).
 
 Card appearance selectors are implemented. The remaining accessibility audit and Safari/device validation are **Milestone 6**. They do not block the Milestone 5 release-preparation work, but remain explicit release limitations. See the [README](README.md) and [release checks](RELEASE_CHECKLIST.md).
 
@@ -14,9 +18,11 @@ Card appearance selectors are implemented. The remaining accessibility audit and
 
 Deployments are serialized per service and are not cancelled halfway through. The workflows use the checked-in Node version and lockfile. No deployment occurs just by pushing source. CI uses local-only Wrangler and dummy production identifiers for dry runs; it needs no Cloudflare secrets.
 
+Product branding is **The Usual Table**. Keep an existing installation's Worker name and API URL stable when updating the app name, so rooms and deployment targets are preserved. The checked-in Wrangler identity is retained for compatibility; the example names below describe new installations.
+
 ## Configure Cloudflare first
 
-Sign in to the intended Cloudflare account and open **Workers & Pages**. Complete first-time onboarding and register the account's `workers.dev` subdomain before running a deployment workflow. This account subdomain is separate from the app's Worker name. For example, an account subdomain of `bretts-table` and Worker name `the-casual-table-api-production` produce `https://the-casual-table-api-production.bretts-table.workers.dev`.
+Sign in to the intended Cloudflare account and open **Workers & Pages**. Complete first-time onboarding and register the account's `workers.dev` subdomain before running a deployment workflow. This account subdomain is separate from the app's Worker name. For example, an account subdomain of `bretts-table` and Worker name `the-usual-table-api-production` produce `https://the-usual-table-api-production.bretts-table.workers.dev`.
 
 If Wrangler reports **You need to register a workers.dev subdomain before publishing to workers.dev**, open the dashboard onboarding link printed in the error and complete that setup. If the link does not open, navigate to **Workers & Pages** in the same account and look for the subdomain/onboarding settings. GitHub Actions is non-interactive and declines Wrangler's registration prompt; rerunning alone will not register the subdomain. After registering it, rerun the failed Worker deployment job. Registration does not require changing the app's Worker name, limiter namespace or SQLite migration.
 
@@ -33,9 +39,9 @@ See [Cloudflare's workers.dev configuration](https://developers.cloudflare.com/w
 | --- | --- | --- |
 | `PAGES_BASE_PATH` | Repository variable | `/repository-name/` for a project site, `/` for a user/organization root site or custom domain |
 | `PAGES_ORIGIN` | Repository variable | Exact frontend origin, such as `https://owner.github.io`; no repository path |
-| `VITE_API_BASE_URL` | Repository variable | Deployed Worker HTTPS origin, such as `https://the-casual-table-api-production.account-subdomain.workers.dev`; no `/api` suffix |
+| `VITE_API_BASE_URL` | Repository variable | Deployed Worker HTTPS origin, such as `https://the-usual-table-api-production.account-subdomain.workers.dev`; no `/api` suffix |
 | `CLOUDFLARE_ACCOUNT_ID` | `production` environment variable | Cloudflare's 32-character account ID |
-| `CLOUDFLARE_WORKER_NAME` | `production` environment variable | A stable, distinct production name, such as `the-casual-table-api-production` |
+| `CLOUDFLARE_WORKER_NAME` | `production` environment variable | A stable, distinct production name, such as `the-usual-table-api-production` |
 | `CLOUDFLARE_RATE_LIMIT_NAMESPACE_ID` | `production` environment variable | An unused numeric namespace ID chosen for this app in your account; distinct from local example `102801` |
 | `ALLOWED_ORIGINS` | `production` environment variable | Exact frontend HTTPS origin(s), comma separated; include `PAGES_ORIGIN`, without the repository path |
 | `CLOUDFLARE_API_TOKEN` | `production` environment **secret** | Cloudflare API token scoped to the intended account with the permissions needed to deploy Workers and Durable Objects |
@@ -45,7 +51,7 @@ For a project at `https://owner.github.io/the-usual-table/`, use `/the-usual-tab
 ## Deploy in order
 
 1. Confirm **Checks** passes on the intended default-branch commit. Review configuration and the residual limitations in the release checklist.
-2. Manually run **Deploy Cloudflare Worker** on that branch. The workflow reruns the checks and validates the production bundle before deployment. Wrangler applies the existing `v1` migration creating the SQLite-backed `TableRoom` class. Keep the Worker name and binding stable on subsequent releases to retain rooms.
+2. Manually run **Deploy Cloudflare Worker** on that branch. The workflow reruns the checks and validates the production bundle before deployment. Wrangler retains the `v1` migration for SQLite-backed `TableRoom` and applies the additive `v2` migration for `LobbyDirectory` with the `LOBBIES` binding. Keep the existing Worker name, `ROOMS` binding and migration history stable to retain rooms. The new directory binding/migration is in source configuration; no new dashboard variable or secret is required for this feature.
 3. Confirm the API's actual HTTPS URL and set `VITE_API_BASE_URL`. `workers.dev` is enabled in the generated production config; version preview URLs are disabled. The account subdomain must already be registered as described above.
 4. Manually run **Deploy frontend to GitHub Pages**. It refuses missing configuration, HTTP/localhost APIs and malformed base paths. A read-only health/protocol/CORS preflight must pass before the artifact is uploaded for publishing. That preflight does not create guests or rooms and cannot establish multiplayer correctness by itself.
 5. Complete the production smoke checks below on the real HTTPS URLs. Record the frontend commit, Worker deployment/version, URLs, time and results before announcing the release.
@@ -76,7 +82,8 @@ To validate production Worker configuration offline, set the documented Worker v
 
 ## Production smoke test
 
-- Open the actual Pages URL: title, scripts, styles and card assets load with no 404s. Enter practice, finish a round, and refresh under the repository path.
+- Check the landing page shows Blackjack as playable and Baccarat, Roulette and Texas Hold'em as coming soon. Open Blackjack, create a public table and find/join it from an independent browser's **Find a table** page. A private table must stay absent from that list. Verify seat counts, full-table removal and stale-listing recovery; invitation links remain usable for either type.
+- Open the actual Pages URL: title, scripts, styles and card assets load with no 404s. Select Find a Table, create a private one-player lobby, finish a round and refresh under the repository path. Confirm the home tile has one entry action, public discovery and public/private creation are available, friends can join later and the desktop table/controls/chat fit without page scrolling.
 - Create an online room; open its copied `#/room/…` invitation in independent browser profiles/devices. Play with four guests; confirm a fifth is rejected and duplicate names remain distinct seats.
 - Choose different optional emoji Player icons when creating/joining. Verify every guest sees the correct seat icons on desktop and phone, reload restores them, and skipping the picker uses the player's initial.
 - Open **Chat**, exchange messages, check unread counts while closed, then reload a guest and confirm the recent messages return. Check a different table sees none of those messages. On a phone, close chat and confirm the game still fits on one screen; while your hand is active, chat should show its remaining time and a return button.
@@ -89,6 +96,8 @@ To validate production Worker configuration offline, set the documented Worker v
 - Check CORS for the actual frontend origin and confirm an unrelated origin cannot open a WebSocket. Never copy guest credentials, socket tickets or private room state into screenshots, logs or issue reports.
 
 ## Rollback and state limits
+
+The game hub and public lobby directory add catalog/listing routes, optional private room game/visibility metadata and a separate `LOBBIES` Durable Object namespace. Old rooms default to private Blackjack tables. The directory contains public summaries only, with a 90-second lease and revision guards; joining still goes through the authoritative room. Directory failures do not block gameplay. Preserve both migration tags (`v1` and `v2`) and the original room binding. Deploy the Worker before Pages: earlier Workers reject create requests containing `visibility`. Account wallets, per-game statistics and social login are not part of this deployed feature; see [platform foundations](PLATFORM_FOUNDATIONS.md) for their implementation order.
 
 Player icons add an optional validated `icon` field to guest create/join requests and public/stored players. Existing guests without an icon keep their initial; no storage migration, binding or configuration variable is added. Deploy the Worker before Pages: older Workers reject the new icon request field. Older frontends can continue using the updated Worker. Rolling back to an older Worker can discard icon metadata when it rewrites room storage.
 

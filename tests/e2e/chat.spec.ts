@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expectOneScreen } from './fixtures';
+import { openTableEntry, expectOneScreen } from './fixtures';
 
 async function chat(page: Page) {
   const sidebar = page.getByRole('region', { name: 'Table chat', exact: true });
@@ -11,7 +11,7 @@ test('table chat shares safe text, stays private to the room, survives reload an
   const context = await browser.newContext({ viewport: page.viewportSize()!, reducedMotion: 'reduce' }); const peer = await context.newPage();
   try {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('./'); await page.getByLabel('What should we call you?').fill('Alex'); await page.getByRole('button', { name: 'Create a table with friends' }).click();
+    await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Alex'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
     await peer.goto(page.url()); await peer.getByLabel('What should we call you?').fill('Alex'); await peer.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();

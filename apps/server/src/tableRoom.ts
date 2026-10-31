@@ -1,19 +1,23 @@
 import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
-import { CHAT_CAPABILITY, chatCommandSchema, commandSchema, displayNameSchema, playerIconSchema, type Command, type ServerEvent } from '@casual/protocol';
+import { CHAT_CAPABILITY, chatCommandSchema, commandSchema, displayNameSchema, lobbyVisibilitySchema, playerIconSchema, type Command, type ServerEvent } from '@casual/protocol';
 import { addChat, restoreChat } from './tableChat';
 import { GameError } from '@casual/engine';
 import { applyCommand, assertRule, collectSeats, disconnectMember, expireRoomDecisions, newMember, newRoom, nextAlarm, PRESENCE_MS, ROOM_IDLE_MS, roomSnapshot, type OnlineRoom } from './roomState';
 import { restoreRoom } from './roomStorage';
+import { flushRoomWallet, fundedSeat, walletHasFunds } from './roomWallet';
 import { errorResponse, hashSecret, originAllowed, randomSecret, readJson, secureRandomIndex } from './security';
 import type { Env } from './env';
 
 interface Attachment { playerId: string; controllerId: string; chat?: boolean }
 const guestBody = z.object({ name: displayNameSchema, icon: playerIconSchema.optional() }).strict();
+const createBody = guestBody.extend({ visibility: lobbyVisibilitySchema.optional() });
 const ticketBody = z.object({ claimId: z.string().uuid(), controllerId: z.string().uuid().optional(), claimVersion: z.number().int().nonnegative() }).strict();
 
 export class TableRoom extends DurableObject<Env> {
   private pending: Promise<unknown> = Promise.resolve();
+  private lobbyReport = '';
+  private lobbyPublishedAt = 0;
   private exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.pending.then(operation);
     this.pending = result.catch(() => undefined);
@@ -31,13 +35,39 @@ export class TableRoom extends DurableObject<Env> {
     return room;
   }
   private async save(room: OnlineRoom) {
+    await this.persist(room);
+    await flushRoomWallet(room, this.env.WALLET_SERVICE, () => this.persist(room));
+    if (this.emptyRoom(room)) return;
+    this.publishLobby(room);
+  }
+  private emptyRoom(room: OnlineRoom) {
+    return room.engine.players.length === 0 && !walletHasFunds(room);
+  }
+  private async deleteRoom(room: OnlineRoom) {
+    // Our compatibility date makes deleteAll remove both stored data and its alarm.
+    await this.ctx.storage.deleteAll();
+    this.publishLobby(room, true);
+  }
+  private async persist(room: OnlineRoom) {
     if (collectSeats(room, Date.now())) room.revision++;
+    if (this.emptyRoom(room)) { await this.deleteRoom(room); return; }
     const deadline = nextAlarm(room);
     await this.ctx.storage.transaction(async storage => {
       await storage.put('room', room);
-      if (deadline !== null) await storage.setAlarm(deadline);
+      if (deadline !== null) await storage.setAlarm(Math.max(Date.now() + 1, deadline));
       else await storage.deleteAlarm();
     });
+  }
+  private publishLobby(room: OnlineRoom, expired = false) {
+    if (room.visibility !== 'public') return;
+    const host = room.engine.players.find(player => player.id === room.managerId);
+    const visible = !expired && host && room.engine.players.length < 4 && Object.values(room.members).some(member => member.connected && !member.leaveAfterRound);
+    const report = visible ? { roomId: room.id, gameId: 'blackjack' as const, hostName: host.name, players: room.engine.players.length, capacity: 4, phase: room.engine.phase === 'BETTING' ? 'waiting' as const : 'playing' as const, updatedAt: 0 } : null;
+    const signature = JSON.stringify(report); const now = Date.now();
+    if (!expired && signature === this.lobbyReport && now - this.lobbyPublishedAt < 30_000) return;
+    this.lobbyReport = signature; this.lobbyPublishedAt = now;
+    // Discovery may lag or fail without interrupting table actions. Heartbeats renew its lease.
+    this.ctx.waitUntil(this.env.LOBBIES.getByName('blackjack').update(room.id, room.revision + (expired ? 1 : 0), report).catch(() => { this.lobbyPublishedAt = 0; }));
   }
   private send(ws: WebSocket, event: ServerEvent) {
     try { ws.send(JSON.stringify(event)); } catch { /* The close callback handles presence. */ }
@@ -59,8 +89,8 @@ export class TableRoom extends DurableObject<Env> {
     const next = expireRoomDecisions(room, secureRandomIndex, now);
     const changed = collectSeats(next, now);
     if (changed) next.revision++;
-    if (!Object.values(next.members).some(m => m.connected) && now >= next.lastActivity + ROOM_IDLE_MS) {
-      await this.ctx.storage.transaction(async storage => { await storage.delete('room'); await storage.delete('chat'); await storage.deleteAlarm(); });
+    if (this.emptyRoom(next) || (!Object.values(next.members).some(m => m.connected) && now >= next.lastActivity + ROOM_IDLE_MS && !walletHasFunds(next))) {
+      await this.deleteRoom(next);
       for (const ws of this.ctx.getWebSockets()) { this.send(ws, { type: 'error', code: 'ROOM_EXPIRED', message: 'This table has expired. Create a new table.' }); ws.close(4004, 'Table expired'); }
       throw new GameError('ROOM_EXPIRED', 'This table has expired. Create a new table.');
     }
@@ -78,6 +108,7 @@ export class TableRoom extends DurableObject<Env> {
     const hash = await hashSecret(credential);
     const playerId = Object.keys(room.members).find(id => room.members[id]!.hash === hash && !room.members[id]!.leaveAfterRound);
     assertRule(playerId, 'SESSION_INVALID', 'Your guest session is no longer valid.');
+    assertRule(!fundedSeat(room, playerId), 'ACCOUNT_REQUIRED', 'This seat requires account authorization.');
     return playerId;
   }
   async fetch(request: Request): Promise<Response> {
@@ -87,13 +118,16 @@ export class TableRoom extends DurableObject<Env> {
         const url = new URL(request.url); const operation = url.pathname.split('/').at(-1);
         if (url.pathname === '/api/v1/rooms' && request.method === 'POST') {
           assertRule(!(await this.ctx.storage.get('room')), 'INVALID_REQUEST', 'This table already exists.');
-          const body = guestBody.safeParse(await readJson(request)); assertRule(body.success, 'INVALID_NAME', 'Enter a display name of 1–24 characters.');
+          const body = createBody.safeParse(await readJson(request)); assertRule(body.success, 'INVALID_NAME', 'Enter a display name of 1–24 characters and choose public or private.');
           const credential = randomSecret(); const playerId = crypto.randomUUID(); const inviteId = request.headers.get('X-Room-Id')!;
           const room = newRoom(inviteId, playerId, body.data.name, await hashSecret(credential), secureRandomIndex, Date.now(), body.data.icon);
+          room.gameId = 'blackjack'; room.visibility = body.data.visibility ?? 'private';
           await this.save(room);
           return Response.json({ session: { inviteId, playerId, credential }, snapshot: roomSnapshot(room, playerId) }, { status: 201 });
         }
         const room = await this.catchUp(await this.load());
+        // Closed rooms may still be settling hands/returns internally. Old invitations cannot revive them.
+        assertRule(Object.values(room.members).some(member => !member.leaveAfterRound), 'ROOM_EXPIRED', 'This table has closed. Create a new table.');
         if (operation === 'join' && request.method === 'POST') {
           const body = guestBody.safeParse(await readJson(request)); assertRule(body.success, 'INVALID_NAME', 'Enter a display name of 1–24 characters.');
           assertRule(room.engine.players.length < 4, 'TABLE_FULL', 'This table has four players already. Create another table.');
@@ -116,6 +150,7 @@ export class TableRoom extends DurableObject<Env> {
           assertRule(index >= 0, 'TICKET_INVALID', 'Your connection ticket expired or was already used. Request a new ticket.');
           const claimed = room.tickets.splice(index, 1)[0]!; const { playerId } = claimed;
           assertRule(room.members[playerId] && !room.members[playerId]!.leaveAfterRound, 'SESSION_INVALID', 'Your guest session is no longer valid.');
+          assertRule(!fundedSeat(room, playerId), 'ACCOUNT_REQUIRED', 'This seat requires account authorization.');
           const controllerId = crypto.randomUUID(); const member = room.members[playerId]!;
           assertRule(member.claimVersion === claimed.claimVersion && member.claimId === claimed.claimId, 'SESSION_REPLACED', 'A newer tab has claimed this seat.');
           member.controllerId = controllerId; member.connected = true; member.reservationDeadline = null; member.presenceDeadline = Date.now() + PRESENCE_MS;
@@ -157,6 +192,7 @@ export class TableRoom extends DurableObject<Env> {
         const attachment = ws.deserializeAttachment() as Attachment; playerId = attachment.playerId;
         room = await this.catchUp(await this.load());
         assertRule(room.members[playerId]?.controllerId === attachment.controllerId && room.members[playerId]?.connected, 'SESSION_INVALID', 'This connection no longer controls your seat.');
+        assertRule(!fundedSeat(room, playerId), 'ACCOUNT_REQUIRED', 'This seat requires account authorization.');
         authenticated = true;
         if (message === 'ping') {
           room.members[playerId]!.presenceDeadline = Date.now() + PRESENCE_MS;
