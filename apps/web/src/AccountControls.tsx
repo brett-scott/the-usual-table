@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, useSyncE
 import { PLAYER_ICONS, WALLET_UNITS_PER_CHIP, type PlayerIcon } from '@casual/protocol';
 import { browserAuth, type AuthController, type AuthState } from './authClient';
 import s from './AccountControls.module.css';
+import { AccountStatisticsDialog } from './AccountStatistics';
 
 type ProfileEdit = 'nickname' | 'icon' | null;
 const AuthContext = createContext<{ auth: AuthController; editNickname(): void; editIcon(): void } | null>(null);
@@ -69,6 +70,7 @@ function NicknameForm({ auth, state, required, focusIcon, onSaved }: { auth: Aut
 }
 
 export function AccountControls({ beforeSignIn, signedInOnly = false }: { beforeSignIn?: () => void; signedInOnly?: boolean }) {
+  const [statisticsOpen, setStatisticsOpen] = useState(false);
   const { auth, editNickname, editIcon } = useContext(AuthContext)!;
   const state = useSyncExternalStore(auth.subscribe, auth.getSnapshot);
   const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null); const controls = useRef<HTMLDivElement>(null);
@@ -104,6 +106,7 @@ export function AccountControls({ beforeSignIn, signedInOnly = false }: { before
     }}>
       <button role="menuitem" onClick={() => { closeMenu(); editNickname(); }}>Edit nickname</button>
       <button role="menuitem" onClick={() => { closeMenu(); editIcon(); }}>Edit player icon</button>
+      <button role="menuitem" onClick={() => { closeMenu(); setStatisticsOpen(true); }}>Statistics</button>
       <button role="menuitem" disabled={state.working || state.savingNickname} onClick={() => { closeMenu(); void auth.signOut(); }}>Sign out</button>
       <div className={s.wallet} role="group" aria-label="Account wallet" aria-live="polite">
         <span>Wallet balance</span>
@@ -119,6 +122,7 @@ export function AccountControls({ beforeSignIn, signedInOnly = false }: { before
       </div>
       <p className={s.note}>Choose saved or temporary chips when entering a table.</p>
     </div>}
+    <AccountStatisticsDialog open={statisticsOpen} accountId={state.account?.accountId ?? null} onClose={() => setStatisticsOpen(false)} />
     {state.error && <span className={s.notice} role="status">Account unavailable · Guest play is available</span>}
     <dialog ref={dialog} className={s.dialog} aria-labelledby={titleId} onClose={() => { auth.cancelSignIn(); trigger.current?.focus(); }}>
       <div className={s.heading}><h2 id={titleId}>A seat with your name on it.</h2><button autoFocus aria-label="Close account" onClick={() => dialog.current?.close()}>×</button></div>

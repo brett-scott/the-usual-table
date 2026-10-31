@@ -187,3 +187,42 @@ it('rejects wrong-account RPC data and fails closed for network/abort errors', a
   const offline = await SELF.fetch('https://api.test/api/v1/account/wallet', { headers }); expect(offline.status).toBe(503);
   expect(await offline.json()).toMatchObject({ code: 'WALLET_UNAVAILABLE' });
 });
+
+const statistics = { contract: 1, accountId, unitsPerChip: 100, basis: 'saved-rounds', games: [{ gameId: 'blackjack', roundsPlayed: '3', roundsWon: '1', roundsLost: '1', roundsEven: '1', wageredUnits: '3000', returnedUnits: '3000', netUnits: '0', bestRoundNetUnits: '1000' }] };
+it('reads caller-only statistics with real Workers request options and no caller-selected account', async () => {
+  rpc.mockImplementationOnce(async (url, init) => { expect(new Request(url, init).redirect).toBe('manual'); return Response.json(statistics); });
+  const jwt = await token();
+  const response = await SELF.fetch(`https://api.test/api/v1/account/statistics?accountId=${crypto.randomUUID()}`, { headers: { Origin: origin, Authorization: `Bearer ${jwt}` } });
+  expect(response.status).toBe(200); expect(await response.json()).toEqual(statistics);
+  expect(response.headers.get('Cache-Control')).toBe('no-store');
+  expect(rpc).toHaveBeenCalledExactlyOnceWith(`${PUBLIC_SUPABASE_CONFIG.url}/rest/v1/rpc/usual_table_account_statistics`, expect.objectContaining({ method: 'POST', body: '{}', redirect: 'manual', cache: 'no-store', headers: expect.objectContaining({ Authorization: `Bearer ${jwt}`, apikey: PUBLIC_SUPABASE_CONFIG.publishableKey }) }));
+});
+it('rejects guest statistics and does not provide a statistics mutation endpoint', async () => {
+  expect((await SELF.fetch('https://api.test/api/v1/account/statistics', { headers: { Origin: origin } })).status).toBe(401);
+  expect((await SELF.fetch('https://api.test/api/v1/account/statistics', { method: 'POST', headers: { Origin: origin, Authorization: `Bearer ${await token()}` } })).status).toBe(404);
+  expect(rpc).not.toHaveBeenCalled();
+});
+it.each([
+  { ...statistics, accountId: crypto.randomUUID() },
+  { ...statistics, games: [{ ...statistics.games[0], netUnits: '999' }] },
+  { ...statistics, games: [{ ...statistics.games[0], roundsPlayed: 'NaN' }] },
+  { ...statistics, games: [statistics.games[0], statistics.games[0]] },
+])('fails closed for mismatched, malformed or duplicate statistics', async value => {
+  rpc.mockImplementationOnce(async () => Response.json(value));
+  const response = await SELF.fetch('https://api.test/api/v1/account/statistics', { headers: { Origin: origin, Authorization: `Bearer ${await token()}` } });
+  expect(response.status).toBe(503); expect(await response.json()).toMatchObject({ code: 'STATISTICS_UNAVAILABLE' });
+});
+it.each([302, 307])('rejects statistics HTTP %s redirects without forwarding the caller token', async status => {
+  rpc.mockImplementationOnce(async () => new Response('private redirect', { status, headers: { Location: 'https://other.test/private' } }));
+  const response = await SELF.fetch('https://api.test/api/v1/account/statistics', { headers: { Origin: origin, Authorization: `Bearer ${await token()}` } });
+  expect(response.status).toBe(503); expect(await response.json()).toMatchObject({ code: 'STATISTICS_UNAVAILABLE' }); expect(rpc).toHaveBeenCalledOnce();
+});
+it.each([
+  [404, { code: 'PGRST202' }, 'STATISTICS_NOT_CONNECTED'],
+  [403, { code: '42501' }, 'ACCOUNT_SESSION_INVALID'],
+  [500, { code: 'XX000', message: 'private database detail' }, 'STATISTICS_UNAVAILABLE'],
+] as const)('reports statistics setup/session/service failures safely for HTTP %s', async (status, value, code) => {
+  rpc.mockImplementationOnce(async () => Response.json(value, { status }));
+  const response = await SELF.fetch('https://api.test/api/v1/account/statistics', { headers: { Origin: origin, Authorization: `Bearer ${await token()}` } });
+  const body = await response.json(); expect(body).toMatchObject({ code }); expect(JSON.stringify(body)).not.toContain('private');
+});

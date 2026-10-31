@@ -34,6 +34,18 @@ test('dealer and player cards stay beside each other and table decoration stays 
   await page.getByRole('button', { name: 'Stand', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Dealer cards', exact: true }).getByRole('img')).toHaveCount(7);
   await checkCards(page, 'Dealer cards'); await expectOneScreen(page);
+  const shoe = page.locator('[data-card-shoe]'); const origin = (await shoe.boundingBox())!;
+  expect(origin.width, 'the shoe retains a measured origin for dealing').toBeGreaterThan(0);
+  expect(origin.height).toBeGreaterThan(0);
+  const dealerCards = await page.getByRole('group', { name: 'Dealer cards', exact: true }).getByRole('img').evaluateAll(cards => cards.map(card => {
+    const box = card.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+  }));
+  for (const metadata of await shoe.locator('strong, span:not([aria-hidden]), small').all()) {
+    if (!await metadata.isVisible()) continue;
+    const box = (await metadata.boundingBox())!;
+    expect(dealerCards.some(card => Math.min(card.right, box.x + box.width) - Math.max(card.left, box.x) > 1
+      && Math.min(card.bottom, box.y + box.height) - Math.max(card.top, box.y) > 1), 'shoe metadata must not overlap dealt cards').toBe(false);
+  }
   await page.screenshot({ path: testInfo.outputPath('table-seven-dealer-cards.png'), fullPage: true });
   if (testInfo.project.name === 'desktop') for (const viewport of [{ width: 1366, height: 768 }, { width: 1280, height: 720 }, { width: 1024, height: 768 }]) {
     await page.setViewportSize(viewport); await checkCards(page, 'Dealer cards'); await checkCards(page, 'Player hand cards'); await expectOneScreen(page);

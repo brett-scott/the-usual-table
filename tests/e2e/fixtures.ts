@@ -34,6 +34,13 @@ export async function openTableEntry(page: Page) {
   if (!enginePages.has(page)) await create.click();
 }
 
+export async function openTableOptions(page: Page, section: 'Rules' | 'Cards' | 'Themes') {
+  await page.getByRole('button', { name: 'Table options', exact: true }).click();
+  const options = page.getByRole('dialog', { name: 'Table options', exact: true });
+  await options.getByRole('button', { name: section, exact: true }).click();
+  return options;
+}
+
 /** Changes browser RNG only; production has no seed control or fixture endpoint. */
 export async function rigShoe(page: Page, ranks: string[]) {
   await installEngineFixture(page);

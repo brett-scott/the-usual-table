@@ -98,7 +98,7 @@ test('table browser failure still allows creation of a private solo lobby', asyn
   await page.goto('./#/games/blackjack/lobbies'); await expect(page.getByRole('alert')).toContainText('unavailable');
   await page.getByRole('button', { name: 'Create a table', exact: true }).click();
   await page.getByLabel('What should we call you?').fill('Solo guest'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open betting' }).click(); await expect(page.getByRole('button', { name: /^Ready/ })).toBeEnabled();
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
 });

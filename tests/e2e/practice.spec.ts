@@ -1,4 +1,4 @@
-import { expectOneScreen, openTableEntry, installEngineFixture, rigShoe } from './fixtures';
+import { expectOneScreen, openTableEntry, openTableOptions, installEngineFixture, rigShoe } from './fixtures';
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => { await installEngineFixture(page); });
@@ -8,23 +8,25 @@ test('guest plays repeated complete rounds; themes preserve the hand', async ({ 
   await page.screenshot({ path: testInfo.outputPath('welcome.png'), fullPage: true });
   await page.getByLabel('What should we call you?').fill('River');
   await page.getByRole('button', { name: 'Take a practice seat' }).click();
-  await expect(page.getByRole('heading', { name: 'The practice table' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: /Seat \d empty/ })).toHaveCount(3);
   await page.getByRole('button', { name: 'Increase bet' }).click();
   for (let round = 0; round < 3; round++) {
     await page.getByRole('button', { name: 'Deal me in' }).click();
-    await page.getByRole('button', { name: 'Switch to Midnight table' }).click();
-    await expect(page.locator('[data-theme="midnight"]')).toBeVisible();
-    await page.getByRole('button', { name: 'Switch to Classic table' }).click();
+    const options = await openTableOptions(page, 'Themes');
+    await options.getByRole('radio', { name: 'Midnight', exact: true }).check();
+    await expect(page.locator('[data-connection][data-theme="midnight"]')).toBeVisible();
+    await options.getByRole('radio', { name: 'Classic', exact: true }).check();
+    await options.getByRole('button', { name: 'Close table options' }).click();
     if (await page.getByRole('button', { name: 'No insurance' }).isVisible()) await page.getByRole('button', { name: 'No insurance' }).click();
     if (await page.getByRole('button', { name: 'Stand', exact: true }).isVisible()) await page.getByRole('button', { name: 'Stand', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Next round' })).toBeVisible();
     if (round === 0) await page.screenshot({ path: testInfo.outputPath('table.png'), fullPage: true });
     await page.getByRole('button', { name: 'Next round' }).click();
   }
-  await page.getByRole('button', { name: 'Rules' }).click(); await expect(page.getByRole('dialog')).toBeVisible();
+  await openTableOptions(page, 'Rules'); await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).not.toBeVisible();
-  await expect(page.getByRole('button', { name: 'Rules' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Table options', exact: true })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.reload(); await expect(page.getByLabel('What should we call you?')).toHaveValue('River');
 });
@@ -49,9 +51,10 @@ test('split hands, double, and hit are usable', async ({ page }, testInfo) => {
 
 test('name form and controls work with the keyboard', async ({ page }) => {
   await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Keyboard player'); await page.keyboard.press('Enter');
-  const rules = page.getByRole('button', { name: 'Rules' }); await rules.focus(); await page.keyboard.press('Enter');
-  await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape');
-  await expect(rules).toBeFocused();
+  const options = page.getByRole('button', { name: 'Table options', exact: true }); await options.focus(); await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Rules', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Rules', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(options).toBeFocused();
   await page.getByRole('button', { name: 'Deal me in' }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Deal me in' })).not.toBeVisible();
 });

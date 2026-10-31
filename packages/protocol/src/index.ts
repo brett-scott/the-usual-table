@@ -3,6 +3,8 @@ import { gameIdSchema, lobbyVisibilitySchema, type GameId, type LobbyVisibility 
 export * from './games';
 export * from './wallet';
 export * from './auth';
+export * from './invitations';
+export * from './statistics';
 
 export const PROTOCOL_VERSION = 1;
 export const RESULTS_DURATION_MS = 10_000;

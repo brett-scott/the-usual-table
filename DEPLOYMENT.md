@@ -50,6 +50,8 @@ For a project at `https://owner.github.io/the-usual-table/`, use `/the-usual-tab
 
 ## Deploy in order
 
+For the account-statistics increment, first apply [migration 005](packages/wallet/migrations/005_account_statistics.sql), or rerun the full current [wallet installer](supabase/wallet-setup.sql). Existing balances/history are preserved. Then follow Worker before Pages below; the Pages API gate now requires `accountStatisticsProtocol: 1`. No new credentials or bindings are needed. See [account statistics](ACCOUNT_STATISTICS.md) and the [live wallet reconciliation worksheet](LIVE_WALLET_VERIFICATION.md).
+
 1. Confirm **Checks** passes on the intended default-branch commit. Review configuration and the residual limitations in the release checklist.
 2. Manually run **Deploy Cloudflare Worker** on that branch. The workflow reruns the checks and validates the production bundle before deployment. Wrangler retains the `v1` migration for SQLite-backed `TableRoom` and applies the additive `v2` migration for `LobbyDirectory` with the `LOBBIES` binding. Keep the existing Worker name, `ROOMS` binding and migration history stable to retain rooms. The new directory binding/migration is in source configuration; no new dashboard variable or secret is required for this feature.
 3. Confirm the API's actual HTTPS URL and set `VITE_API_BASE_URL`. `workers.dev` is enabled in the generated production config; version preview URLs are disabled. The account subdomain must already be registered as described above.

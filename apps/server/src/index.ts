@@ -5,6 +5,7 @@ import type { Env } from './env';
 import { verifyAccountSession } from './accountAuth';
 import { readAccountWallet } from './accountWallet';
 import { supabaseWallet } from './supabaseWallet';
+import { supabaseStatistics } from './supabaseStatistics';
 export { TableRoom } from './tableRoom';
 export { LobbyDirectory } from './lobbyDirectory';
 
@@ -19,12 +20,16 @@ export default {
       else if (url.pathname === '/api/v1/health' && request.method === 'GET') {
         const auth = supabaseUrlSchema.safeParse(env.SUPABASE_URL ?? PUBLIC_SUPABASE_CONFIG.url);
         response = Response.json({ status: 'ok', protocol: 1, authProjectUrl: auth.success ? auth.data : null,
-          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE) });
+          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountStatisticsProtocol: 1 });
       }
       else if (url.pathname === '/api/v1/games' && request.method === 'GET') response = Response.json({ games: GAME_CATALOG });
       else if (url.pathname === '/api/v1/account/session' && request.method === 'GET') {
         if (!(await env.ENTRY_LIMITER.limit({ key: `account:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before reconnecting your account.');
         response = Response.json(await verifyAccountSession(request, env));
+      }
+      else if (url.pathname === '/api/v1/account/statistics' && request.method === 'GET') {
+        if (!(await env.ENTRY_LIMITER.limit({ key: `statistics:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before refreshing statistics.');
+        response = Response.json(await supabaseStatistics(request, env, await verifyAccountSession(request, env)));
       }
       else if (url.pathname === '/api/v1/account/wallet' && ['GET', 'POST'].includes(request.method)) {
         if (!(await env.ENTRY_LIMITER.limit({ key: `wallet:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before refreshing your wallet.');

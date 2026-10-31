@@ -12,6 +12,11 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
   const latest = new Map<Page, Snapshot>(); const frames = new Map<Page, string[]>();
   async function fits(peer: Page) {
     if (await peer.evaluate(() => matchMedia('(max-width: 640px), (max-width: 1024px) and (max-height: 500px)').matches)) await expectOneScreen(peer);
+    for (const seat of await peer.getByRole('region', { name: /^Seat \d: / }).all()) {
+      const size = await seat.evaluate(el => ({ height: el.clientHeight, contentHeight: el.scrollHeight, width: el.clientWidth, contentWidth: el.scrollWidth }));
+      expect(size.contentHeight, 'opponent cards and results fit within the seat').toBeLessThanOrEqual(size.height + 1);
+      expect(size.contentWidth, 'opponent card rows stay within the rail').toBeLessThanOrEqual(size.width + 1);
+    }
   }
   for (const peer of pages) {
     frames.set(peer, []);
@@ -31,12 +36,12 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
     await page.goto(`${baseURL}#/games/blackjack`); await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await page.getByLabel('What should we call you?').fill('Alex');
     await page.getByLabel('Player icon', { exact: false }).selectOption('🦊');
     await page.getByRole('button', { name: 'Create table', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     const invite = page.url(); expect(invite).toMatch(/#\/room\/[a-f0-9]{32}$/);
     for (let i = 1; i < 4; i++) {
       const peer = pages[i]!; await peer.goto(invite); await peer.getByLabel('What should we call you?').fill(i === 1 ? 'Alex' : `Guest ${i + 1}`);
       if (i < 3) await peer.getByLabel('Player icon', { exact: false }).selectOption(i === 1 ? '🤖' : '🍀');
-      await peer.getByRole('button', { name: 'Join table', exact: true }).click(); await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+      await peer.getByRole('button', { name: 'Join table', exact: true }).click(); await expect(peer.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     }
     await synced();
     expect(latest.get(page)!.players.map(player => player.icon)).toEqual(['🦊', '🤖', '🍀', undefined]);
@@ -62,6 +67,23 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
       revision = latest.get(page)!.revision;
       await peer.getByRole('button', { name: 'No insurance' }).click(); await synced(revision + 1);
     }
+    for (const peer of pages) {
+      const snapshot = latest.get(peer)!;
+      const own = peer.getByRole('region', { name: 'Your seat', exact: true });
+      const ownCard = (await own.getByRole('group', { name: 'Player hand cards' }).first().getByRole('img').first().boundingBox())!;
+      for (const opponent of snapshot.players.filter(player => player.id !== snapshot.you)) {
+        const seat = peer.getByRole('region', { name: `Seat ${opponent.seat + 1}: ${opponent.name}`, exact: true });
+        const cards = seat.getByRole('group', { name: 'Player hand cards', exact: true }).first();
+        await expect(cards).toBeVisible();
+        const mini = (await cards.getByRole('img').first().boundingBox())!;
+        expect(mini.height, 'opponent cards remain visible on small screens').toBeGreaterThanOrEqual(24);
+        expect(ownCard.height, 'your own cards receive the most space').toBeGreaterThan(mini.height);
+        const second = (await cards.getByRole('img').nth(1).boundingBox())!;
+        expect(second.x - mini.x, 'new cards have distinguishable positions').toBeGreaterThan(6);
+      }
+      await fits(peer);
+    }
+    await page.screenshot({ path: testInfo.outputPath('four-player-visible-cards.png'), fullPage: true });
     for (let turn = 0; latest.get(page)!.phase !== 'ROUND_COMPLETE' && turn < 8; turn++) {
       const active = latest.get(page)!.activePlayerId; const peer = pages.find(p => latest.get(p)!.you === active)!;
       revision = latest.get(page)!.revision;
@@ -78,14 +100,14 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
       await fits(peer);
     }
     await page.screenshot({ path: testInfo.outputPath('four-player-table.png'), fullPage: true });
-    await page.reload(); await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible(); await synced(final.revision + 1);
+    await page.reload(); await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible(); await synced(final.revision + 1);
     expect(latest.get(page)!.you).toBe(identities[0]); expect(latest.get(page)!.players).toHaveLength(4);
     expect(latest.get(page)!.shoe).toEqual(final.shoe);
     await expect(page.getByRole('region', { name: 'Your seat' }).getByRole('img', { name: 'Fox player icon' })).toBeVisible();
     const replacement = await page.context().newPage();
     try {
       await replacement.goto(invite);
-      await expect(replacement.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+      await expect(replacement.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Game controls' }).getByRole('status')).toContainText('another tab');
       await page.evaluate(() => { window.dispatchEvent(new Event('online')); window.dispatchEvent(new Event('focus')); });
       await expect(page.locator('[data-connection]')).toHaveAttribute('data-connection', 'replaced');
@@ -93,7 +115,7 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
       await page.getByRole('button', { name: 'Create another table', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Find a Table', exact: true })).toBeVisible();
       // Leaving the displaced view must not erase the controlling tab's credential.
-      await replacement.reload(); await expect(replacement.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+      await replacement.reload(); await expect(replacement.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     } finally { await replacement.close(); }
   } finally { await Promise.all(contexts.map(context => context.close())); }
 });

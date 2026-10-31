@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openTableEntry, expectOneScreen, rigShoe } from './fixtures';
+import { openTableEntry, openTableOptions, expectOneScreen, rigShoe } from './fixtures';
 async function openChat(page: Page) {
   const sidebar = page.getByRole('region', { name: 'Table chat', exact: true });
   if (await sidebar.isVisible()) return sidebar;
@@ -12,14 +12,13 @@ test('card face and back are independent, remembered and preserve the live cards
   await page.getByRole('button', { name: 'Deal me in' }).click();
   const card = page.getByRole('region', { name: 'Your seat' }).getByRole('img').first(); const handle = await card.elementHandle();
   const before = await page.locator('[data-revision]').getAttribute('data-revision'); const dealAt = await card.getAttribute('data-deal-at');
-  await page.getByRole('button', { name: 'Card styles', exact: true }).click();
-  const styles = page.getByRole('dialog', { name: 'Your card styles' });
+  const styles = await openTableOptions(page, 'Cards');
   await styles.getByLabel('Card face', { exact: true }).selectOption('large-index');
   await styles.getByLabel('Card back', { exact: true }).selectOption('geometric');
   await expect(page.locator('[data-card-face]')).toHaveAttribute('data-card-face', 'large-index');
   await expect(page.locator('[data-card-back]')).toHaveAttribute('data-card-back', 'geometric');
   await page.screenshot({ path: testInfo.outputPath('card-styles.png'), fullPage: true });
-  await styles.getByRole('button', { name: 'Close card styles' }).click();
+  await styles.getByRole('button', { name: 'Close table options' }).click();
   expect(await handle!.evaluate(node => node.isConnected)).toBe(true); expect(await card.getAttribute('data-deal-at')).toBe(dealAt);
   expect(await page.locator('[data-revision]').getAttribute('data-revision')).toBe(before);
   await expect(card).toHaveAttribute('data-face', 'large-index'); await expect(card).toHaveAttribute('data-back', 'geometric');
@@ -57,7 +56,7 @@ test('desktop chat is beside the game and table bubbles expire without replaying
   try {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Host'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     await peer.goto(page.url()); await peer.getByLabel('What should we call you?').fill('Guest'); await peer.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(peer.locator('[data-chat-ready]')).toHaveAttribute('data-chat-ready', 'true');
     await peer.clock.install(); await peer.clock.pauseAt(new Date());
@@ -69,10 +68,10 @@ test('desktop chat is beside the game and table bubbles expire without replaying
     await peer.clock.runFor(5001); await expect(bubble).toHaveCount(0);
     const history = await openChat(peer); await expect(history.getByRole('log')).toContainText(text);
     if (testInfo.project.name !== 'desktop') await sender.getByRole('button', { name: 'Close table chat' }).click();
-    await page.getByRole('button', { name: 'Card styles', exact: true }).click();
+    await openTableOptions(page, 'Cards');
     await page.getByLabel('Card face', { exact: true }).selectOption('large-index');
     await expect(peer.locator('[data-card-face]')).toHaveAttribute('data-card-face', 'classic');
-    await page.getByRole('button', { name: 'Close card styles' }).click();
+    await page.getByRole('button', { name: 'Close table options' }).click();
     await peer.reload(); await expect(peer.locator('[data-chat-ready]')).toHaveAttribute('data-chat-ready', 'true');
     await expect(peer.getByRole('note', { name: 'Message from Host' })).toHaveCount(0);
     const restored = await openChat(peer); await expect(restored.getByRole('log')).toContainText(text);

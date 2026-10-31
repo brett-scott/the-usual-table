@@ -4,7 +4,7 @@ The saved-chip gameplay code is implemented locally. Live play needs the updated
 
 ## 1. Apply the wallet installer
 
-Run the entire current [supabase/wallet-setup.sql](supabase/wallet-setup.sql) in Supabase SQL Editor. It safely preserves recognized existing wallets and includes migration 004, which creates a restricted `usual_table_wallet_backend` NOLOGIN group. The existing 10,000-chip welcome grant remains once per newly created wallet; existing accounts are never reset or topped up.
+Run the entire current [supabase/wallet-setup.sql](supabase/wallet-setup.sql) in Supabase SQL Editor. It safely preserves recognized existing wallets and includes migration 004, which creates a restricted `usual_table_wallet_backend` NOLOGIN group, and migration 005 for read-only account statistics. The existing 10,000-chip welcome grant remains once per newly created wallet; existing accounts are never reset or topped up.
 
 The private backend role can read wallet records, insert immutable history and update account/wallet/session records. RLS policies permit this role. Browser roles retain no access to the private schema and cannot submit wallet commands or payouts.
 
@@ -56,6 +56,8 @@ Saved play uses periodic authenticated connection renewal. JWT signatures, curre
 Buy-ins require at least 10 chips and half-chip precision. The server checks affordability under the account row lock. Account-bound rooms use storage schema 4; older servers must not be deployed over them. New create/join requests carry a canonical entry UUID for retry protection, and repeated creation rejects changed buy-in/visibility settings; stored room decisions and wallet operation IDs prevent repeated allocation or settlement effects. Account seats never offer or accept guest refills.
 
 ## Troubleshooting and local development
+
+Use the [live reconciliation worksheet](LIVE_WALLET_VERIFICATION.md) to record exact buy-in, round and return amounts. The [account statistics guide](ACCOUNT_STATISTICS.md) explains the new profile view and activation order.
 
 - **Saved-chip gameplay needs its database connection**: configure the Hyperdrive ID and redeploy the Worker. Temporary play remains available through an explicit choice.
 - **Moving your buy-in / Saving your chips**: the durable room outbox is awaiting a database acknowledgement. Check Hyperdrive credentials, migration 004, role membership and database connectivity. Keep pending financial room state intact.

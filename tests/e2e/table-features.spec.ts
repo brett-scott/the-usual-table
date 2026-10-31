@@ -57,7 +57,7 @@ test('guests see ready and waiting states, shared results and the host skipping 
   }
   try {
     await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Host'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     await guest.goto(page.url()); await guest.getByLabel('What should we call you?').fill('Guest'); await guest.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(guest.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
     await page.getByRole('button', { name: 'Open betting' }).click();

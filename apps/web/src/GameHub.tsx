@@ -3,8 +3,8 @@ import { GAME_CATALOG, type LobbyVisibility, type PublicLobby } from '@casual/pr
 import { createAccountTable, createGuest, lastTable, listLobbies, rememberSession } from './onlineClient';
 import s from './GameHub.module.css';
 import { AccountControls } from './AccountControls';
-import { BuyInFields, GuestIdentityFields, useTableFunding, useTableIdentity } from './TableIdentity';
-import tableStyles from './App.module.css';
+import { useTableFunding, useTableIdentity } from './TableIdentity';
+import { CreateTableDialog } from './CreateTableDialog';
 
 export function GameHub({ browse = false }: { browse?: boolean }) {
   const recent = lastTable();
@@ -61,19 +61,8 @@ function LobbyBrowser({ identity }: { identity: ReturnType<typeof useTableIdenti
       {lobbies.map(lobby => <article key={lobby.roomId} className={s.lobby}><div><h2>{lobby.hostName}’s table</h2><p>{lobby.players}/{lobby.capacity} seats · {lobby.phase === 'waiting' ? 'Waiting to play' : 'Round in progress · Join next hand'}</p></div><a href={`#/room/${lobby.roomId}`} aria-label={`Join ${lobby.hostName}’s table`}>Join table ↗</a></article>)}
     </div>
     <div className={s.browserActions}><button className={s.primary} ref={createButton} onClick={() => { setCreateError(''); createDialog.current?.showModal(); }}>Create a table</button><span>Public tables are listed here. Private tables are shared by invitation.</span></div>
-    <dialog ref={createDialog} className={`${tableStyles.dialog} ${s.createDialog}`} aria-labelledby="create-table-title"
-      onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => { identity.saveDraft(); createButton.current?.focus(); }}>
-      <div className={tableStyles.dialogHeading}><h2 id="create-table-title">Create a table</h2><button disabled={busy} aria-label="Close create table" onClick={() => createDialog.current?.close()}>×</button></div>
-      <p>Play on your own or invite friends to join.</p>
-      <form className={tableStyles.nameForm} onSubmit={event => { void create(event); }}>
-        <GuestIdentityFields identity={identity} disabled={busy} />
-        <BuyInFields funding={funding} disabled={busy} />
-        <div className={tableStyles.iconPicker}><label htmlFor="table-visibility">Table visibility</label><select id="table-visibility" value={visibility} disabled={busy} onChange={event => setVisibility(event.target.value as LobbyVisibility)}>
-          <option value="private">Private · Invite only</option><option value="public">Public · Listed</option>
-        </select></div>
-        {createError && <p role="alert">{createError}</p>}
-        <button className={tableStyles.primary} type="submit" disabled={busy || !identity.ready || !funding.valid}>{busy ? 'Creating…' : 'Create table'}</button>
-      </form>
-    </dialog>
+    <CreateTableDialog dialogRef={createDialog} identity={identity} funding={funding} busy={busy} error={createError}
+      visibility={visibility} onVisibilityChange={setVisibility} onSubmit={event => { void create(event); }}
+      onClose={() => { identity.saveDraft(); createButton.current?.focus(); }} />
   </main>;
 }

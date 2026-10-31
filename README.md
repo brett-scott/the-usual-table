@@ -23,6 +23,10 @@ Choose **Sign in** on the games hub or Blackjack entry to use Google/Discord, or
 
 Accounts have a stable, unique account ID. Display names/usernames **do not need to be unique**; changing a name will not change the account or its ownership. Saved profiles and future wallet/statistics/progression data use the account ID, never the display name.
 
+The profile menu's **Statistics** view shows saved rounds and chip totals separately for each game. Results come from verified server settlements; temporary play and guests are not recorded. Apply [statistics migration 005, then deploy Worker before Pages](ACCOUNT_STATISTICS.md). Existing saved results are included automatically, with no wallet reset. Use the [live wallet worksheet](LIVE_WALLET_VERIFICATION.md) to reconcile buy-ins, payouts and returns on the deployed site.
+
+**Invite** copies a shorter `#/t/` link using a 22-character code that retains the full room identifier. Existing `#/room/` invitations continue to work; both formats support joining, reload and social-login return. The dealer's displayed score counts only cards whose reveal has finished and updates after each card, including ace adjustments.
+
 To try four devices on one computer, use four independent browser profiles/contexts. A second tab in the same profile restores the same guest and replaces its previous controlling connection. Duplicate names are allowed; seat numbers distinguish players. A fifth guest receives a Table full message.
 
 Before taking a seat, optionally choose one of 16 emoji **Player icons**, or keep **Use my initial**. Your choice is remembered in this browser and shared at your seat with everyone in the room, including on phones. Reloading an online table restores the icon belonging to that guest seat.

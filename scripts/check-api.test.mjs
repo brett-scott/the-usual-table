@@ -9,6 +9,7 @@ globalThis.fetch = async (input, options) => {
   const path = new URL(input).pathname;
   if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,
     ...(process.env.CHECK_SCENARIO === 'missing-account-play' ? {} : {accountPlayProtocol:1}),
+    ...(process.env.CHECK_SCENARIO === 'missing-statistics-protocol' ? {} : {accountStatisticsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'old-worker' ? {} : {authProjectUrl:process.env.CHECK_SCENARIO === 'wrong-project' ? 'https://wrong.supabase.co' : project})},
     {headers:{'Access-Control-Allow-Origin':origin}});
   if (path === '/api/v1/account/session') return Response.json({code:'ACCOUNT_SESSION_INVALID'},
@@ -17,6 +18,9 @@ globalThis.fetch = async (input, options) => {
   if (path === '/api/v1/account/wallet') return Response.json({code:'ACCOUNT_SESSION_INVALID'},
     {status:process.env.CHECK_SCENARIO === 'wallet-read-missing' && options.method === 'GET' || process.env.CHECK_SCENARIO === 'wallet-create-missing' && options.method === 'POST' ? 404 : 401,
       headers:{'Access-Control-Allow-Origin':origin}});
+  if (path === '/api/v1/account/statistics') return Response.json({code:'ACCOUNT_SESSION_INVALID'},
+    {status:process.env.CHECK_SCENARIO === 'statistics-missing' ? 404 : process.env.CHECK_SCENARIO === 'statistics-accepted' ? 200 : 401,
+      headers:{'Access-Control-Allow-Origin':process.env.CHECK_SCENARIO === 'statistics-cors' ? 'https://wrong.test' : origin}});
   return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'content-type,authorization'}});
 };
 await import(${JSON.stringify(new URL('./check-api.mjs', import.meta.url).href)});
@@ -40,4 +44,7 @@ it.each(['account-accepted', 'account-missing', 'account-cors'])('rejects an inv
 });
 it.each(['wallet-read-missing', 'wallet-create-missing'])('rejects a Worker missing a wallet route: %s', scenario => {
   const result = check(scenario); expect(result.status).toBe(1); expect(result.stderr).toContain('wallet read/provisioning');
+});
+it.each(['missing-statistics-protocol', 'statistics-missing', 'statistics-accepted', 'statistics-cors'])('requires the private statistics endpoint before Pages: %s', scenario => {
+  const result = check(scenario); expect(result.status).toBe(1); expect(result.stderr).toContain('account statistics');
 });

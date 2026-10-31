@@ -12,9 +12,9 @@ test('table chat shares safe text, stays private to the room, survives reload an
   try {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Alex'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     await peer.goto(page.url()); await peer.getByLabel('What should we call you?').fill('Alex'); await peer.getByRole('button', { name: 'Join table', exact: true }).click();
-    await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+    await expect(peer.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     // The table renders from HTTP before its socket/history handshake completes.
     await expect(peer.locator('[data-chat-ready]')).toHaveAttribute('data-chat-ready', 'true');
     const sender = await chat(page);
@@ -53,7 +53,7 @@ test('table chat shares safe text, stays private to the room, survives reload an
       await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
     }
     if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
-    await peer.reload(); await expect(peer.getByRole('heading', { name: 'The shared table' })).toBeVisible();
+    await peer.reload(); await expect(peer.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     const restored = await chat(peer); await expect(restored.getByRole('log').locator('article')).toHaveCount(2);
     await context.setOffline(true); await expect(peer.locator('[data-connection]')).toHaveAttribute('data-connection', 'offline');
     await restored.getByRole('textbox').fill('Keep my draft'); await expect(restored.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();

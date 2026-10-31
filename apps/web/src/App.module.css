@@ -5,15 +5,14 @@
 .brand small { display: block; font: 8px 'Segoe UI', sans-serif; letter-spacing: 2.1px; margin-top: 7px; color: var(--muted); }
 .brandMark { display: inline-grid; place-items: center; font-size: 28px; border: 1px solid var(--accent); border-radius: 10px; color: var(--accent); width: 43px; height: 49px; transform: rotate(-8deg); }
 .headerActions { display: flex; align-items: center; gap: 12px; }
-.headerActions button, .buttons > button:not(.primary), .dialog button { background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 10px 18px; font-size: 13px; }
-.practiceBadge { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); padding-right: 15px; }
-.practiceBadge i, .footer i { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: #a4c4a1; }
+.headerActions > button, .buttons > button:not(.primary), .dialog button { background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 10px 18px; font-size: 13px; }
 .main { max-width: 1500px; padding: 28px 4% 20px; margin: auto; }
-.tableHeading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; gap: 15px; }
+.tableToolbar { display: flex; align-items: center; justify-content: space-between; min-width: 0; min-height: 44px; gap: 12px; }
+.connectionBadge { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted); font-size: 12px; }
+.connectionBadge i { width: 6px; height: 6px; border-radius: 50%; background: #a4c4a1; flex-shrink: 0; }
+.connectionBadge:not([data-status='connected']) i { background: #e9bd8a; }
+.tableToolbar .leaveButton { min-height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; border: 1px solid #9b7563; background: #2a241e; color: #f4c6b7; border-radius: 7px; padding: 10px 14px; font-size: 13px; font-weight: 600; }
 .eyebrow { font-size: 9px; font-weight: 600; letter-spacing: 2.3px; color: var(--accent); margin: 0 0 9px; }
-.tableHeading h1 { font: 29px Georgia, serif; margin: 0; }
-.roomMeta { font-size: 12px; text-align: right; color: #d2dacd; }
-.roomMeta span { display: block; font-size: 10px; margin-top: 7px; color: var(--muted); }
 .table { position: relative; border: 10px solid #29372d; border-radius: 200px 200px 130px 130px; padding: 7px; background: #9c8754; box-shadow: 0 18px 38px #0005, inset 0 0 0 1px #cfbb80; }
 .tableInner { position: relative; min-height: 475px; border-radius: 184px 184px 112px 112px; overflow: hidden; padding: 24px 32px 25px; background: radial-gradient(ellipse at 50% 20%, #ffffff08, transparent 70%), repeating-linear-gradient(75deg, #ffffff02 0 1px, transparent 1px 4px), var(--felt); box-shadow: inset 0 0 75px #001c1780; display: flex; flex-direction: column; align-items: center; }
 .shoe { position: absolute; right: 10%; top: 45px; display: flex; align-items: center; flex-direction: column; gap: 5px; color: #d6e4cfaa; font-size: 9px; }
@@ -122,8 +121,6 @@
 .betLimits { justify-self: end; text-align: right; }
 .betLimits strong { display: block; font-size: 11px; font-weight: 400; }
 .betLimits > span:last-child { display: block; font-size: 10px; color: var(--muted); margin-top: 7px; }
-.footer { display: flex; justify-content: space-between; gap: 15px; padding: 20px 2px 0; color: var(--muted); font-size: 10px; }
-.footer i { margin-right: 5px; width: 5px; height: 5px; }
 .error { color: #ffb5a8; font-size: 12px; }
 .dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 16px; max-width: 520px; width: calc(100% - 32px); max-height: calc(100dvh - 40px); padding: 24px 30px; }
 .dialog::backdrop { background: #07140edb; backdrop-filter: blur(5px); }
@@ -161,12 +158,10 @@
 .entryProblem h2 { margin: 0 0 7px; font: 21px Georgia, serif; color: #ffcfb7; }
 .entryProblem p { font-size: 12px; line-height: 1.6; margin: 0 0 8px; }
 .entryProblem span { font-size: 11px; color: var(--muted); }
-.app:not([data-connection='connected']) .practiceBadge i { background: #e9bd8a; }
 .otherSeat { text-align: center; padding: 10px 5px; border: 1px solid #d1d7bc40; border-radius: 10px; background: #112d2630; }
 .otherSeat .card { width: 48px; height: 67px; }
 .otherSeat .smallNote { font-size: 9px; color: #d4e0cb; }
 .otherSeat .countdown { max-width: 120px; }
-.leaveButton { background: none; border: 0; padding: 0 10px; font-size: 10px; min-height: 24px; text-decoration: underline; }
 .welcomeFooter { display: flex; justify-content: space-between; gap: 20px; font-size: 9px; color: var(--muted); letter-spacing: 1.3px; }
 @media (min-width: 1400px) { .tableInner { min-height: 540px; } .feltLettering { margin: 20px 0 30px; } .card { width: 71px; height: 99px; } }
 @media (max-width: 1024px) { .header { padding: 20px 3%; } .main { padding: 24px 3% 15px; } .table { border-width: 7px; border-radius: 100px; } .tableInner { border-radius: 85px; padding: 24px 18px 20px; } .seats { gap: 12px; } .shoe { right: 8%; } .controls { padding: 20px 16px; grid-template-columns: 1fr 2.5fr; } .betLimits { display: none; } .brand { font-size: 22px; } .practiceBadge { padding: 0; } .ownSeat { padding-inline: 7px; } .playerHead { gap: 6px; } }
@@ -179,14 +174,9 @@
   .brandMark { flex: 0 0 auto; width: 25px; height: 30px; border-radius: 5px; font-size: 20px; }
   .brand small, .practiceBadge, .themeText { display: none; }
   .headerActions { flex: 0 0 auto; gap: 4px; }
-  .headerActions button { min-width: 44px; min-height: 44px; padding: 8px; font-size: 11px; }
-  .headerActions button > span[aria-hidden] { display: none; }
-  .main { flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 6px max(8px, env(safe-area-inset-right)) max(6px, var(--safe-bottom)) max(8px, env(safe-area-inset-left)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 8px; }
-  .tableHeading { min-width: 0; min-height: 24px; margin: 0 2px; gap: 6px; }
-  .tableHeading > div:first-child { min-width: 0; }
-  .tableHeading .eyebrow, .roomMeta span { display: none; }
-  .tableHeading h1 { font-size: 17px; white-space: nowrap; }
-  .roomMeta { flex-shrink: 0; font-size: 10px; }
+  .headerActions > button { min-width: 44px; min-height: 44px; padding: 8px; font-size: 11px; }
+  .headerActions > button > span[aria-hidden] { display: none; }
+  .main { flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 6px max(8px, env(safe-area-inset-right)) max(6px, var(--safe-bottom)) max(8px, env(safe-area-inset-left)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; }
   .table { min-height: 0; border: 3px solid #29372d; border-radius: 24px; padding: 3px; box-shadow: 0 5px 16px #0004; }
   .tableInner { width: 100%; height: 100%; min-height: 0; border-radius: 17px; padding: 10px 8px; display: grid; grid-template-rows: minmax(88px, .65fr) minmax(0, 1.75fr); align-items: stretch; gap: 8px; }
   .feltLettering { display: none; }
@@ -272,9 +262,6 @@
   .betControl > span > small { font-size: 6px; }
   .betLimits { display: none; }
   .error { grid-column: 1 / -1; margin: 0; font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; }
-  .footer { min-height: 14px; padding: 0 2px; align-items: center; justify-content: space-between; gap: 5px; font-size: 8px; }
-  .footer > span:first-child { display: none; }
-  .leaveButton { min-height: 44px; padding: 4px 8px; font-size: 10px; }
   .dialog { padding: 18px; max-height: calc(100dvh - 24px); }
   .dialog h2 { font-size: 25px; }
   .welcome { height: 100dvh; min-height: 0; padding: max(12px, env(safe-area-inset-top)) 20px max(12px, env(safe-area-inset-bottom)); }
@@ -316,12 +303,10 @@
 }
 @media (min-width: 641px) and (max-width: 1024px) and (max-height: 500px) {
   .header { min-height: 48px; padding-block: 2px; }
-  .main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px 10px; }
-  .tableHeading { grid-column: 2; grid-row: 1; }
-  .tableHeading h1 { font-size: 15px; }
+  .tableToolbar { grid-column: 2; grid-row: 1; }
+  .main { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 6px 10px; }
   .table { grid-column: 1; grid-row: 1 / -1; }
   .controls { grid-column: 2; grid-row: 2; align-self: center; }
-  .footer { grid-column: 2; grid-row: 3; }
   .buttons { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tableInner { padding: 5px; gap: 4px; grid-template-rows: 64px minmax(0, 1fr); }
   .dealer .cards { --card-height: 43px; }
@@ -400,13 +385,9 @@
   .app .brand > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .app .brand small { display: none; }
   .app .headerActions { flex-shrink: 0; gap: 6px; }
-  .app .headerActions button { min-height: 44px; padding: 8px 12px; }
+  .app .headerActions > button { min-height: 44px; padding: 8px 12px; }
   .app .practiceBadge { padding-right: 0; font-size: 10px; }
-  .app .main { flex: 1; min-height: 0; width: 100%; margin: 0 auto; padding: 10px 3% 8px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 10px; }
-  .app .tableHeading { margin: 0; gap: 10px; }
-  .app .tableHeading .eyebrow { margin-bottom: 4px; }
-  .app .tableHeading h1 { font-size: 24px; }
-  .app .roomMeta span { margin-top: 3px; }
+  .app .main { flex: 1; min-height: 0; width: 100%; margin: 0 auto; padding: 10px 3% 8px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
   .app .table { min-height: 0; border-width: 6px; padding: 5px; border-radius: 100px 100px 65px 65px; }
   .app .tableInner { height: 100%; min-height: 0; width: 100%; padding: 14px 20px; border-radius: 85px 85px 52px 52px; display: grid; grid-template-rows: minmax(86px, .6fr) auto minmax(0, 1.4fr); gap: 8px; align-items: stretch; }
   /* Inline-size containment on card rows requires an allocated parent width. */
@@ -438,8 +419,6 @@
   .app .buttons > button { min-height: 44px; padding: 8px 12px; }
   .app .balance strong { font-size: 23px; }
   .app .betControl button { min-height: 44px; }
-  .app .footer { padding: 0 2px; min-height: 28px; align-items: center; }
-  .app .leaveButton { min-height: 28px; }
   .app .error { margin: 0; grid-column: 1 / -1; }
 }
 @media (min-width: 641px) and (min-height: 501px) and (max-height: 900px) {
@@ -449,4 +428,99 @@
 }
 @media (min-width: 641px) and (max-width: 1199px) and (min-height: 501px) {
   .app .practiceBadge { display: none; }
+}
+
+/* The local cards and wager form the foreground; other seats stay at the rail. */
+.wagerDisplay { display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: #f0e6c9; font-size: 11px; white-space: nowrap; }
+.ownSeat { background: linear-gradient(180deg, #071e1740, #061b1580); border-color: var(--accent); }
+.ownSeat .wagerDisplay [data-chip-amount] { width: 44px; height: 34px; }
+.ownSeat .handInfo { gap: 8px; }
+.ownSeat .total { font-size: 14px; padding: 4px 8px; }
+.ownSeat .handInfo [data-hand-outcome] { font-size: 12px; }
+.ownSeat .hands:not(:has(> :nth-child(2))) .activeHand { border-color: transparent; background: transparent; }
+.otherSeat[data-active='true'] { border-color: var(--accent); background: #ecdfa314; box-shadow: 0 0 0 1px #ecdfa340; }
+/* Small faces favour an unobstructed rank and suit over repeated decoration. */
+.otherSeat .card[data-face='classic'] .cardFace > text:first-of-type { font-size: 32px; transform: translateY(12px); }
+.otherSeat .card[data-face='classic'] .cardFace > text:nth-of-type(2) { font-size: 24px; transform: translateY(23px); }
+.otherSeat .card[data-face='classic'] .cardFace > text:nth-of-type(3),
+.otherSeat .card[data-face='classic'] .cardFace > g { display: none; }
+@media (min-width: 641px) and (min-height: 501px) {
+  .app .tableInner { grid-template-rows: minmax(100px, .4fr) auto minmax(0, 1.6fr); }
+  .app .seats { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(110px, .65fr) minmax(0, 1.35fr); align-items: stretch; gap: 12px; }
+  .app .ownSeat { grid-column: 1 / -1; grid-row: 2; width: min(100%, 680px); justify-self: center; align-self: stretch; padding: 10px 16px; display: flex; flex-direction: column; container-type: size; }
+  .app .ownSeat .playerHead { flex-shrink: 0; margin-bottom: 4px; }
+  .app .ownHands { display: flex; flex: 1; min-height: 0; }
+  .app .ownSeat .hands { width: 100%; flex: 1; align-items: center; }
+  .app .ownSeat .hand { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .app .ownSeat .cards { width: 100%; }
+  .app .ownSeat .card { --card-height: clamp(58px, calc(100cqh - 108px), 112px); }
+  .app .ownSeat .hands:has(> :nth-child(2)) .card { --card-height: clamp(44px, calc(100cqh - 112px), 86px); }
+  .app .ownSeat .countdown { width: min(100%, 180px); }
+  .app .ownSeat .handInfo .turnLabel { display: none; }
+  .app .otherSeat { padding: 6px 8px; display: flex; flex-direction: column; justify-content: center; }
+  .app .otherSeat .playerHead { margin-bottom: 3px; }
+  .app .otherSeat .avatar { width: 24px; height: 24px; font-size: 14px; }
+  .app .otherSeat .card { --card-height: clamp(36px, 4.8dvh, 50px); }
+  .app .otherSeat .handInfo { margin-top: 2px; font-size: 9px; }
+  .app .otherSeat .wagerDisplay { gap: 3px; font-size: 9px; }
+  .app .otherSeat .wagerDisplay [data-chip-amount] { width: 25px; height: 19px; }
+  .app .otherSeat .countdown { display: none; }
+  .app .otherSeat > .smallNote:last-child { margin: 3px 0 0; }
+  .app .emptySeat { align-self: center; padding: 6px; }
+}
+@media (min-width: 641px) and (min-height: 501px) and (max-height: 900px) {
+  .app .tableInner { grid-template-rows: minmax(86px, .35fr) minmax(0, 1.65fr); }
+}
+@media (max-width: 640px), (max-width: 1024px) and (max-height: 500px) {
+  /* Long dealer fans take priority; preserve the shoe's measured deal origin. */
+  .tableInner:has(.dealer .card:nth-child(n+5)) .shoe > :not(.shoeIcon) { visibility: hidden; }
+  .tableInner { grid-template-rows: minmax(78px, .35fr) minmax(0, 1.65fr); }
+  .seats:has(.otherSeat .hands) { grid-template-rows: minmax(88px, .45fr) minmax(0, 1.2fr); }
+  .ownSeat { --hand-overhead: 100px; border-radius: 14px; }
+  .ownSeat:has(.handTabs) { --hand-overhead: 150px; }
+  .ownSeat .wagerDisplay { gap: 5px; font-size: 11px; }
+  .ownSeat .wagerDisplay [data-chip-amount] { width: 38px; height: 28px; }
+  .ownSeat .handInfo { gap: 7px; }
+  .ownSeat .total { font-size: 13px; padding: 3px 7px; }
+  .otherSeat .hands { display: flex; flex: 1; min-height: 0; width: 100%; align-items: center; flex-wrap: nowrap; gap: 3px; }
+  .otherSeat .hand { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; padding: 0; }
+  .otherSeat .hand .cards { --card-height: 44px; padding: 2px 0; }
+  .otherSeat .hands:has(> :nth-child(2)) .card { width: var(--card-width); height: var(--card-height); }
+  .otherSeat .handInfo, .otherSeat .countdown { display: none; }
+  .otherSeat .playerHead { flex-shrink: 0; }
+  .otherSeat .opponentSummary { flex-shrink: 0; }
+  .seats .otherSeat:has(.roundOutcome) .playerHead .seatStatus { display: block; font-size: 8px; line-height: 1.2; }
+  .otherSeat .opponentSummary .roundOutcome { display: none; }
+  .otherSeat .opponentSummary [data-chip-amount][data-settled='true'] { display: none; }
+  .otherSeat > .smallNote:last-child { display: none; }
+  .otherSeat:has(.hand:nth-child(3)) .hands { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .otherSeat:has(.hand:nth-child(3)) .hand .cards { --card-height: 30px; }
+  .seats:has(.otherSeat .hand:nth-child(3)) { grid-template-rows: minmax(110px, .55fr) minmax(0, 1.2fr); }
+  .seats:has(.roundOutcome) { grid-template-rows: minmax(94px, .45fr) minmax(0, 1.2fr); }
+}
+@media (max-width: 640px) and (max-height: 740px) {
+  .otherSeat .hand .cards { --card-height: clamp(28px, 5.5dvh, 38px); }
+  .otherSeat .card[data-face='classic'] .cardFace > text:first-of-type { font-size: 36px; transform: translateY(16px); }
+  .otherSeat .card[data-face='classic'] .cardFace > text:nth-of-type(2) { font-size: 26px; transform: translateY(30px); }
+}
+@media (min-width: 641px) and (max-width: 1024px) and (max-height: 500px) {
+  .tableInner { grid-template-columns: minmax(100px, 1fr) minmax(0, 1.8fr); grid-template-rows: 48px repeat(3, minmax(0, 1fr)); gap: 4px 7px; }
+  .seats, .seats:has(.otherSeat .hands), .seats:has(.otherSeat .hand:nth-child(3)) { display: contents; }
+  .dealer { grid-column: 1; grid-row: 1; width: 100%; }
+  .dealer .cards { --card-height: 30px; }
+  .dealer .seatLabel { font-size: 7px; margin-bottom: 1px; }
+  .cardSpaces span { height: 30px; width: 22px; }
+  .shoe { right: 12px; top: 8px; font-size: 6px; }
+  .shoe strong { display: none; }
+  .ownSeat { grid-column: 2; grid-row: 1 / -1; width: 100%; padding: 5px; --hand-overhead: 100px; }
+  .ownSeat:has(.handTabs) { --hand-overhead: 150px; }
+  .ownSeat .hand .card { --card-height: clamp(44px, calc(100cqh - var(--hand-overhead)), 110px); }
+  .otherSeat, .emptySeat { grid-column: 1; min-height: 0; padding: 2px 3px; gap: 1px; }
+  .otherSeat .hand .cards { --card-height: 32px; padding-block: 0; }
+  .otherSeat .card[data-face='classic'] .cardFace > text:first-of-type { font-size: 40px; transform: translateY(20px); }
+  .otherSeat .card[data-face='classic'] .cardFace > text:nth-of-type(2) { font-size: 30px; transform: translateY(40px); }
+  .otherSeat .playerHead strong { font-size: 9px; }
+  .otherSeat .opponentSummary { font-size: 8px; }
+  .otherSeat .opponentSummary > span { padding-block: 0; }
+  .emptySeat .emptyAvatar { display: none; }
 }
