@@ -127,8 +127,29 @@ it('connects the verified caller to Supabase RPC with the public app key and no 
   const response = await SELF.fetch(`https://api.test/api/v1/account/wallet?accountId=${crypto.randomUUID()}`, { headers: { Origin: origin, Authorization: `Bearer ${jwt}` } });
   expect(response.status).toBe(200); expect(await response.json()).toEqual(wallet);
   expect(rpc).toHaveBeenCalledExactlyOnceWith(`${PUBLIC_SUPABASE_CONFIG.url}/rest/v1/rpc/usual_table_wallet_summary`, expect.objectContaining({
-    method: 'POST', body: '{}', redirect: 'error', cache: 'no-store', headers: { apikey: PUBLIC_SUPABASE_CONFIG.publishableKey, Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' }, signal: expect.any(AbortSignal),
+    method: 'POST', body: '{}', redirect: 'manual', cache: 'no-store', headers: { apikey: PUBLIC_SUPABASE_CONFIG.publishableKey, Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' }, signal: expect.any(AbortSignal),
   }));
+});
+it.each(['GET', 'POST'])('uses RPC options accepted by the real Workers Request implementation for wallet %s', async method => {
+  let constructionError: unknown;
+  rpc.mockImplementationOnce(async (url, init) => {
+    let outgoing: Request;
+    try { outgoing = new Request(url, init); } catch (error) { constructionError = error; throw error; }
+    expect(outgoing.redirect).toBe('manual');
+    return Response.json(wallet);
+  });
+  const response = await SELF.fetch('https://api.test/api/v1/account/wallet', { method, headers: { Origin: origin, Authorization: `Bearer ${await token()}` } });
+  expect(constructionError).toBeUndefined();
+  expect(response.status).toBe(200); expect(await response.json()).toEqual(wallet);
+});
+it.each([301, 302, 303, 307, 308])('rejects a Supabase %s redirect without following it or exposing account tokens', async status => {
+  const jwt = await token();
+  rpc.mockImplementationOnce(async () => new Response('Redirect body', { status, headers: { Location: 'https://other.test/private-target' } }));
+  const response = await SELF.fetch('https://api.test/api/v1/account/wallet', { headers: { Origin: origin, Authorization: `Bearer ${jwt}` } });
+  expect(response.status).toBe(503); const value = await response.json();
+  expect(value).toMatchObject({ code: 'WALLET_UNAVAILABLE' });
+  expect(JSON.stringify(value)).not.toContain(jwt); expect(JSON.stringify(value)).not.toContain('private-target');
+  expect(rpc).toHaveBeenCalledOnce(); expect(rpc.mock.calls[0]![1]!.redirect).toBe('manual');
 });
 it('returns not-found for a missing wallet, and provisions only through an authenticated empty POST', async () => {
   const jwt = await token(); const headers = { Origin: origin, Authorization: `Bearer ${jwt}` };

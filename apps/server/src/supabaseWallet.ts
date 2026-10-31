@@ -12,8 +12,10 @@ export async function supabaseWallet(request: Request, env: Pick<Env, 'SUPABASE_
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(3000)]);
     const response = await fetch(`${config.data.url}/rest/v1/rpc/${ensure ? 'usual_table_ensure_wallet' : 'usual_table_wallet_summary'}`, {
       method: 'POST', headers: { apikey: config.data.publishableKey, Authorization: request.headers.get('Authorization')!, 'Content-Type': 'application/json' },
-      body: '{}', redirect: 'error', cache: 'no-store', signal,
+      body: '{}', redirect: 'manual', cache: 'no-store', signal,
     });
+    // Workers supports manual redirects, not redirect: 'error'. Never forward account tokens to another URL.
+    if (response.status >= 300 && response.status < 400) throw new Error('Unexpected wallet redirect');
     const value: unknown = await response.json();
     if (!response.ok) {
       const code = value && typeof value === 'object' && 'code' in value ? value.code : '';
