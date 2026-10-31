@@ -7,6 +7,13 @@ const base = JSON.parse(readFileSync(new URL('../apps/server/wrangler.jsonc', im
 const production = { CLOUDFLARE_WORKER_NAME: 'the-usual-table-api-production', CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32), CLOUDFLARE_RATE_LIMIT_NAMESPACE_ID: '102802', ALLOWED_ORIGINS: 'https://player.github.io' };
 
 describe('release boundaries', () => {
+  it('binds the optional wallet Hyperdrive without exposing database credentials or changing room migrations', () => {
+    const config = workerConfig(base, { ...production, CLOUDFLARE_WALLET_HYPERDRIVE_ID: 'b'.repeat(32) });
+    expect(config.hyperdrive).toEqual([{ binding: 'WALLET_DB', id: 'b'.repeat(32) }]);
+    expect(config.compatibility_flags).toContain('nodejs_compat'); expect(config.migrations).toEqual(base.migrations);
+    expect(workerConfig(base, production).hyperdrive).toBeUndefined();
+    expect(() => workerConfig(base, { ...production, CLOUDFLARE_WALLET_HYPERDRIVE_ID: 'postgres://private:password@host' })).toThrow('Hyperdrive ID');
+  });
   it('uses the shared public Auth project and rejects partial, privileged or malformed overrides', () => {
     expect(publicAuthConfig({})).toMatchObject({ url: 'https://npqvazffslqmfjtyyhpn.supabase.co', publishableKey: expect.stringMatching(/^sb_publishable_/) });
     expect(() => publicAuthConfig({ VITE_SUPABASE_URL: 'https://other.supabase.co' })).toThrow('both');

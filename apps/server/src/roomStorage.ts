@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createDecks, GameError } from '@casual/engine';
 import { lobbyVisibilitySchema, playerIconSchema } from '@casual/protocol';
 import { newMember, PRESENCE_MS, type OnlineRoom } from './roomState';
-import { roomWalletSchema, validRoomWallet } from './roomWallet';
+import { fundedSeat, roomWalletSchema, validRoomWallet } from './roomWallet';
 
 const integer = z.number().int().nonnegative().safe();
 const time = integer.nullable();
@@ -20,7 +20,7 @@ const engine = z.object({
   acceptedCommands: z.array(z.object({ id, playerId: id })).max(128),
 });
 const oldMember = z.object({ hash, connected: z.boolean(), controllerId: id.nullable(), leaveAfterRound: z.boolean() });
-const member = oldMember.extend({ reservationDeadline: time, presenceDeadline: time, claimId: id.nullable(), claimVersion: integer, retiredClaims: z.array(id).max(8) });
+const member = oldMember.extend({ reservationDeadline: time, presenceDeadline: time, claimId: id.nullable(), claimVersion: integer, retiredClaims: z.array(id).max(8), account: z.object({ id: z.string().uuid(), expiresAt: integer }).strict().optional() });
 const common = {
   gameId: z.literal('blackjack').optional(), visibility: lobbyVisibilitySchema.optional(),
   id: z.string().regex(/^[a-f0-9]{32}$/), revision: integer, managerId: z.string().max(100), engine,
@@ -30,11 +30,16 @@ const common = {
   roundDeadline: time.optional(),
 };
 const currentSchema = z.object({ ...common, schema: z.literal(2), members: z.record(id, member), tickets: z.array(z.object({ hash, playerId: id, expires: integer, claimId: id, claimVersion: integer })).max(4) });
-const fundedSchema = currentSchema.extend({ schema: z.literal(3), wallet: roomWalletSchema });
+const fundedSchema = currentSchema.extend({ schema: z.literal(3), wallet: roomWalletSchema,
+  creation: z.object({ entryId: z.string().uuid(), buyInUnits: integer.min(1000).max(9_000_000_000_000), visibility: lobbyVisibilitySchema }).strict().optional() });
+const accountSchema = fundedSchema.extend({ schema: z.literal(4) });
 const legacySchema = z.object({ ...common, schema: z.literal(1), members: z.record(id, oldMember), tickets: z.array(z.object({ hash, playerId: id, expires: integer })).max(4) });
 const physicalCards = new Map(createDecks().map(card => [card.id, card]));
 function validateInvariants(room: OnlineRoom) {
   if (!validRoomWallet(room)) return false;
+  if (room.schema !== 4 && Object.values(room.members).some(member => member.account)) return false;
+  if (room.creation && (!room.wallet?.seats[room.creation.entryId] || room.creation.visibility !== room.visibility)) return false;
+  if (Object.entries(room.members).some(([id, member]) => member.account && fundedSeat(room, id)?.accountId !== member.account.id)) return false;
   if (room.roundDeadline != null && room.engine.phase !== 'ROUND_COMPLETE') return false;
   const players = room.engine.players;
   if (new Set(players.map(p => p.id)).size !== players.length || new Set(players.map(p => p.seat)).size !== players.length) return false;
@@ -55,9 +60,9 @@ function validateInvariants(room: OnlineRoom) {
 export function restoreRoom(value: unknown, now: number): { room: OnlineRoom; migrated: boolean } {
   if (!value) throw new GameError('ROOM_EXPIRED', 'This table invitation has expired or does not exist. Create a new table.');
   const version = (value as { schema?: unknown }).schema;
-  if (version !== 1 && version !== 2 && version !== 3) throw new GameError('ROOM_VERSION_UNSUPPORTED', 'This table needs a different server version. Create another table.');
-  if (version !== 3 && 'wallet' in (value as object)) throw new GameError('ROOM_VERSION_UNSUPPORTED', 'Wallet state requires a compatible server version.');
-  let parsed: ReturnType<typeof currentSchema.safeParse> | ReturnType<typeof fundedSchema.safeParse>;
+  if (version !== 1 && version !== 2 && version !== 3 && version !== 4) throw new GameError('ROOM_VERSION_UNSUPPORTED', 'This table needs a different server version. Create another table.');
+  if (version !== 3 && version !== 4 && 'wallet' in (value as object)) throw new GameError('ROOM_VERSION_UNSUPPORTED', 'Wallet state requires a compatible server version.');
+  let parsed: ReturnType<typeof currentSchema.safeParse> | ReturnType<typeof fundedSchema.safeParse> | ReturnType<typeof accountSchema.safeParse>;
   if (version === 1) {
     const legacy = legacySchema.safeParse(value);
     if (!legacy.success) throw new GameError('ROOM_STATE_INVALID', 'This table could not be safely restored. Create another table.');
@@ -66,7 +71,7 @@ export function restoreRoom(value: unknown, now: number): { room: OnlineRoom; mi
       presenceDeadline: previous.connected ? now + PRESENCE_MS : null,
       reservationDeadline: previous.connected || previous.leaveAfterRound ? null : now + 60_000,
     }])) });
-  } else parsed = version === 3 ? fundedSchema.safeParse(value) : currentSchema.safeParse(value);
+  } else parsed = version === 4 ? accountSchema.safeParse(value) : version === 3 ? fundedSchema.safeParse(value) : currentSchema.safeParse(value);
   if (!parsed.success || !validateInvariants(parsed.data)) throw new GameError('ROOM_STATE_INVALID', 'This table could not be safely restored. Create another table.');
   return { room: parsed.data, migrated: version === 1 };
 }

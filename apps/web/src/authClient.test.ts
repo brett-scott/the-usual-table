@@ -33,6 +33,25 @@ function fixture(path = '/repo/#/games', enabled = true) {
 }
 
 describe('OAuth return boundaries', () => {
+  it('keeps an unexpired verified account during same-account refresh and clears it if verification fails', async () => {
+    const f = fixture(); f.sdk.getSession.mockResolvedValue({ data: { session }, error: null }); await f.client.start();
+    let finish!: (value: AccountSession) => void;
+    f.env.verify.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    f.event('TOKEN_REFRESHED', { ...session, access_token: 'new.token' });
+    await vi.waitFor(() => expect(f.env.verify).toHaveBeenCalledTimes(2));
+    expect(f.client.getSnapshot().account?.accountId).toBe(account.accountId);
+    finish({ ...account, expiresAt: account.expiresAt + 1000 }); await vi.waitFor(() => expect(f.client.getSnapshot().working).toBe(false));
+    f.env.verify.mockRejectedValueOnce(new Error('Revoked')); f.event('TOKEN_REFRESHED', { ...session, access_token: 'bad.token' });
+    await vi.waitFor(() => expect(f.client.getSnapshot().account).toBeNull());
+  });
+  it('provides a current gameplay token only for the verified account and clears access on sign-out', async () => {
+    const f = fixture(); f.sdk.getSession.mockResolvedValue({ data: { session }, error: null }); await f.client.start();
+    expect(await f.client.accessToken()).toBe(session.access_token);
+    f.sdk.getSession.mockResolvedValue({ data: { session: { ...session, user: { ...session.user, id: crypto.randomUUID() } } }, error: null });
+    await expect(f.client.accessToken()).rejects.toThrow('Sign in again');
+    f.sdk.getSession.mockResolvedValue({ data: { session }, error: null }); await f.client.signOut();
+    await expect(f.client.accessToken()).rejects.toThrow('Sign in again');
+  });
   it('allows only local game/invitation hashes', () => {
     for (const hash of ['#/games', '#/games/blackjack', '#/games/blackjack/lobbies', `#/room/${'a'.repeat(32)}`]) expect(safeAuthDestination(hash)).toBe(hash);
     for (const hash of ['https://evil.test', '//evil.test', '#/games?token=secret', '#/room/short', '#access_token=secret']) expect(safeAuthDestination(hash)).toBe('#/games');

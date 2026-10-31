@@ -38,6 +38,7 @@ jobs:
           CLOUDFLARE_WORKER_NAME: the-usual-table-api-production
           CLOUDFLARE_ACCOUNT_ID: '00000000000000000000000000000000'
           CLOUDFLARE_RATE_LIMIT_NAMESPACE_ID: '102802'
+          CLOUDFLARE_WALLET_HYPERDRIVE_ID: '11111111111111111111111111111111'
           ALLOWED_ORIGINS: https://example.test
       - uses: actions/upload-artifact@v7
         if: failure()

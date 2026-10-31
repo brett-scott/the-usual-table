@@ -55,20 +55,24 @@ const operation = (seat: FundedSeat) => ({ contract: 1 as const, operationId: cr
   sessionId: seat.sessionId, expectedVersion: seat.version });
 
 /** Trusted identity/seat authorization must precede this call. No browser account ID is accepted. */
-export function beginWalletFunding(previous: OnlineRoom, playerId: string, accountId: string, buyInUnits: number): OnlineRoom {
+export function beginWalletFunding(previous: OnlineRoom, playerId: string, accountId: string, buyInUnits: number, sessionId = crypto.randomUUID()): OnlineRoom {
   id.parse(accountId); walletUnitsSchema.parse(buyInUnits);
+  id.parse(sessionId);
   const chips = walletUnitsToBlackjack(buyInUnits);
   check(chips >= 20, 'A Blackjack buy-in must cover the minimum bet.');
-  check(previous.engine.phase === 'BETTING' && previous.bettingDeadline === null && previous.members[playerId]
-    && !previous.members[playerId]!.leaveAfterRound, 'Fund a seat only between hands before betting opens.');
+  const candidate = previous.engine.players.find(player => player.id === playerId);
+  check(candidate && candidate.hands.length === 0 && !previous.locked[playerId] && !previous.engine.insurance[playerId]?.wager
+    && previous.members[playerId] && !previous.members[playerId]!.leaveAfterRound, 'Fund only a new, uncommitted seat.');
   check(!fundedSeat(previous, playerId), 'This seat already has a funding decision.');
   check(!Object.values(previous.wallet?.seats ?? {}).some(seat => seat.accountId === accountId && !terminal(seat)), 'This account already has a seat.');
+  if (previous.members[playerId]!.account) check(Object.values(previous.wallet?.seats ?? {}).every(seat => terminal(seat)
+    || previous.members[seat.playerId]?.account?.id === seat.accountId), 'Existing funded seats need compatible account ownership before adding account play.');
   const room = structuredClone(previous);
-  room.schema = 3;
+  room.schema = previous.members[playerId]!.account ? 4 : 3;
   room.wallet ??= { schema: 1, seats: {}, outbox: [], retryAt: null, failures: 0, error: null };
   // Retain completed records while the room lives; refuse an unbounded history rather than erase money.
   check(Object.keys(room.wallet.seats).length < 128, 'This room has reached its funded-session limit.');
-  const seat: FundedSeat = { sessionId: crypto.randomUUID(), accountId, playerId, status: 'funding',
+  const seat: FundedSeat = { sessionId, accountId, playerId, status: 'funding',
     version: 0, sequence: 0, stackUnits: buyInUnits, lastRound: room.engine.roundId, leaveRequested: false };
   room.wallet.seats[seat.sessionId] = seat;
   const player = room.engine.players.find(p => p.id === playerId)!;
@@ -149,7 +153,7 @@ export async function flushRoomWallet(room: OnlineRoom, gateway: WalletGateway |
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'WALLET_UNAVAILABLE';
       const seat = room.wallet.seats[entry.after.sessionId]!;
       // These explicit rejections prove that this allocation operation did not reserve funds.
-      if (entry.command.kind === 'allocate' && ['INSUFFICIENT_FUNDS', 'ACCOUNT_SUSPENDED', 'ACCOUNT_NOT_FOUND'].includes(code)) {
+      if (entry.command.kind === 'allocate' && ['INSUFFICIENT_FUNDS', 'ACCOUNT_SUSPENDED', 'ACCOUNT_NOT_FOUND', 'SESSION_EXISTS'].includes(code)) {
         room.wallet.outbox = room.wallet.outbox.filter(item => item.after.sessionId !== seat.sessionId);
         seat.status = 'rejected'; seat.stackUnits = 0; room.revision++;
       } else {
@@ -180,7 +184,7 @@ export async function flushRoomWallet(room: OnlineRoom, gateway: WalletGateway |
 /** Storage validation must reject inconsistent financial state rather than resetting a room. */
 export function validRoomWallet(room: OnlineRoom): boolean {
   if (!room.wallet) return room.schema === 2;
-  if (room.schema !== 3 || Object.keys(room.wallet.seats).length > 128) return false;
+  if (![3, 4].includes(room.schema) || Object.keys(room.wallet.seats).length > 128) return false;
   if ((room.wallet.outbox.length === 0) !== (room.wallet.retryAt === null)) return false;
   const livePlayers = new Set<string>(); const liveAccounts = new Set<string>(); const operationIds = new Set<string>();
   for (const [sessionId, seat] of Object.entries(room.wallet.seats)) {
@@ -190,6 +194,8 @@ export function validRoomWallet(room: OnlineRoom): boolean {
       livePlayers.add(seat.playerId); liveAccounts.add(seat.accountId);
     }
     const player = room.engine.players.find(p => p.id === seat.playerId);
+    if (room.schema === 4 && player && !room.members[seat.playerId]?.account) return false;
+    if (room.members[seat.playerId]?.account && room.members[seat.playerId]!.account!.id !== seat.accountId) return false;
     if (['funding', 'active'].includes(seat.status) && !player) return false;
     if (seat.status === 'funding' && (player!.balance !== 0 || player!.hands.length !== 0)) return false;
     if (seat.status === 'active' && player) {

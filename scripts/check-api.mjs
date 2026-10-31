@@ -10,6 +10,7 @@ try {
   const body = await health.json();
   if (body.status !== 'ok' || body.protocol !== 1) throw new Error('The deployed API must support protocol 1.');
   if (body.authProjectUrl !== auth.url) throw new Error('Deploy the updated Worker with the same Supabase project as the frontend before publishing Pages.');
+  if (body.accountPlayProtocol !== 1) throw new Error('Deploy the updated Worker for saved-chip Blackjack before publishing Pages.');
   const session = await fetch(`${api}/api/v1/account/session`, { headers: { Origin: origin }, signal: AbortSignal.timeout(15_000) });
   const sessionBody = await session.json();
   if (session.status !== 401 || sessionBody.code !== 'ACCOUNT_SESSION_INVALID' || session.headers.get('Access-Control-Allow-Origin') !== origin) throw new Error('The deployed Worker must expose account verification and reject unauthenticated account requests.');

@@ -138,8 +138,9 @@ export class AuthController {
     const generation = ++this.generation; this.verification?.abort();
     this.walletGeneration++; this.walletRequest?.abort();
     const request = new AbortController(); this.verification = request; this.pendingToken = session.access_token;
-    this.publish({ working: true, hasSession: true, account: null, error: '',
-      nickname: null, nicknameStatus: 'loading', savingNickname: false, nicknameError: '', playerIcon: null, wallet: null, walletStatus: 'idle' });
+    const continuing = this.state.account?.accountId === session.user.id && this.state.account.expiresAt > this.env.now();
+    this.publish({ working: true, hasSession: true, error: '', wallet: null, walletStatus: 'idle',
+      ...(!continuing ? { account: null, nickname: null, nicknameStatus: 'loading' as const, savingNickname: false, nicknameError: '', playerIcon: null } : {}) });
     this.pendingVerification = (async () => {
       try {
         const account = accountSessionSchema.parse(await this.env.verify(session.access_token, request.signal));
@@ -229,6 +230,13 @@ export class AuthController {
     } catch {
       if (generation === this.walletGeneration) this.publish({ wallet: null, walletStatus: 'error' });
     }
+  }
+  async accessToken() {
+    const account = this.state.account;
+    const { data, error } = await this.sdk.getSession();
+    if (error || !account || !data.session || data.session.user.id !== account.accountId || this.state.account?.accountId !== account.accountId)
+      throw new Error('Sign in again to use your saved chips.');
+    return data.session.access_token;
   }
   async signOut() {
     this.walletGeneration++; this.walletRequest?.abort();

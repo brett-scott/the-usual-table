@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRoom, project } from '@casual/engine';
 import type { GameClient, ServerEvent, SessionResponse, Snapshot } from '@casual/protocol';
+const accountFixture = vi.hoisted(() => ({
+  state: { account: { accountId: 'verified-account' } as { accountId: string } | null },
+  token: 'verified.token.one', listeners: new Set<() => void>(),
+}));
+vi.mock('./authClient', () => ({ browserAuth: () => ({
+  getSnapshot: () => accountFixture.state, accessToken: async () => accountFixture.token,
+  subscribe(listener: () => void) { accountFixture.listeners.add(listener); return () => accountFixture.listeners.delete(listener); },
+}) }));
 
 class FakeSocket {
   static OPEN = 1;
@@ -30,18 +38,36 @@ function deliver(socket: FakeSocket, snapshot: Snapshot, revision: number, contr
   socket.emit({ type: 'connected', controllerId, serverTime: Date.now() });
   socket.emit({ type: 'snapshot', snapshot: { ...snapshot, revision }, serverTime: Date.now() });
 }
-async function start() {
+async function start(account = false) {
   const { createOnlineClient } = await import('./onlineClient'); const response = initial();
+  if (account) response.session.funding = 'account';
   const client = createOnlineClient(response); clients.push(client); await vi.advanceTimersByTimeAsync(0);
   const socket = FakeSocket.instances.at(-1)!; deliver(socket, response.snapshot, 1);
   return { client, socket, snapshot: response.snapshot };
 }
 beforeEach(() => {
+  accountFixture.state.account = { accountId: 'verified-account' }; accountFixture.token = 'verified.token.one'; accountFixture.listeners.clear();
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-28T00:00:00Z')); vi.resetModules();
   FakeSocket.instances = []; browserWindow = new EventTarget(); network = { onLine: true };
   vi.stubGlobal('window', browserWindow); vi.stubGlobal('navigator', network); vi.stubGlobal('location', { protocol: 'http:', hostname: '127.0.0.1' });
   vi.stubGlobal('localStorage', { setItem: vi.fn(), getItem: vi.fn(() => null) }); vi.stubGlobal('WebSocket', FakeSocket);
   fetcher = vi.fn(async () => Response.json({ ticket: 'c'.repeat(64) })); vi.stubGlobal('fetch', fetcher);
+});
+
+it('renews a funded controller using the current token and stops immediately when its account signs out', async () => {
+  const { client, socket } = await start(true);
+  expect(fetcher.mock.calls[0]![1].headers.Authorization).toBe('Bearer verified.token.one');
+  accountFixture.token = 'verified.token.refreshed'; for (const listener of accountFixture.listeners) listener();
+  expect(client.getConnection().status).toBe('connected');
+  for (let tick = 0; tick < 3; tick++) {
+    await vi.advanceTimersByTimeAsync(10000); socket.emit({ type: 'pong', serverTime: Date.now() });
+  }
+  const renewal = fetcher.mock.calls.find(call => String(call[0]).endsWith('/authorize'))!;
+  expect(renewal[1].headers.Authorization).toBe('Bearer verified.token.refreshed');
+  expect(JSON.parse(renewal[1].body)).toEqual({ controllerId: controllerOne });
+  accountFixture.state.account = null; for (const listener of accountFixture.listeners) listener();
+  expect(client.getConnection().status).toBe('invalid'); expect(socket.readyState).toBe(3);
+  await expect(client.send({ type: 'Ready' })).rejects.toThrow('Reconnect');
 });
 afterEach(() => { for (const client of clients.splice(0)) client.dispose(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 

@@ -40,6 +40,9 @@ export function workerConfig(base, env) {
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(authUrl)) throw new Error('SUPABASE_URL must be an HTTPS Supabase project origin.');
   const authKey = env.SUPABASE_PUBLISHABLE_KEY?.trim();
   if (authKey && !/^sb_publishable_[A-Za-z0-9_-]{10,}$/.test(authKey)) throw new Error('SUPABASE_PUBLISHABLE_KEY must be a publishable key, never a secret key.');
+  const database = env.CLOUDFLARE_WALLET_HYPERDRIVE_ID?.trim();
+  if (database && !/^[a-f0-9]{32}$/.test(database)) throw new Error('CLOUDFLARE_WALLET_HYPERDRIVE_ID must be a 32-character Hyperdrive ID.');
   return { ...base, name, account_id: account, workers_dev: true, preview_urls: false, vars: { ALLOWED_ORIGINS: origins.join(','), SUPABASE_URL: new URL(authUrl).origin,
-    ...(authKey ? { SUPABASE_PUBLISHABLE_KEY: authKey } : {}) }, ratelimits: [{ ...base.ratelimits[0], namespace_id: namespace }] };
+    ...(authKey ? { SUPABASE_PUBLISHABLE_KEY: authKey } : {}) }, ratelimits: [{ ...base.ratelimits[0], namespace_id: namespace }],
+    ...(database ? { hyperdrive: [{ binding: 'WALLET_DB', id: database }] } : {}) };
 }

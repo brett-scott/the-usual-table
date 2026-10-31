@@ -1,14 +1,18 @@
 import { CHAT_CAPABILITY, chatTextSchema, lobbyListSchema, serverEventSchema, sessionResponseSchema, snapshotSchema, type LobbyVisibility, type PlayerIcon, type Action, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
+import { browserAuth } from './authClient';
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || `${location.protocol}//${location.hostname}:8787`).replace(/\/$/, '');
 const temporarySessions = new Map<string, GuestSession>();
 export class ApiError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
-async function request(path: string, options: { session?: GuestSession; body?: unknown; method?: string; signal?: AbortSignal } = {}): Promise<unknown> {
+async function request(path: string, options: { session?: GuestSession; account?: boolean; body?: unknown; method?: string; signal?: AbortSignal } = {}): Promise<unknown> {
   const headers: Record<string, string> = {};
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-  if (options.session) headers.Authorization = `Bearer ${options.session.credential}`;
+  if (options.account || options.session?.funding === 'account') {
+    try { headers.Authorization = `Bearer ${await browserAuth().accessToken()}`; }
+    catch { throw new ApiError('ACCOUNT_SESSION_INVALID', 'Sign in again to use your saved chips.'); }
+  } else if (options.session) headers.Authorization = `Bearer ${options.session.credential}`;
   const controller = new AbortController(); const abort = () => controller.abort();
   options.signal?.addEventListener('abort', abort, { once: true });
   if (options.signal?.aborted) controller.abort();
@@ -30,6 +34,12 @@ function parseSession(value: unknown) {
   return result.data;
 }
 export async function createGuest(name: string, icon?: PlayerIcon, visibility?: LobbyVisibility) { return parseSession(await request('', { body: { name, icon, visibility } })); }
+export async function createAccountTable(name: string, icon: PlayerIcon | undefined, visibility: LobbyVisibility, buyInUnits: number, entryId: string) {
+  return parseSession(await request('', { account: true, body: { name, icon, visibility, funding: 'account', buyInUnits, entryId } }));
+}
+export async function joinAccountTable(invite: string, name: string, icon: PlayerIcon | undefined, buyInUnits: number, entryId: string) {
+  return parseSession(await request(`/${invite}/join`, { account: true, body: { name, icon, funding: 'account', buyInUnits, entryId } }));
+}
 export async function listLobbies(signal?: AbortSignal) {
   const controller = new AbortController(); const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
@@ -81,6 +91,10 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   let retry: ReturnType<typeof setTimeout> | undefined; let attempt = 0; let generation = 0;
   let handshakeTimer: ReturnType<typeof setTimeout> | undefined; let heartbeat: ReturnType<typeof setTimeout> | undefined;
   let ticketRequest: AbortController | undefined; let lastReceived = Date.now();
+  let lastAuthorized = Date.now();
+  const auth = session.funding === 'account' ? browserAuth() : undefined;
+  const owner = auth?.getSnapshot().account?.accountId;
+  const unsubscribeAccount = auth?.subscribe(() => { if (auth.getSnapshot().account?.accountId !== owner) fail('ACCOUNT_SESSION_INVALID', 'Sign in to the same account to restore this seat.'); });
   function notify() { for (const listener of listeners) listener(); }
   function setConnection(status: ConnectionInfo['status'], message: string) { connection = { ...connection, status, message }; notify(); }
   function rejectPending(message: string) {
@@ -101,7 +115,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   }
   function fail(code: string, message: string) {
     terminal = true; stopAttempt(); rejectPending(message);
-    const status = code === 'SESSION_REPLACED' ? 'replaced' : code === 'ROOM_EXPIRED' ? 'expired' : ['SESSION_INVALID', 'SESSION_EXPIRED'].includes(code) ? 'invalid' : 'incompatible';
+    const status = code === 'SESSION_REPLACED' ? 'replaced' : code === 'ROOM_EXPIRED' ? 'expired' : ['SESSION_INVALID', 'SESSION_EXPIRED', 'ACCOUNT_SESSION_INVALID', 'ACCOUNT_REQUIRED', 'ACCOUNT_SUSPENDED'].includes(code) ? 'invalid' : 'incompatible';
     setConnection(status, message);
   }
   function lost(message: string) {
@@ -113,9 +127,19 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
   }
   function scheduleHeartbeat(current: WebSocket, version: number) {
     clearTimeout(heartbeat);
-    heartbeat = setTimeout(() => {
+    heartbeat = setTimeout(async () => {
       if (disposed || terminal || socket !== current || generation !== version) return;
       if (Date.now() - lastReceived >= 25_000) { lost('Checking your connection… Actions are paused.'); return; }
+      if (auth && Date.now() - lastAuthorized >= 30_000) {
+        try {
+          await request(`/${session.inviteId}/authorize`, { session, body: { controllerId } }); lastAuthorized = Date.now();
+          if (disposed || terminal || socket !== current || generation !== version) return;
+        } catch (error) {
+          if (error instanceof ApiError && ['ACCOUNT_SESSION_INVALID', 'ACCOUNT_REQUIRED', 'ACCOUNT_SUSPENDED', 'SESSION_REPLACED'].includes(error.code)) fail(error.code, error.message);
+          else lost('Checking your account connection… Actions are paused.');
+          return;
+        }
+      }
       try { current.send('ping'); scheduleHeartbeat(current, version); }
       catch { lost('Reconnecting… Actions are paused.'); }
     }, 10_000);
@@ -127,6 +151,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
     ticketRequest = new AbortController();
     try {
       const response = await request(`/${session.inviteId}/ticket`, { session, body: { claimId, controllerId, claimVersion }, signal: ticketRequest.signal }) as { ticket: string };
+      lastAuthorized = Date.now();
       if (disposed || terminal || version !== generation) return;
       if (!/^[a-f0-9]{64}$/.test(response.ticket)) { fail('CLIENT_INCOMPATIBLE', 'The table returned an invalid connection response. Refresh to reconnect.'); return; }
       const url = new URL(`${apiBase}/api/v1/rooms/${session.inviteId}/socket`); url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -162,7 +187,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
             if (task) { clearTimeout(task.timer); pending.delete(message.commandId); task.resolve(); }
           } else if (message.type === 'error') {
             if (message.code === 'CHAT_UNAVAILABLE') { chat = { ...chat, available: false, problem: message.message }; notify(); }
-            if (['SESSION_INVALID', 'SESSION_EXPIRED', 'SESSION_REPLACED', 'ROOM_EXPIRED', 'CLIENT_INCOMPATIBLE', 'ROOM_VERSION_UNSUPPORTED', 'ROOM_STATE_INVALID'].includes(message.code)) { fail(message.code, message.message); return; }
+            if (['SESSION_INVALID', 'SESSION_EXPIRED', 'SESSION_REPLACED', 'ROOM_EXPIRED', 'CLIENT_INCOMPATIBLE', 'ROOM_VERSION_UNSUPPORTED', 'ROOM_STATE_INVALID', 'ACCOUNT_SESSION_INVALID', 'ACCOUNT_REQUIRED', 'ACCOUNT_SUSPENDED'].includes(message.code)) { fail(message.code, message.message); return; }
             if (message.snapshot) acceptSnapshot(message.snapshot);
             const task = message.commandId ? pending.get(message.commandId) : undefined;
             if (task) { clearTimeout(task.timer); pending.delete(message.commandId!); task.reject(new ApiError(message.code, message.message)); }
@@ -177,7 +202,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
       };
     } catch (error) {
       if (disposed || terminal || version !== generation) return;
-      if (error instanceof ApiError && ['SESSION_INVALID', 'SESSION_EXPIRED', 'SESSION_REPLACED', 'ROOM_EXPIRED', 'CLIENT_INCOMPATIBLE', 'ROOM_VERSION_UNSUPPORTED', 'ROOM_STATE_INVALID'].includes(error.code)) { fail(error.code, error.message); return; }
+      if (error instanceof ApiError && ['SESSION_INVALID', 'SESSION_EXPIRED', 'SESSION_REPLACED', 'ROOM_EXPIRED', 'CLIENT_INCOMPATIBLE', 'ROOM_VERSION_UNSUPPORTED', 'ROOM_STATE_INVALID', 'ACCOUNT_SESSION_INVALID', 'ACCOUNT_REQUIRED', 'ACCOUNT_SUSPENDED'].includes(error.code)) { fail(error.code, error.message); return; }
       lost('The table service is unreachable. Retrying…');
     }
   }
@@ -223,7 +248,7 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
     },
     reconnect() { if (!disposed && !terminal && connection.status !== 'connected') void connect(); },
     dispose() {
-      disposed = true; stopAttempt(); rejectPending('You left the table.'); listeners.clear();
+      disposed = true; unsubscribeAccount?.(); stopAttempt(); rejectPending('You left the table.'); listeners.clear();
       window.removeEventListener('offline', wentOffline); window.removeEventListener('online', wentOnline); window.removeEventListener('focus', focused);
     },
   };

@@ -71,6 +71,7 @@ export interface RoomInfo { inviteId: string; managerPlayerId: string; bettingOp
 export interface Snapshot {
   protocol: 1; revision: number; roundId: number; phase: Phase;
   you: string; room?: RoomInfo;
+  wallet?: { status: 'funding' | 'active' | 'returning' | 'closed' | 'cancelled' | 'rejected'; stackUnits: number; error: string | null };
   players: PublicPlayer[]; dealer: VisibleCard[]; dealerTotal: number | null;
   activePlayerId: string | null; activeHandId: string | null; legalActions: ActionType[];
   decisionDeadline: number | null;
@@ -102,7 +103,7 @@ export interface GameClient {
   dispose(): void;
 }
 export interface ConnectionInfo { status: 'connected' | 'connecting' | 'reconnecting' | 'offline' | 'replaced' | 'expired' | 'invalid' | 'incompatible'; message: string; clockOffsetMs?: number }
-export interface GuestSession { inviteId: string; playerId: string; credential: string }
+export interface GuestSession { inviteId: string; playerId: string; credential: string; funding?: 'account' }
 export interface SessionResponse { session: GuestSession; snapshot: Snapshot }
 export type ServerEvent =
   | { type: 'chat'; messages: ChatMessage[] }
@@ -117,6 +118,7 @@ export type ConnectionEvent = { type: 'connected'; controllerId: string; serverT
 const cardSchema = z.object({ id: z.string(), rank: z.enum(['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']), suit: z.enum(['spades', 'hearts', 'diamonds', 'clubs']) });
 const handSchema = z.object({ id: z.string(), cards: z.array(cardSchema), total: z.number(), soft: z.boolean(), wager: amount, status: z.enum(['playing', 'stood', 'bust']), timedOut: z.boolean().optional(), outcome: z.enum(['blackjack', 'win', 'push', 'loss']).optional(), returned: amount.optional() });
 export const snapshotSchema = z.object({
+  wallet: z.object({ status: z.enum(['funding', 'active', 'returning', 'closed', 'cancelled', 'rejected']), stackUnits: z.number().int().nonnegative().safe(), error: z.string().nullable() }).optional(),
   protocol: z.literal(1), revision: amount, roundId: amount, phase: z.enum(['BETTING', 'INSURANCE', 'PLAYER_TURNS', 'ROUND_COMPLETE']), you: z.string(),
   room: z.object({ inviteId: z.string(), managerPlayerId: z.string(), bettingOpen: z.boolean(), bettingDeadline: z.number().nullable(), insuranceDeadline: z.number().nullable(), claimVersion: amount.optional(), gameId: gameIdSchema.optional(), visibility: lobbyVisibilitySchema.optional() }).optional(),
   players: z.array(z.object({ id: z.string(), name: z.string(), icon: playerIconSchema.optional(), seat: z.number().int(), balance: amount, bet: amount, hands: z.array(handSchema), connected: z.boolean().optional(), ready: z.boolean().optional(), sittingOut: z.boolean().optional(), reservationDeadline: z.number().nullable().optional(), leavingAfterRound: z.boolean().optional(), roundResult: z.object({ net: z.number().int(), outcome: z.enum(['won', 'lost', 'even', 'out']) }).optional() })).max(4),
@@ -126,7 +128,7 @@ export const snapshotSchema = z.object({
   insurance: z.object({ wager: amount, returned: amount }).nullable(),
   shoe: z.object({ decks: z.literal(6), remaining: amount, shuffled: z.boolean(), shuffleNext: z.boolean() }),
 });
-export const sessionResponseSchema = z.object({ session: z.object({ inviteId: z.string().regex(/^[a-f0-9]{32}$/), playerId: z.string(), credential: z.string().regex(/^[a-f0-9]{64}$/) }), snapshot: snapshotSchema });
+export const sessionResponseSchema = z.object({ session: z.object({ inviteId: z.string().regex(/^[a-f0-9]{32}$/), playerId: z.string(), credential: z.string().regex(/^[a-f0-9]{64}$/), funding: z.literal('account').optional() }), snapshot: snapshotSchema });
 export const serverEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chat'), messages: z.array(chatMessageSchema).max(CHAT_HISTORY_LIMIT) }),
   z.object({ type: z.literal('snapshot'), snapshot: snapshotSchema, serverTime: z.number().finite() }),

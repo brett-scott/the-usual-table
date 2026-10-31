@@ -1,6 +1,6 @@
 import { createRoom, expireDecision, GameError, project, transition, type RandomIndex, type RoomState } from '@casual/engine';
 import { RESULTS_DURATION_MS, resultsRevealDelay, type LobbyVisibility, type PlayerIcon, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
-import { recordWalletRound, sealWalletSeat, walletActions, walletHasFunds, type RoomWallet } from './roomWallet';
+import { fundedSeat, recordWalletRound, sealWalletSeat, walletActions, walletHasFunds, type RoomWallet } from './roomWallet';
 
 export const RESERVATION_MS = 60_000;
 export const PRESENCE_MS = 30_000;
@@ -9,10 +9,12 @@ export interface Member {
   hash: string; connected: boolean; controllerId: string | null; leaveAfterRound: boolean;
   reservationDeadline: number | null; presenceDeadline: number | null;
   claimId: string | null; claimVersion: number; retiredClaims: string[];
+  account?: { id: string; expiresAt: number };
 }
 export interface OnlineRoom {
-  schema: 2 | 3; id: string; revision: number; managerId: string; engine: RoomState;
+  schema: 2 | 3 | 4; id: string; revision: number; managerId: string; engine: RoomState;
   wallet?: RoomWallet;
+  creation?: { entryId: string; buyInUnits: number; visibility: LobbyVisibility };
   members: Record<string, Member>; locked: Record<string, 'ready' | 'out'>;
   bettingDeadline: number | null; insuranceDeadline: number | null; lastActivity: number;
   roundDeadline?: number | null;
@@ -85,7 +87,9 @@ export function roomActions(room: OnlineRoom, playerId: string): ActionType[] {
 export function roomSnapshot(room: OnlineRoom, playerId: string): Snapshot {
   assertRule(room.members[playerId], 'SESSION_INVALID', 'Your guest session is no longer valid.');
   const snapshot = project(room.engine, playerId);
+  const seat = fundedSeat(room, playerId);
   return { ...snapshot, revision: room.revision, roundDeadline: resultsDeadline(room), legalActions: roomActions(room, playerId),
+    ...(seat ? { wallet: { status: seat.status, stackUnits: seat.stackUnits, error: room.wallet?.error ?? null } } : {}),
     room: { inviteId: room.id, gameId: room.gameId ?? 'blackjack', visibility: room.visibility ?? 'private', managerPlayerId: room.managerId, bettingOpen: room.bettingDeadline !== null, bettingDeadline: room.bettingDeadline, insuranceDeadline: room.insuranceDeadline, claimVersion: room.members[playerId]!.claimVersion },
     players: snapshot.players.map(p => ({ ...p, connected: room.members[p.id]!.connected, reservationDeadline: room.members[p.id]!.reservationDeadline, leavingAfterRound: room.members[p.id]!.leaveAfterRound, ready: room.locked[p.id] === 'ready', sittingOut: room.locked[p.id] === 'out' })) };
 }

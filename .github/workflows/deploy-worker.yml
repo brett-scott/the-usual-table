@@ -22,6 +22,7 @@ jobs:
       ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
       SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      CLOUDFLARE_WALLET_HYPERDRIVE_ID: ${{ vars.CLOUDFLARE_WALLET_HYPERDRIVE_ID }}
     steps:
       - uses: actions/checkout@v7
         with:

@@ -117,13 +117,13 @@ export function AccountControls({ beforeSignIn, signedInOnly = false }: { before
             menu.current?.querySelector<HTMLButtonElement>('button')?.focus(); void auth.refreshWallet();
           }}>Retry wallet balance</button>}</>}
       </div>
-      <p className={s.note}>Temporary table chips · Separate from your wallet</p>
+      <p className={s.note}>Choose saved or temporary chips when entering a table.</p>
     </div>}
     {state.error && <span className={s.notice} role="status">Account unavailable · Guest play is available</span>}
     <dialog ref={dialog} className={s.dialog} aria-labelledby={titleId} onClose={() => { auth.cancelSignIn(); trigger.current?.focus(); }}>
       <div className={s.heading}><h2 id={titleId}>A seat with your name on it.</h2><button autoFocus aria-label="Close account" onClick={() => dialog.current?.close()}>×</button></div>
       <p>Sign in with Google or Discord, or keep playing as a guest.</p>
-      <p className={s.note}>Tables currently use temporary chips. Playing with your saved chips and saving progress are coming soon.</p>
+      <p className={s.note}>Bring saved chips to a table or play as a guest with temporary chips.</p>
       {state.error && <p className={s.error} role="alert">{state.error}</p>}
       <div className={s.providers}>
         <button disabled={state.working} onClick={() => { beforeSignIn?.(); void auth.signIn('google'); }}>Continue with Google</button>

@@ -8,6 +8,7 @@ const project = 'https://npqvazffslqmfjtyyhpn.supabase.co';
 globalThis.fetch = async (input, options) => {
   const path = new URL(input).pathname;
   if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,
+    ...(process.env.CHECK_SCENARIO === 'missing-account-play' ? {} : {accountPlayProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'old-worker' ? {} : {authProjectUrl:process.env.CHECK_SCENARIO === 'wrong-project' ? 'https://wrong.supabase.co' : project})},
     {headers:{'Access-Control-Allow-Origin':origin}});
   if (path === '/api/v1/account/session') return Response.json({code:'ACCOUNT_SESSION_INVALID'},
@@ -30,6 +31,9 @@ it('accepts a matching Auth project, account rejection and CORS before Pages pub
 });
 it.each(['old-worker', 'wrong-project'])('rejects an %s deployment before Pages publishing', scenario => {
   const result = check(scenario); expect(result.status).toBe(1); expect(result.stderr).toContain('Deploy the updated Worker');
+});
+it('requires the updated account-play Worker before publishing the saved-chip entry flow', () => {
+  const result = check('missing-account-play'); expect(result.status).toBe(1); expect(result.stderr).toContain('saved-chip Blackjack');
 });
 it.each(['account-accepted', 'account-missing', 'account-cors'])('rejects an invalid account gate: %s', scenario => {
   const result = check(scenario); expect(result.status).toBe(1); expect(result.stderr).toContain('account verification');

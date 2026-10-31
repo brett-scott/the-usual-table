@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { GAME_CATALOG, type LobbyVisibility, type PublicLobby } from '@casual/protocol';
-import { createGuest, lastTable, listLobbies, rememberSession } from './onlineClient';
+import { createAccountTable, createGuest, lastTable, listLobbies, rememberSession } from './onlineClient';
 import s from './GameHub.module.css';
 import { AccountControls } from './AccountControls';
-import { GuestIdentityFields, useTableIdentity } from './TableIdentity';
+import { BuyInFields, GuestIdentityFields, useTableFunding, useTableIdentity } from './TableIdentity';
 import tableStyles from './App.module.css';
 
 export function GameHub({ browse = false }: { browse?: boolean }) {
@@ -24,17 +24,18 @@ export function GameHub({ browse = false }: { browse?: boolean }) {
 }
 
 function LobbyBrowser({ identity }: { identity: ReturnType<typeof useTableIdentity> }) {
+  const funding = useTableFunding();
   const [lobbies, setLobbies] = useState<PublicLobby[]>([]); const [error, setError] = useState('');
   const [loading, setLoading] = useState(true); const [refresh, setRefresh] = useState(0);
   const createDialog = useRef<HTMLDialogElement>(null); const createButton = useRef<HTMLButtonElement>(null);
   const creating = useRef(false); const [busy, setBusy] = useState(false); const [createError, setCreateError] = useState('');
   const [visibility, setVisibility] = useState<LobbyVisibility>('private');
   async function create(event: FormEvent) {
-    event.preventDefault(); if (creating.current || !identity.ready) return;
+    event.preventDefault(); if (creating.current || !identity.ready || !funding.valid) return;
     const seat = identity.validate(); if (!seat) { setCreateError('Enter a name of 1–24 characters.'); return; }
     creating.current = true; setBusy(true); setCreateError(''); identity.saveDraft();
     try {
-      const response = await createGuest(seat.name, seat.icon, visibility);
+      const response = funding.saved ? await createAccountTable(seat.name, seat.icon, visibility, funding.units, funding.entryId) : await createGuest(seat.name, seat.icon, visibility);
       rememberSession(response.session); location.hash = `/room/${response.session.inviteId}`;
     } catch (problem) { setCreateError(problem instanceof Error ? problem.message : 'Your table could not be created. Please retry.'); }
     finally { creating.current = false; setBusy(false); }
@@ -66,11 +67,12 @@ function LobbyBrowser({ identity }: { identity: ReturnType<typeof useTableIdenti
       <p>Play on your own or invite friends to join.</p>
       <form className={tableStyles.nameForm} onSubmit={event => { void create(event); }}>
         <GuestIdentityFields identity={identity} disabled={busy} />
+        <BuyInFields funding={funding} disabled={busy} />
         <div className={tableStyles.iconPicker}><label htmlFor="table-visibility">Table visibility</label><select id="table-visibility" value={visibility} disabled={busy} onChange={event => setVisibility(event.target.value as LobbyVisibility)}>
           <option value="private">Private · Invite only</option><option value="public">Public · Listed</option>
         </select></div>
         {createError && <p role="alert">{createError}</p>}
-        <button className={tableStyles.primary} type="submit" disabled={busy || !identity.ready}>{busy ? 'Creating…' : 'Create table'}</button>
+        <button className={tableStyles.primary} type="submit" disabled={busy || !identity.ready || !funding.valid}>{busy ? 'Creating…' : 'Create table'}</button>
       </form>
     </dialog>
   </main>;

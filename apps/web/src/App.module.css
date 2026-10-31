@@ -24,6 +24,10 @@
 .seatLabel { font-size: 9px; color: #d5e0cf; letter-spacing: 2px; margin: 0 0 12px; display: flex; align-items: center; justify-content: center; gap: 9px; }
 .dealerNote { display: block; font-size: 10px; color: #d2dfc9b3; margin-top: 12px; }
 .cards { display: flex; justify-content: center; align-items: center; padding: 0 6px; min-width: 0; }
+.buyInFields { width: 100%; }
+.buyInFields input { width: 100%; }
+.buyInFields p { margin: 6px 0; font-size: 11px; line-height: 1.35; }
+.welcome:has(.buyInFields) .welcomeArt { display: none; }
 .dealer .cards { --card-overlap: -8px; }
 .card { width: 64px; height: 90px; flex: 0 0 auto; display: block; color: #24332d; fill: currentColor; border-radius: 6px; margin-left: -16px; transform: rotate(-3deg); perspective: 800px; }
 .cardTravel, .cardFlipper { width: 100%; height: 100%; position: relative; }
