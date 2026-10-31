@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { PostgresWalletStore } from '@casual/wallet';
-import { postgresWalletDatabase } from '@casual/wallet/postgres';
+import { postgresPoolCloser, postgresWalletDatabase } from '@casual/wallet/postgres';
 import type { Env } from './env';
 import type { WalletGateway } from './roomWallet';
 
@@ -11,6 +11,7 @@ export function walletBackend(env: Env, context: { waitUntil(task: Promise<unkno
   return { execute(command) {
     const task = (async () => {
       const pool = new Pool({ connectionString: env.WALLET_DB!.connectionString, max: 1, connectionTimeoutMillis: 2000 });
+      const closePool = postgresPoolCloser(pool);
       try {
         const database = postgresWalletDatabase(pool);
         const store = new PostgresWalletStore({ ...database, transaction: work => database.transaction(async tx => {
@@ -19,7 +20,7 @@ export function walletBackend(env: Env, context: { waitUntil(task: Promise<unkno
           return work(tx);
         }) });
         return await store.execute(command);
-      } finally { await pool.end(); }
+      } finally { await closePool(); }
     })();
     // A room timeout is an uncertain acknowledgement, not permission to abandon the transaction.
     context.waitUntil(task.catch(() => undefined));

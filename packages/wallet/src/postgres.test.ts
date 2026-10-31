@@ -6,12 +6,13 @@ import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { WalletCommand } from '@casual/protocol';
 import { PostgresWalletStore } from './index';
-import { postgresWalletDatabase } from './postgres';
+import { postgresPoolCloser, postgresWalletDatabase } from './postgres';
 import { supabaseAuthFixture } from './supabaseFixture';
 
 let server: EmbeddedPostgres; let pool: pg.Pool; let store: PostgresWalletStore;
 let directory = ''; let started = false;
 let backendConnection = '';
+let closePool: (() => Promise<void>) | undefined;
 const parent = resolve('.wrangler');
 beforeAll(async () => {
   await mkdir(parent, { recursive: true }); directory = await mkdtemp(join(parent, 'wallet-pg-'));
@@ -27,6 +28,7 @@ beforeAll(async () => {
   await server.initialise(); await server.start(); started = true;
   pool = new pg.Pool({ host: '127.0.0.1', port, user: 'wallet_test', password, database: 'postgres', max: 8,
     connectionTimeoutMillis: 5000, statement_timeout: 10_000 });
+  closePool = postgresPoolCloser(pool);
   await pool.query(await readFile(new URL('../migrations/001_wallet.sql', import.meta.url), 'utf8'));
   await pool.query(supabaseAuthFixture);
   await pool.query(await readFile(new URL('../migrations/002_supabase_wallet_api.sql', import.meta.url), 'utf8'));
@@ -38,9 +40,12 @@ beforeAll(async () => {
   store = new PostgresWalletStore(postgresWalletDatabase(pool), { welcome: { version: 'test-only', amountUnits: 100_000 } });
 }, 60_000);
 afterAll(async () => {
-  await pool?.end(); if (started) await server.stop();
-  // Only this suite's freshly created directory may be recursively removed.
-  if (directory && dirname(resolve(directory)) === parent && basename(directory).startsWith('wallet-pg-')) await rm(directory, { recursive: true, force: true });
+  try { await closePool?.(); }
+  finally {
+    if (started) await server.stop();
+    // Only this suite's freshly created directory may be recursively removed.
+    if (directory && dirname(resolve(directory)) === parent && basename(directory).startsWith('wallet-pg-')) await rm(directory, { recursive: true, force: true });
+  }
 }, 30_000);
 async function account() {
   const accountId = crypto.randomUUID(); await store.createAccount(accountId);
