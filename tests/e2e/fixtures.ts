@@ -64,7 +64,7 @@ export async function expectOneScreen(page: Page) {
     if (!(await locator.isVisible())) continue;
     const bounds = await locator.boundingBox(); expect(bounds!.y).toBeGreaterThanOrEqual(0); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(size.height + 1);
     const overflow = await locator.evaluate(el => ({ height: el.clientHeight, scrollHeight: el.scrollHeight, width: el.clientWidth, scrollWidth: el.scrollWidth }));
-    expect(overflow.scrollHeight, 'game content must fit its allocated area').toBeLessThanOrEqual(overflow.height + 1);
+    expect(overflow.scrollHeight, `${await locator.getAttribute('aria-label')} content must fit its allocated area at ${size.width}x${size.height}`).toBeLessThanOrEqual(overflow.height + 1);
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.width + 1);
   }
   for (const button of await page.getByRole('region', { name: 'Game controls' }).getByRole('button').all()) {

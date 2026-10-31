@@ -38,8 +38,23 @@ test('split hands, double, and hit are usable', async ({ page }, testInfo) => {
   for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Split', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Split', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Double', exact: true })).toBeEnabled();
-  if (testInfo.project.name === 'desktop') for (const [width, height] of [[1440, 900], [1366, 768], [1280, 720], [1024, 768]]) {
-    await page.setViewportSize({ width: width!, height: height! }); await expectOneScreen(page);
+  if (testInfo.project.name === 'desktop') {
+    // CI falls back from Segoe UI to Arial-compatible metrics. Wider numerals can
+    // wrap the score/wager row, so exercise that layout on Windows as well.
+    for (const family of ['', 'Arial, sans-serif']) {
+      await page.evaluate(font => { document.documentElement.style.fontFamily = font; }, family);
+      for (const [width, height] of [[1440, 900], [1366, 768], [1280, 720], [1024, 768]]) await test.step(`${family || 'System font'} at ${width}x${height}`, async () => {
+        await page.setViewportSize({ width: width!, height: height! }); await expectOneScreen(page);
+        const seat = page.getByRole('region', { name: 'Your seat' }); const area = (await seat.boundingBox())!;
+        for (const content of await seat.locator('[id^="hand-"], [role="img"], [data-hand-total], [data-chip-amount], [role="timer"]').all()) {
+          const bounds = (await content.boundingBox())!;
+          expect(bounds.y, 'split cards, totals, wagers and timer stay inside the seat').toBeGreaterThanOrEqual(area.y);
+          expect(bounds.y + bounds.height).toBeLessThanOrEqual(area.y + area.height);
+        }
+        if (family && width === 1280) await page.screenshot({ path: testInfo.outputPath('four-hands-fallback-1280x720.png') });
+      });
+    }
+    await page.evaluate(() => { document.documentElement.style.fontFamily = ''; });
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('four-hands.png'), fullPage: true });

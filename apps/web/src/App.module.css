@@ -454,7 +454,9 @@
   .app .ownSeat .hand { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .app .ownSeat .cards { width: 100%; }
   .app .ownSeat .card { --card-height: clamp(58px, calc(100cqh - 108px), 112px); }
-  .app .ownSeat .hands:has(> :nth-child(2)) .card { --card-height: clamp(44px, calc(100cqh - 112px), 86px); }
+  /* Split totals/wagers can wrap with fallback fonts; reserve both rows and the
+     active-hand timer. Override the legacy fixed split size so cards can shrink. */
+  .app .ownSeat .hands:has(> :nth-child(2)) .card { --card-height: clamp(44px, calc(100cqh - 150px), 86px); width: calc(var(--card-height) * 76 / 106); height: var(--card-height); }
   .app .ownSeat .countdown { width: min(100%, 180px); }
   .app .ownSeat .handInfo .turnLabel { display: none; }
   .app .otherSeat { padding: 6px 8px; display: flex; flex-direction: column; justify-content: center; }
