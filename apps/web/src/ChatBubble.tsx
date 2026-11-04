@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { ChatFeed, GameClient } from '@casual/protocol';
+import type { ChatFeed,TableClient } from '@casual/protocol';
 import s from './App.module.css';
 const empty: ChatFeed = { messages: [], available: false, unread: 0 };
 export const BUBBLE_LIMIT = 80;
@@ -7,7 +7,7 @@ export function bubbleText(text: string) {
   const characters = Array.from(text.replace(/\s+/g, ' ').trim());
   return characters.length > BUBBLE_LIMIT ? `${characters.slice(0, BUBBLE_LIMIT - 1).join('')}…` : characters.join('');
 }
-export function ChatBubble({ client, playerId, name }: { client: GameClient; playerId: string; name: string }) {
+export function ChatBubble({ client, playerId, name }: { client: Pick<TableClient<unknown,unknown>,'getChat'|'subscribe'>; playerId: string; name: string }) {
   const feed = useSyncExternalStore(client.subscribe, () => client.getChat?.() ?? empty);
   const latest = feed.liveMessages?.filter(entry => entry.message.playerId === playerId).at(-1);
   const [, tick] = useState(0);

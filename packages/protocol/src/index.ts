@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { gameIdSchema, lobbyVisibilitySchema, type GameId, type LobbyVisibility } from './games';
+import type { TableClient,TableServerEvent,TableSessionResponse } from './tablePlatform';
 export * from './games';
 export * from './wallet';
 export * from './auth';
@@ -7,6 +8,8 @@ export * from './invitations';
 export * from './statistics';
 export * from './rewards';
 export * from './progression';
+export * from './tablePlatform';
+export * from './gameRoutes';
 
 export const PROTOCOL_VERSION = 1;
 export const RESULTS_DURATION_MS = 10_000;
@@ -19,7 +22,7 @@ export const CHAT_HISTORY_LIMIT = 50;
 export const CHAT_CAPABILITY = 'casual-chat-v1';
 export const chatTextSchema = z.string().trim().min(1, 'Write a message first.').max(CHAT_MAX_LENGTH, `Use at most ${CHAT_MAX_LENGTH} characters.`);
 export const chatCommandSchema = z.object({ type: z.literal('chat'), protocol: z.literal(1), id: z.string().uuid(), text: chatTextSchema }).strict();
-export const chatMessageSchema = z.object({ id: z.string().uuid(), playerId: z.string().min(1).max(100), name: z.string().min(1).max(24), seat: z.number().int().min(0).max(3), text: chatTextSchema, sentAt: z.number().int().nonnegative().safe() });
+export const chatMessageSchema = z.object({ id: z.string().uuid(), playerId: z.string().min(1).max(100), name: z.string().min(1).max(24), seat: z.number().int().min(0).max(11), text: chatTextSchema, sentAt: z.number().int().nonnegative().safe() });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export interface ChatFeed { messages: ChatMessage[]; available: boolean; unread: number; problem?: string; liveMessages?: { message: ChatMessage; receivedAt: number }[] }
 /** Display text only: duplicates are allowed. Account/player IDs determine ownership. */
@@ -95,27 +98,11 @@ export function resultsRevealDelay(previous: Snapshot, next: Snapshot) {
   return newPlayerCards * INITIAL_CARD_STEP_MS + hole + Math.max(0, next.dealer.length - previous.dealer.length) * (DEALER_REVEAL_STEP_MS + CARD_DEAL_MS + CARD_FLIP_MS);
 }
 /** Both practice and online adapters deliver public snapshots, never private engine state. */
-export interface GameClient {
-  getSnapshot(): Snapshot;
-  subscribe(listener: () => void): () => void;
-  send(action: Action): Promise<void>;
-  getConnection(): ConnectionInfo;
-  reconnect?(): void;
-  getChat?(): ChatFeed;
-  markChatRead?(): void;
-  sendChat?(text: string): Promise<void>;
-  dispose(): void;
-}
+export type GameClient = TableClient<Snapshot,Action>;
 export interface ConnectionInfo { status: 'connected' | 'connecting' | 'reconnecting' | 'offline' | 'replaced' | 'expired' | 'invalid' | 'incompatible'; message: string; clockOffsetMs?: number }
-export interface GuestSession { inviteId: string; playerId: string; credential: string; funding?: 'account' }
-export interface SessionResponse { session: GuestSession; snapshot: Snapshot }
-export type ServerEvent =
-  | { type: 'chat'; messages: ChatMessage[] }
-  | { type: 'snapshot'; snapshot: Snapshot; serverTime: number }
-  | { type: 'ack'; commandId: string; revision: number }
-  | { type: 'error'; commandId?: string; code: string; message: string; snapshot?: Snapshot }
-  | { type: 'replaced'; message: string }
-  | ConnectionEvent;
+export interface GuestSession { inviteId: string; playerId: string; credential: string; funding?: 'account';gameId?:GameId;adapterVersion?:number }
+export type SessionResponse = TableSessionResponse<Snapshot>;
+export type ServerEvent = TableServerEvent<Snapshot>;
 // A controller ID proves continuation of this tab's connection, not guest identity.
 export type ConnectionEvent = { type: 'connected'; controllerId: string; serverTime: number } | { type: 'pong'; serverTime: number };
 
@@ -132,13 +119,16 @@ export const snapshotSchema = z.object({
   insurance: z.object({ wager: amount, returned: amount }).nullable(),
   shoe: z.object({ decks: z.literal(6), remaining: amount, shuffled: z.boolean(), shuffleNext: z.boolean() }),
 });
-export const sessionResponseSchema = z.object({ session: z.object({ inviteId: z.string().regex(/^[a-f0-9]{32}$/), playerId: z.string(), credential: z.string().regex(/^[a-f0-9]{64}$/), funding: z.literal('account').optional() }), snapshot: snapshotSchema });
-export const serverEventSchema = z.discriminatedUnion('type', [
+export function tableSessionResponseSchema<S>(payload:z.ZodType<S>){return z.object({gameId:gameIdSchema.optional(),adapterVersion:z.number().int().min(1).optional(), session: z.object({ inviteId: z.string().regex(/^[a-f0-9]{32}$/), playerId: z.string(), credential: z.string().regex(/^[a-f0-9]{64}$/), funding: z.literal('account').optional() }), snapshot: payload });}
+export const sessionResponseSchema = tableSessionResponseSchema(snapshotSchema);
+export function gameServerEventSchema<S>(payload:z.ZodType<S>) { return z.discriminatedUnion('type', [
   z.object({ type: z.literal('chat'), messages: z.array(chatMessageSchema).max(CHAT_HISTORY_LIMIT) }),
-  z.object({ type: z.literal('snapshot'), snapshot: snapshotSchema, serverTime: z.number().finite() }),
+  z.object({ type: z.literal('snapshot'), snapshot: payload, serverTime: z.number().finite() }),
+  z.object({type:z.literal('game-snapshot'),protocol:z.literal(1),gameId:gameIdSchema,adapterVersion:z.number().int().min(1),snapshot:payload,serverTime:z.number().finite()}),
   z.object({ type: z.literal('connected'), controllerId: z.string().uuid(), serverTime: z.number().finite() }),
   z.object({ type: z.literal('pong'), serverTime: z.number().finite() }),
   z.object({ type: z.literal('ack'), commandId: z.string().min(1).max(100), revision: amount }),
-  z.object({ type: z.literal('error'), commandId: z.string().max(100).optional(), code: z.string().max(100), message: z.string().max(2000), snapshot: snapshotSchema.optional() }),
+  z.object({ type: z.literal('error'), commandId: z.string().max(100).optional(), code: z.string().max(100), message: z.string().max(2000), snapshot: payload.optional() }),
   z.object({ type: z.literal('replaced'), message: z.string().max(2000) }),
-]);
+]); }
+export const serverEventSchema = gameServerEventSchema(snapshotSchema);

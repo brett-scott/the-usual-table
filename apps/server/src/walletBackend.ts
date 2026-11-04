@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { PostgresWalletStore } from '@casual/wallet';
 import { postgresPoolCloser, postgresWalletDatabase } from '@casual/wallet/postgres';
 import type { Env } from './env';
-import type { WalletGateway } from './roomWallet';
+import type { WalletGateway } from './tableWallet';
 
 /** Each delivery owns its connections; Hyperdrive pools the underlying database sockets. */
 export function walletBackend(env: Env, context: { waitUntil(task: Promise<unknown>): void }): WalletGateway | undefined {

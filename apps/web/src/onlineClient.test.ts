@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRoom, project } from '@casual/engine';
+import { z } from 'zod';
+import { BLACKJACK_TABLE_RULES,type GameClientAdapter } from '@casual/protocol';
 import type { GameClient, ServerEvent, SessionResponse, Snapshot } from '@casual/protocol';
 const accountFixture = vi.hoisted(() => ({
   state: { account: { accountId: 'verified-account' } as { accountId: string } | null },
@@ -77,7 +79,7 @@ it('ignores late messages from a superseded connection and restores a full revis
   socket.emit({ type: 'snapshot', snapshot: { ...snapshot, revision: 99 }, serverTime: Date.now() });
   expect(client.getSnapshot().revision).toBe(7); expect(client.getConnection().status).toBe('connected');
   const task = client.send({ type: 'PlaceBet', amount: 40 });
-  const command = JSON.parse(replacement.sent.at(-1)!) as { id: string };
+  const command = (JSON.parse(replacement.sent.at(-1)!) as {command:{id:string}}).command;
   socket.emit({ type: 'error', commandId: command.id, code: 'INVALID_ACTION', message: 'Old callback' });
   replacement.emit({ type: 'ack', commandId: command.id, revision: 8 }); await expect(task).resolves.toBeUndefined();
 });
@@ -180,4 +182,38 @@ it('offers only new recent arrivals for table bubbles, without replaying initial
   socket.emit({ type: 'chat', messages: [old, fresh, stale] }); expect(client.getChat!().liveMessages?.map(entry => entry.message.text)).toEqual(['Live']);
   socket.emit({ type: 'chat', messages: [old, fresh, stale] }); expect(client.getChat!().liveMessages).toHaveLength(1);
   await vi.advanceTimersByTimeAsync(5001); socket.emit({ type: 'chat', messages: [old, fresh, stale] }); expect(client.getChat!().liveMessages).toEqual([]);
+});
+it('reuses the same transport for a non-card game, its commands, chat, reconnect and version checks',async()=>{
+  const {createTableClient}=await import('./onlineClient');
+  const schema=z.object({viewer:z.string(),table:z.string(),revision:z.number().int(),roundKey:z.string(),counter:z.number().int()}).strict();
+  type State=z.infer<typeof schema>;type Move={type:'Increment';choice:number};
+  const adapter:GameClientAdapter<State,Move>={gameId:'baccarat',version:7,entry:{...BLACKJACK_TABLE_RULES,capacity:6,buyInStepUnits:100},snapshotSchema:schema,
+    identity:s=>({playerId:s.viewer,roomId:s.table,revision:s.revision,claimVersion:0,gameId:'baccarat'}),
+    command:(s,action,playerId,id)=>({id,playerId,roundKey:s.roundKey,expectedCounter:s.counter,action})};
+  const state={viewer:'counter-player',table:'d'.repeat(32),revision:0,roundKey:'spin-A',counter:0};
+  const client=createTableClient({gameId:'baccarat',adapterVersion:7,session:{inviteId:state.table,playerId:state.viewer,credential:'b'.repeat(64)},snapshot:state},adapter);
+  try{
+    await vi.advanceTimersByTimeAsync(0);const socket=FakeSocket.instances.at(-1)!;
+    socket.emit({type:'connected',controllerId:controllerOne,serverTime:Date.now()});
+    socket.emit({type:'game-snapshot',protocol:1,gameId:'baccarat',adapterVersion:7,snapshot:{...state,revision:1},serverTime:Date.now()});
+    expect(client.getConnection().status).toBe('connected');
+    const action=client.send({type:'Increment',choice:4});const outgoing=JSON.parse(socket.sent.at(-1)!);
+    expect(outgoing).toMatchObject({type:'game-command',protocol:1,gameId:'baccarat',adapterVersion:7,command:{roundKey:'spin-A',expectedCounter:0,action:{type:'Increment',choice:4}}});
+    expect(outgoing.command).not.toHaveProperty('handId');expect(outgoing.command).not.toHaveProperty('roundId');
+    socket.emit({type:'ack',commandId:outgoing.command.id,revision:2});await expect(action).resolves.toBeUndefined();
+    socket.emit({type:'chat',messages:[]});socket.emit({type:'chat',messages:[{id:crypto.randomUUID(),playerId:'sixth',name:'Sixth',seat:5,text:'Hello',sentAt:Date.now()}]});
+    expect(client.getChat!().unread).toBe(1);socket.close();await vi.advanceTimersByTimeAsync(500);
+    const replacement=FakeSocket.instances.at(-1)!;replacement.emit({type:'connected',controllerId:controllerTwo,serverTime:Date.now()});
+    replacement.emit({type:'game-snapshot',protocol:1,gameId:'baccarat',adapterVersion:7,snapshot:{...state,revision:8,counter:1},serverTime:Date.now()});
+    expect(client.getSnapshot().counter).toBe(1);expect(client.getConnection().status).toBe('connected');
+    replacement.emit({type:'game-snapshot',protocol:1,gameId:'roulette',adapterVersion:7,snapshot:{...state,revision:99},serverTime:Date.now()});
+    expect(client.getConnection().status).toBe('incompatible');expect(client.getSnapshot().revision).toBe(8);
+  }finally{client.dispose();}
+});
+it('rejects initial table and game identity mismatches before persisting or connecting',async()=>{
+  const {createOnlineClient}=await import('./onlineClient');const response=initial();
+  expect(()=>createOnlineClient({...response,gameId:'roulette'})).toThrow('different game');
+  expect(()=>createOnlineClient({...response,adapterVersion:9})).toThrow('different game');
+  expect(()=>createOnlineClient({...response,snapshot:{...response.snapshot,you:'another-player'}})).toThrow('another seat');
+  expect(FakeSocket.instances).toHaveLength(0);expect(localStorage.setItem).not.toHaveBeenCalled();
 });

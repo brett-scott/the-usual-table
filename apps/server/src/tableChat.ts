@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CHAT_HISTORY_LIMIT, chatMessageSchema, type ChatMessage } from '@casual/protocol';
-import { assertRule, type OnlineRoom } from './roomState';
+import { assertRule } from './roomMembership';
+import type { HostedRoom,SeatIdentity } from './games/contracts';
 
 const counter = z.object({ start: z.number().int().nonnegative(), count: z.number().int().nonnegative() });
 const stateSchema = z.object({ schema: z.literal(1), messages: z.array(chatMessageSchema).max(CHAT_HISTORY_LIMIT), receipts: z.array(z.object({ playerId: z.string(), id: z.string().uuid() })).max(128), rates: z.record(z.string(), counter) });
@@ -11,9 +12,9 @@ export function restoreChat(value: unknown): ChatState {
   assertRule(parsed.success, 'CHAT_UNAVAILABLE', 'Table chat is unavailable. Your game can continue.');
   return parsed.data;
 }
-export function addChat(chat: ChatState, room: OnlineRoom, playerId: string, id: string, text: string, now: number): boolean {
+export function addChat(chat: ChatState, room: HostedRoom, playerId: string, id: string, text: string, now: number,players:SeatIdentity[]): boolean {
   if (chat.receipts.some(receipt => receipt.playerId === playerId && receipt.id === id)) return false;
-  const player = room.engine.players.find(p => p.id === playerId);
+  const player = players.find(p => p.id === playerId);
   assertRule(player && room.members[playerId]?.connected && !room.members[playerId]?.leaveAfterRound, 'SESSION_INVALID', 'Reconnect to your seat before sending a message.');
   // Keep only current-seat rate buckets. Chat never uses the gameplay rate budget.
   chat.rates = Object.fromEntries(Object.entries(chat.rates).filter(([key]) => room.members[key]));

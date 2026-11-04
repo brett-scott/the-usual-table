@@ -53,7 +53,7 @@ describe('OAuth return boundaries', () => {
     await expect(f.client.accessToken()).rejects.toThrow('Sign in again');
   });
   it('allows only local game/invitation hashes', () => {
-    for (const hash of ['#/games', '#/games/blackjack', '#/games/blackjack/lobbies', `#/room/${'a'.repeat(32)}`, shortRoomHash('a'.repeat(32))]) expect(safeAuthDestination(hash)).toBe(hash);
+    for (const hash of ['#/games', '#/games/blackjack', '#/games/blackjack/lobbies','#/games/baccarat','#/games/texas-holdem/lobbies', `#/room/${'a'.repeat(32)}`, shortRoomHash('a'.repeat(32))]) expect(safeAuthDestination(hash)).toBe(hash);
     for (const hash of ['https://evil.test', '//evil.test', '#/games?token=secret', '#/room/short', '#access_token=secret']) expect(safeAuthDestination(hash)).toBe('#/games');
   });
   it('removes codes, flow selectors, OAuth errors and implicit tokens while keeping unrelated parameters', () => {

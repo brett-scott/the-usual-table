@@ -46,7 +46,7 @@ test('guests see ready and waiting states, shared results and the host skipping 
   const latest = new Map<Page, Snapshot>();
   for (const peer of [page, guest]) peer.on('websocket', socket => socket.on('framereceived', event => {
     const data = JSON.parse(String(event.payload)) as { type: string; snapshot?: Snapshot };
-    if (data.type === 'snapshot' && data.snapshot) latest.set(peer, data.snapshot);
+    if ((data.type === 'snapshot'||data.type === 'game-snapshot') && data.snapshot) latest.set(peer, data.snapshot);
   }));
   async function sharedState(accept: (snapshot: Snapshot) => boolean) {
     await expect.poll(() => {

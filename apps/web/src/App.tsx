@@ -1,22 +1,22 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore,type ComponentType, type CSSProperties, type RefObject } from 'react';
 import type { Action, GameClient, PublicHand, PublicPlayer, VisibleCard } from '@casual/protocol';
-import { roomIdFromHash } from '@casual/protocol';
-import { ApiError, createOnlineClient, forgetSession, joinAccountTable, joinGuest, resumeGuest, savedSession } from './onlineClient';
+import { gameIdFromHash,roomIdFromHash,type GameId,type TableInfo } from '@casual/protocol';
+import { ApiError,tableInfo } from './onlineClient';
+import { blackjackClientAdapter } from './gameClientAdapters';
 import { PlayingCard } from './PlayingCard';
 import { dealerKey, playerCardKey, type CardTimeline } from './cardTimeline';
 import { useTablePresentation } from './useTablePresentation';
 import { displayedDealerTotal } from './dealerScore';
 import { useCompactLayout } from './useCompactLayout';
-import { TableChat } from './TableChat';
+import { TableHeader,TableToolbar } from './TableChrome';
 import { CardAppearance, savedAppearance } from './cardAppearance';
 import { TableOptions } from './TableOptions';
-import { TableInvite } from './TableInvite';
 import { ChatBubble } from './ChatBubble';
 import { WagerChips } from './WagerChips';
 import { PlayerAvatar } from './PlayerAvatar';
 import { GameHub } from './GameHub';
 import { AccountControls, AccountProvider } from './AccountControls';
-import { BuyInFields, GuestIdentityFields, useTableFunding, useTableIdentity } from './TableIdentity';
+import { GameRoomEntry } from './GameRoomEntry';
 import s from './App.module.css';
 
 const money = (units: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(units / 2);
@@ -51,60 +51,30 @@ function AppRoutes() {
   const [hash, setHash] = useState(() => location.hash);
   useEffect(() => { const changed = () => setHash(location.hash); window.addEventListener('hashchange', changed); return () => window.removeEventListener('hashchange', changed); }, []);
   const invite = roomIdFromHash(hash);
-  if (invite) return <BlackjackRoom key={invite} invite={invite} />;
-  if (hash === '#/games/blackjack' || hash === '#/games/blackjack/lobbies') return <GameHub browse />;
+  if (invite) return <GameRoomRoute key={invite} invite={invite} />;
+  const gameId=gameIdFromHash(hash);
+  if (gameId) return <GameHub key={gameId} browse gameId={gameId}/>;
   return <GameHub />;
 }
 
-function BlackjackRoom({ invite }: { invite: string }) {
-  const identity = useTableIdentity();
-  const funding = useTableFunding();
-  const [client, setClient] = useState<GameClient | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(''); const [entryErrorCode, setEntryErrorCode] = useState('');
-  useEffect(() => () => client?.dispose(), [client]);
-  function showEntryError(problem: unknown) {
-    setError(problem instanceof Error ? problem.message : 'The table could not be opened.');
-    setEntryErrorCode(problem instanceof ApiError ? problem.code : 'REQUEST_FAILED');
-  }
-  useEffect(() => {
-    const session = savedSession(invite); if (!session) return;
-    if (session.funding === 'account' && !identity.accountId) return;
-    let active = true; const abort = new AbortController(); setBusy(true);
-    void resumeGuest(session, abort.signal).then(response => { if (active) setClient(createOnlineClient(response)); })
-      .catch(problem => { if (active) showEntryError(problem); }).finally(() => { if (active) setBusy(false); });
-    return () => { active = false; abort.abort(); };
-  }, [invite, identity.accountId]);
-  async function enter(event: FormEvent) {
-    event.preventDefault(); if (busy || !identity.ready || !funding.valid) return;
-    const seat = identity.validate(); if (!seat) { setError('Enter a name of 1–24 characters.'); return; }
-    identity.saveDraft(); setBusy(true); setError(''); setEntryErrorCode('');
-    try { setClient(createOnlineClient(funding.saved ? await joinAccountTable(invite, seat.name, seat.icon, funding.units, funding.entryId) : await joinGuest(invite, seat.name, seat.icon))); }
-    catch (problem) { showEntryError(problem); }
-    finally { setBusy(false); }
-  }
-  function leave(endSession = false) {
-    if (endSession) forgetSession(invite);
-    client?.dispose(); location.hash = endSession ? '/games' : '/games/blackjack';
-  }
-  return client ? <Table client={client} onLeave={leave} /> : <div className={s.welcome}>
-    <div className={s.welcomeNav}><div className={s.welcomeBrand}><span className={s.brandMark}>♣</span><span>The Usual Table</span></div><a href="#/games">All games ↗</a><AccountControls beforeSignIn={identity.saveDraft} /></div>
-    <main className={s.welcomeMain}>
-      <div className={s.welcomeArt} aria-hidden="true"><PlayingCard card={{ id: 'intro-a', rank: 'A', suit: 'spades' }} /><PlayingCard card={{ id: 'intro-k', rank: 'K', suit: 'hearts' }} /><span className={s.artChip}>21</span></div>
-      <p className={s.eyebrow}>YOU’RE INVITED TO THE TABLE</p>
-      <h1>A seat at the table.<br /><em>Nothing on the line.</em></h1>
-      <p className={s.welcomeCopy}>Join your friends for a little blackjack. No account required, no real money.</p>
-      <form onSubmit={event => { void enter(event); }} className={s.nameForm}>
-        <GuestIdentityFields identity={identity} disabled={busy} />
-        <BuyInFields funding={funding} disabled={busy} />
-        {error && <div className={s.entryProblem} role="alert" data-error-code={entryErrorCode}><h2>{entryErrorCode === 'TABLE_FULL' ? 'Table full' : entryErrorCode === 'ROOM_EXPIRED' ? 'Table expired' : ['SESSION_INVALID', 'SESSION_EXPIRED'].includes(entryErrorCode) ? 'Seat unavailable' : entryErrorCode === 'OFFLINE' ? 'Connection unavailable' : 'Couldn’t open this table'}</h2><p>{error}</p><span>Find another table or create your own.</span></div>}
-        <button className={s.primary} type="submit" disabled={busy || !identity.ready || !funding.valid}>{busy ? 'Connecting…' : 'Join table'}</button>
-        <a className={s.secondary} href="#/games/blackjack">Find or create another table</a>
-      </form>
-      <p className={s.smallNote}>Play chips only · Up to four friends</p>
-    </main>
-    <footer className={s.welcomeFooter}><span>BLACKJACK, WITHOUT THE STAKES.</span><span>Six decks. Classic rules. Your pace.</span></footer>
-  </div>;
+const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom}};
+function GameRoomRoute({invite}:{invite:string}){
+  const [info,setInfo]=useState<TableInfo|null>(null);const [error,setError]=useState<ApiError|null>(null);const [attempt,setAttempt]=useState(0);
+  useEffect(()=>{let active=true;const abort=new AbortController();setError(null);
+    void tableInfo(invite,abort.signal).then(value=>{if(active)setInfo(value);}).catch(problem=>{if(active)setError(problem instanceof ApiError?problem:new ApiError('CLIENT_INCOMPATIBLE','This app cannot open this game. Refresh and try again.'));});
+    return()=>{active=false;abort.abort();};},[invite,attempt]);
+  const view=info?gameRoomViews[info.gameId]:undefined;const View=view?.component;
+  if(info&&View&&info.adapterVersion===view?.version)return <View invite={invite} info={info}/>;
+  return <main className={s.welcome}><div className={s.welcomeNav}><a href="#/games">All games</a><AccountControls/></div><div className={s.welcomeMain}>
+    {!error&&!info?<p role="status">Opening your table…</p>:<><h1>{error?.code==='ROOM_EXPIRED'?'Table expired':'Table unavailable'}</h1><p>{error?.message??'Refresh the app to open this game.'}</p><button onClick={()=>setAttempt(x=>x+1)}>Retry table</button><a href="#/games">Find or create another table</a></>}
+  </div></main>;
+}
+function BlackjackRoom({invite,info}:{invite:string;info:TableInfo}) {
+  return <GameRoomEntry invite={invite} info={info} adapter={blackjackClientAdapter} gameName="Blackjack"
+    intro="Join your friends for a little blackjack. No account required, no real money." seatHint="Up to four friends"
+    art={<><PlayingCard card={{id:'intro-a',rank:'A',suit:'spades'}}/><PlayingCard card={{id:'intro-k',rank:'K',suit:'hearts'}}/><span className={s.artChip}>21</span></>}
+    footer={<><span>BLACKJACK, WITHOUT THE STAKES.</span><span>Six decks. Classic rules. Your pace.</span></>}
+  >{(client,onLeave)=><Table client={client} onLeave={onLeave}/>}</GameRoomEntry>;
 }
 
 export function Table({ client, onLeave }: { client: GameClient; onLeave: (endSession?: boolean) => void }) {
@@ -174,22 +144,13 @@ export function Table({ client, onLeave }: { client: GameClient; onLeave: (endSe
   const phaseDeadline = state.roundDeadline ?? state.room?.bettingDeadline ?? state.room?.insuranceDeadline;
   const phaseSeconds = phaseDeadline ? Math.min(complete ? 10 : Infinity, Math.max(0, Math.ceil((phaseDeadline - (connection.clockOffsetMs ?? 0) - now) / 1000))) : null;
   return <CardAppearance.Provider value={appearance}><div className={s.app} data-theme={theme} data-card-face={appearance.face} data-card-back={appearance.back} data-online={!!state.room} data-revision={state.revision} data-connection={connection.status}>
-    <header className={s.header}>
-      <a href="#" className={s.brand} aria-label="The Usual Table"><span className={s.brandMark}>♣</span><span>The Usual Table</span></a>
-      <div className={s.headerActions}>
-        {state.room && <TableChat client={client} ownTurn={ownTurn} seconds={localDeadline === null ? null : Math.max(0, Math.ceil((localDeadline - now) / 1000))} />}
-        {state.room && <TableInvite />}
+    <TableHeader client={client} playerId={player.id} online={!!state.room} ownTurn={ownTurn} seconds={localDeadline===null?null:Math.max(0,Math.ceil((localDeadline-now)/1000))} decisionLabel="hand" showAccountSignIn={!!state.wallet}>
         <TableOptions appearance={appearance} onAppearanceChange={next => { setAppearance(next); writeLocal('casual-card-face', next.face); writeLocal('casual-card-back', next.back); }}
           theme={theme} onThemeChange={value => { setTheme(value); writeLocal('casual-theme', value); }}
           rules={<><p>Beat the dealer without going over 21. Aces count as 1 or 11. The dealer stands on every 17, including soft 17.</p><dl><dt>Blackjack</dt><dd>An unsplit ace + ten-value card pays 3:2. Regular wins pay 1:1; a push returns your bet.</dd><dt>Your turn</dt><dd>Each active hand gets 20 seconds. Hit resets the countdown to 20 seconds. If time runs out, your hand stands automatically.</dd><dt>Double</dt><dd>Double only on an initial two-card total of 9, 10 or 11, including after splitting. Receive one card, then stand.</dd><dt>Split</dt><dd>Identical ranks only, up to four hands. Split aces receive one card each, then stand. Split 21 pays 1:1.</dd><dt>Insurance</dt><dd>Offered before the dealer checks an ace. Wager up to half your original bet; pays 2:1 if the dealer has blackjack.</dd><dt>The shoe</dt><dd>Six physical decks, drawn without replacement across rounds. A cut card or safety reserve triggers a shuffle before the next deal.</dd></dl></>} />
-        <AccountControls signedInOnly={!state.wallet} />
-      </div>
-    </header>
+    </TableHeader>
     <main className={s.main}>
-      <div className={s.tableToolbar}>
-        <span className={s.connectionBadge} data-status={connection.status}><i aria-hidden="true" />{connection.status === 'connected' ? 'Connected' : connection.message}</span>
-        <button className={s.leaveButton} disabled={!!state.room && (pending || connection.status !== 'connected')} onClick={() => { if (state.room) void send({ type: 'Leave' }); else onLeave(true); }}>Leave table <span aria-hidden="true">↗</span></button>
-      </div>
+      <TableToolbar connection={connection} leaveDisabled={!!state.room&&(pending||connection.status!=='connected')} onLeave={()=>{if(state.room)void send({type:'Leave'});else onLeave(true);}}/>
       <section className={s.table} aria-label="Blackjack table">
         <div className={s.tableInner}>
           <div ref={shoeRef} className={s.shoe} data-card-shoe><span className={s.shoeIcon} aria-hidden="true">▱</span><strong>6-DECK SHOE</strong><span>{state.shoe.remaining} cards remaining</span><small>{state.shoe.shuffleNext ? 'Shuffle before next deal' : state.shoe.shuffled ? 'Fresh shuffle this round' : 'Same shoe, next hand'}</small></div>

@@ -22,6 +22,7 @@ const engine = z.object({
 const oldMember = z.object({ hash, connected: z.boolean(), controllerId: id.nullable(), leaveAfterRound: z.boolean() });
 const member = oldMember.extend({ reservationDeadline: time, presenceDeadline: time, claimId: id.nullable(), claimVersion: integer, retiredClaims: z.array(id).max(8), account: z.object({ id: z.string().uuid(), expiresAt: integer }).strict().optional() });
 const common = {
+  adapterVersion:z.literal(1).optional(),
   gameId: z.literal('blackjack').optional(), visibility: lobbyVisibilitySchema.optional(),
   id: z.string().regex(/^[a-f0-9]{32}$/), revision: integer, managerId: z.string().max(100), engine,
   locked: z.record(id, z.enum(['ready', 'out'])), bettingDeadline: time, insuranceDeadline: time, lastActivity: integer,

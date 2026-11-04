@@ -7,6 +7,7 @@ import { readAccountWallet } from './accountWallet';
 import { supabaseWallet } from './supabaseWallet';
 import { supabaseStatistics } from './supabaseStatistics';
 import { supabaseAllowance } from './supabaseRewards';
+import { gameAdapters } from './games/registry';
 export { TableRoom } from './tableRoom';
 export { LobbyDirectory } from './lobbyDirectory';
 
@@ -21,7 +22,7 @@ export default {
       else if (url.pathname === '/api/v1/health' && request.method === 'GET') {
         const auth = supabaseUrlSchema.safeParse(env.SUPABASE_URL ?? PUBLIC_SUPABASE_CONFIG.url);
         response = Response.json({ status: 'ok', protocol: 1, authProjectUrl: auth.success ? auth.data : null,
-          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountStatisticsProtocol: 1, accountRewardsProtocol:1 });
+          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1 });
       }
       else if (url.pathname === '/api/v1/games' && request.method === 'GET') response = Response.json({ games: GAME_CATALOG });
       else if (url.pathname === '/api/v1/account/session' && request.method === 'GET') {
@@ -52,14 +53,15 @@ export default {
       }
       else if (/^\/api\/v1\/games\/[^/]+\/lobbies$/.test(url.pathname) && request.method === 'GET') {
         const gameId = url.pathname.split('/')[4];
-        const game = GAME_CATALOG.find(game => game.id === gameId);
-        if (!game || game.status !== 'available') throw new GameError('GAME_UNAVAILABLE', 'This game is not available yet.');
+        const game = gameAdapters.available(gameId);
         if (!(await env.ENTRY_LIMITER.limit({ key: `lobbies:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before refreshing the tables.');
-        response = Response.json({ gameId, lobbies: await env.LOBBIES.getByName(game.id).list() });
+        response = Response.json({ gameId, lobbies: (await env.LOBBIES.getByName(game.gameId).list()).filter(lobby=>lobby.gameId===game.gameId) });
       }
       else {
-        const create = url.pathname === '/api/v1/rooms' && request.method === 'POST';
-        const match = url.pathname.match(/^\/api\/v1\/rooms\/([a-f0-9]{32})(?:\/(join|resume|ticket|snapshot|socket|authorize))?$/);
+        const gameCreate=/^\/api\/v1\/games\/([^/]+)\/rooms$/.exec(url.pathname);
+        const create = (url.pathname === '/api/v1/rooms'||!!gameCreate) && request.method === 'POST';
+        const game=create?gameAdapters.available(gameCreate?.[1]??'blackjack'):undefined;
+        const match = url.pathname.match(/^\/api\/v1\/rooms\/([a-f0-9]{32})(?:\/(join|resume|ticket|snapshot|socket|authorize|info))?$/);
         if (!create && !match) return Response.json({ code: 'NOT_FOUND', message: 'This table route does not exist.' }, { status: 404 });
         if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
           const key = `${create ? 'create' : match?.[2] ?? 'room'}:${request.headers.get('CF-Connecting-IP') ?? 'local'}`;
@@ -74,10 +76,12 @@ export default {
           const account = await verifyAccountSession(request, env);
           let entry: { funding?: unknown; entryId?: unknown }; try { entry = JSON.parse(new TextDecoder().decode(body)); } catch { throw new GameError('INVALID_REQUEST', 'Send a valid table entry.'); }
           if (!entry || entry.funding !== 'account' || typeof entry.entryId !== 'string' || !/^[a-f0-9-]{36}$/i.test(entry.entryId)) throw new GameError('INVALID_REQUEST', 'Saved-chip entries require a unique entry ID.');
-          inviteId = (await hashSecret(`blackjack:${account.accountId}:${entry.entryId.toLowerCase()}`)).slice(0, 32);
+          inviteId = (await hashSecret(`${game!.gameId}:${account.accountId}:${entry.entryId.toLowerCase()}`)).slice(0, 32);
         }
         const headers = new Headers(request.headers); headers.set('X-Room-Id', inviteId);
-        response = await env.ROOMS.getByName(inviteId).fetch(new Request(request.url, { method: request.method, headers, body }));
+        headers.delete('X-Game-Id');if(game)headers.set('X-Game-Id',game.gameId);
+        if(create)url.pathname='/api/v1/rooms';
+        response = await env.ROOMS.getByName(inviteId).fetch(new Request(url, { method: request.method, headers, body }));
       }
     } catch (error) { response = errorResponse(error); }
     // Upgrade responses retain their WebSocket; only append headers for HTTP responses.

@@ -6,6 +6,8 @@ Casual table games without money. Blackjack is playable; Baccarat, Roulette, Tex
 
 ## Run locally
 
+The [shared game adapter guide](GAME_ADAPTERS.md) describes the implemented common lobby, entry, connection, chat and wallet lifecycle. Blackjack is the first adapter; new games supply their own engine, commands, projection, timers and settlement rules without duplicating the platform flow.
+
 Install Node.js 22.12+ (Node 24 LTS recommended), then from the repository root:
 
 ```sh
@@ -78,12 +80,12 @@ Keep ports 5173 and 8787 free before starting `npm run dev`. Optional shell vari
 
 ## Workspace
 
-- `apps/web`: React UI, CSS Modules, original SVG cards, the online `GameClient` adapter and a test-only local engine adapter.
+- `apps/web`: React UI, CSS Modules, original SVG cards, typed game codecs, shared table entry/chrome and online transport, plus a test-only local engine adapter.
 - `apps/server`: Worker routes, hibernating room WebSockets, guest authentication, SQLite-backed state, command receipts and durable alarms.
 - Shared-table chat uses the existing authenticated connection and separate bounded durable history; no additional service or deployment variable is required.
-- `packages/engine`: pure shoe, scoring, transitions, actions and settlement. Randomness/time are injected.
-- `packages/protocol`: versioned public DTOs, Zod commands, and shared adapter interface.
-- `packages/wallet`: trusted-server PostgreSQL wallet repository, pinned-connection adapter, private-schema migration and embedded/native PostgreSQL tests; no hosted account play is enabled yet.
+- `packages/engine`: pure Blackjack shoe, scoring, transitions, actions and settlement. Randomness/time are injected; other games supply their own engines.
+- `packages/protocol`: versioned shared table contracts, typed client adapter interface, game catalog and Blackjack DTOs/commands.
+- `packages/wallet`: trusted-server PostgreSQL wallet repository, pinned-connection adapter, private-schema migrations and embedded/native PostgreSQL tests; saved play requires the documented hosted SQL/Hyperdrive setup.
 - `tests/e2e`: round, split/double/hit, insurance, keyboard, and responsive checks.
 - `.github/workflows`: validation plus separate manual frontend/backend deployment workflows.
 - [Deployment guide](DEPLOYMENT.md), [release checklist](RELEASE_CHECKLIST.md), [rules and asset credits](DEPLOYMENT.md#rules-and-assets). Detailed local development notes remain under ignored `docs/`.

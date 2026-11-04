@@ -10,7 +10,7 @@ test('desktop table, controls and chat fit laptop screens with four players', as
   const latest = new Map<Page, Snapshot>(); const errors: string[] = [];
   function observe(view: Page, frame: string | Buffer) {
     const event = JSON.parse(String(frame)) as ServerEvent;
-    if (event.type === 'snapshot' && event.snapshot.revision >= (latest.get(view)?.revision ?? -1)) latest.set(view, event.snapshot);
+    if ((event.type === 'snapshot'||event.type === 'game-snapshot') && event.snapshot.revision >= (latest.get(view)?.revision ?? -1)) latest.set(view, event.snapshot);
     if (event.type === 'error') errors.push(event.code);
   }
   for (const view of pages) view.on('websocket', socket => socket.on('framereceived', event => observe(view, event.payload)));
@@ -37,7 +37,7 @@ test('desktop table, controls and chat fit laptop screens with four players', as
     peers[0]!.once('close', () => clearTimeout(timer));
     upstream.onMessage(message => {
       const event = JSON.parse(String(message)) as ServerEvent;
-      if (!delayedReadySnapshot && event.type === 'snapshot' && event.snapshot.phase === 'BETTING' && event.snapshot.players.some(player => player.seat === 0 && player.ready)) {
+      if (!delayedReadySnapshot && (event.type === 'snapshot'||event.type === 'game-snapshot') && event.snapshot.phase === 'BETTING' && event.snapshot.players.some(player => player.seat === 0 && player.ready)) {
         delayedReadySnapshot = true; waiting = true;
         timer = setTimeout(() => { waiting = false; for (const frame of queued.splice(0)) { socket.send(frame); observe(peers[0]!, frame); } }, 500);
       }

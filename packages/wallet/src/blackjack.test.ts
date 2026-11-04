@@ -7,6 +7,8 @@ import { applyCommand, collectSeats, expireRoomDecisions, newMember, newRoom, ne
 import { beginWalletFunding, flushRoomWallet, fundedSeat, recordWalletRound, validRoomWallet, walletHasFunds, type WalletGateway } from '../../../apps/server/src/roomWallet';
 import { restoreRoom } from '../../../apps/server/src/roomStorage';
 import { PostgresWalletStore } from './index';
+import { queueWalletOperation,flushTableWallet,walletOperation,type FundedSeat } from '../../../apps/server/src/tableWallet';
+import type { HostedRoom } from '../../../apps/server/src/games/contracts';
 
 let db: PGlite; let wallet: PostgresWalletStore;
 beforeAll(async () => {
@@ -14,6 +16,25 @@ beforeAll(async () => {
   wallet = new PostgresWalletStore(db, { welcome: { version: 'test-only', amountUnits: 100_000 } });
 }, 30_000);
 afterAll(async () => { await db?.close(); });
+it('shares allocation, exact hundredth-chip results and returns with a non-Blackjack room',async()=>{
+  const accountId=crypto.randomUUID();await wallet.createAccount(accountId);await wallet.execute({contract:1,accountId,operationId:crypto.randomUUID(),kind:'claim_grant',source:'welcome'});
+  const seat:FundedSeat={sessionId:crypto.randomUUID(),accountId,playerId:'future',status:'funding',version:0,sequence:0,stackUnits:10000,lastRound:0,leaveRequested:false};
+  const room:HostedRoom={schema:100,id:'f'.repeat(32),gameId:'baccarat',adapterVersion:7,revision:0,managerId:'future',members:{},lastActivity:0,tickets:[],receipts:[],commandRates:{},
+    wallet:{schema:1,seats:{[seat.sessionId]:seat},outbox:[],retryAt:null,failures:0,error:null}};
+  let engineStack=0;let persisted=structuredClone(room);const persist=async()=>{persisted=structuredClone(room);};
+  const flush=()=>flushTableWallet(room,wallet,persist,(playerId,units)=>{expect(playerId).toBe('future');expect(engineStack).toBe(0);engineStack=units;},1000);
+  const allocation={contract:1 as const,accountId,operationId:crypto.randomUUID(),kind:'allocate' as const,sessionId:seat.sessionId,roomId:room.id,gameId:'baccarat' as const,funding:'account' as const,amountUnits:10000};
+  const before=structuredClone(room);expect(()=>queueWalletOperation(room,seat,{...allocation,gameId:'roulette'},'pending_activation')).toThrow('another game');expect(room).toEqual(before);
+  queueWalletOperation(room,seat,allocation,'pending_activation');queueWalletOperation(room,seat,{...walletOperation(seat),kind:'activate'},'active');await persist();await flush();
+  expect(engineStack).toBe(10000);expect(seat.status).toBe('active');
+  seat.stackUnits=10095;seat.sequence=1;
+  queueWalletOperation(room,seat,{...walletOperation(seat),kind:'settle',roomId:room.id,gameId:'baccarat',funding:'account',sequence:1,roundId:'spin-A',rulesetVersion:'test-exact-units',wageredUnits:100,returnedUnits:195},'active');
+  await persist();await flush();expect((await wallet.getSession(accountId,seat.sessionId)).stackUnits).toBe(10095);
+  seat.status='returning';queueWalletOperation(room,seat,{...walletOperation(seat),kind:'request_return',finalSequence:1,finalStackUnits:10095},'returning');
+  queueWalletOperation(room,seat,{...walletOperation(seat),kind:'complete_return'},'closed',0);await persist();await flush();
+  expect(await wallet.getWallet(accountId)).toMatchObject({availableUnits:100095,atTablesUnits:0,pendingReturnUnits:0});
+  expect(persisted.wallet?.outbox).toEqual([]);expect(seat.status).toBe('closed');
+});
 const random = (max: number) => max - 1;
 const now = 1000;
 function rig(room: OnlineRoom, ranks: Rank[]) {

@@ -7,6 +7,7 @@ import type { useTableFunding, useTableIdentity } from './TableIdentity';
 import s from './CreateTableDialog.module.css';
 
 type Props = {
+  gameName?:string;
   dialogRef: RefObject<HTMLDialogElement | null>;
   identity: ReturnType<typeof useTableIdentity>;
   funding: ReturnType<typeof useTableFunding>;
@@ -18,22 +19,22 @@ type Props = {
   onClose(): void;
 };
 
-export function CreateTableDialog({ dialogRef, identity, funding, busy, error, visibility, onVisibilityChange, onSubmit, onClose }: Props) {
+export function CreateTableDialog({ gameName='Blackjack',dialogRef, identity, funding, busy, error, visibility, onVisibilityChange, onSubmit, onClose }: Props) {
   const account = useAccountState(); const id = useId();
   useEffect(() => { if (account.account) void browserAuth().refreshWallet(); }, [account.account?.accountId]);
   const available = account.walletStatus === 'ready' && account.wallet
     ? new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(account.wallet.availableUnits / 100) : null;
   const insufficient = funding.saved && account.walletStatus === 'ready' && account.wallet && funding.units > account.wallet.availableUnits;
-  const belowMinimum = account.walletStatus === 'ready' && account.wallet && account.wallet.availableUnits < 1000;
+  const belowMinimum = account.walletStatus === 'ready' && account.wallet && account.wallet.availableUnits < funding.rules.minBuyInUnits;
   const invalid = funding.saved && !funding.valid;
   const profileLoading = account.nicknameStatus === 'idle' || account.nicknameStatus === 'loading';
   const close = () => dialogRef.current?.close();
   return <dialog ref={dialogRef} className={s.dialog} aria-labelledby={`${id}-title`} aria-describedby={`${id}-intro`}
     onCancel={event => { if (busy) event.preventDefault(); }} onClose={onClose}>
     <header className={s.header}>
-      <div><p className={s.eyebrow}><span aria-hidden="true">♣</span> BLACKJACK <span className={s.headerDetail}>· 1–4 PLAYERS</span></p>
+      <div><p className={s.eyebrow}><span aria-hidden="true">♣</span> {gameName.toUpperCase()} <span className={s.headerDetail}>· {funding.rules.minPlayers}–{funding.rules.capacity} PLAYERS</span></p>
         <h2 id={`${id}-title`}>Create a table</h2>
-        <p className={s.intro} id={`${id}-intro`}>A quiet hand for yourself, or a table for your friends.</p></div>
+        <p className={s.intro} id={`${id}-intro`}>{gameName==='Blackjack'?'A quiet hand for yourself, or a table for your friends.':'Create a table and invite your friends.'}</p></div>
       <button className={s.close} type="button" aria-label="Close create table" disabled={busy} onClick={close}>×</button>
     </header>
     <form className={s.form} onSubmit={onSubmit} aria-busy={busy}>
@@ -64,13 +65,13 @@ export function CreateTableDialog({ dialogRef, identity, funding, busy, error, v
         </section>
         <section className={s.chipsSection} role="group" aria-label="Table chips">
           <h3>Your chips</h3>
-          {identity.signedIn && <div className={s.fundingFields}>
+          {identity.signedIn&&funding.rules.accountFunding==='house' && <div className={s.fundingFields}>
             <div><label htmlFor={`${id}-funding`}>Play with</label>
               <select id={`${id}-funding`} value={funding.mode} disabled={busy} onChange={event => funding.setMode(event.target.value)} aria-describedby={`${id}-chips-help`}>
                 <option value="account">Saved account chips</option><option value="guest">Temporary chips</option>
               </select></div>
             {funding.saved && <div><label htmlFor={`${id}-buy-in`}>Buy-in (chips)</label>
-              <input id={`${id}-buy-in`} type="number" min="10" step="0.5" value={funding.amount} disabled={busy} onChange={event => funding.setAmount(event.target.value)} required
+              <input id={`${id}-buy-in`} type="number" min={funding.rules.minBuyInUnits/100} step={funding.rules.buyInStepUnits/100} value={funding.amount} disabled={busy} onChange={event => funding.setAmount(event.target.value)} required
                 aria-invalid={invalid || undefined} aria-describedby={`${id}-wallet ${id}-chips-help${invalid ? ` ${id}-amount-error` : ''}`} /></div>}
           </div>}
           {funding.saved ? <>
@@ -79,9 +80,9 @@ export function CreateTableDialog({ dialogRef, identity, funding, busy, error, v
               {['error', 'not-connected'].includes(account.walletStatus) && <button className={s.retry} type="button" disabled={busy} onClick={() => { void browserAuth().refreshWallet(); }}>Retry wallet balance</button>}
             </div>
             <p className={s.hint} id={`${id}-chips-help`}>Bring chips from your wallet. Remaining table chips return when you leave.</p>
-            {invalid && <p className={s.fieldError} id={`${id}-amount-error`} role="alert">{insufficient ? belowMinimum ? 'Not enough saved chips. Choose temporary chips to play.' : 'Choose a buy-in no larger than your available chips.' : 'Enter at least 10 chips, in steps of 0.5.'}</p>}
+            {invalid && <p className={s.fieldError} id={`${id}-amount-error`} role="alert">{insufficient ? belowMinimum ? 'Not enough saved chips. Choose temporary chips to play.' : 'Choose a buy-in no larger than your available chips.' : `Enter at least ${funding.rules.minBuyInUnits/100} chips, in steps of ${funding.rules.buyInStepUnits/100}.`}</p>}
           </> : <div className={s.temporary} id={`${id}-chips-help`}>
-            <span className={s.chip} aria-hidden="true">♣</span><div><strong>1,000 temporary chips</strong><p>Chips and results aren’t saved.</p></div>
+            <span className={s.chip} aria-hidden="true">♣</span><div><strong>{new Intl.NumberFormat('en').format(funding.rules.guestStartingChips)} temporary chips</strong><p>Chips and results aren’t saved.</p></div>
           </div>}
           {error && <p className={s.error} role="alert">{error}</p>}
         </section>

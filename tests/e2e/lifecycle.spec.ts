@@ -46,7 +46,7 @@ test('lost snapshots and acknowledgements recover without repeating the accepted
     const server = route.connectToServer();
     server.onMessage(async raw => {
       const message = JSON.parse(String(raw)) as { type: string; snapshot?: Snapshot };
-      if (message.type === 'snapshot') {
+      if ((message.type === 'snapshot'||message.type === 'game-snapshot')) {
         if (message.snapshot!.roundId > 0 && !committed) committed = message.snapshot;
         if (dropSnapshot) { dropSnapshot = false; return; }
       }
@@ -69,14 +69,16 @@ test('lost snapshots and acknowledgements recover without repeating the accepted
 });
 
 test('expired invitations and invalid saved sessions show recovery actions', async ({ page }, testInfo) => {
-  await page.goto(`./#/room/${'0'.repeat(32)}`); await page.getByLabel('What should we call you?').fill('Guest');
-  await page.getByRole('button', { name: 'Join table', exact: true }).click();
+  await page.goto(`./#/room/${'0'.repeat(32)}`);
   await expect(page.getByRole('heading', { name: 'Table expired' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Join table', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Find or create another table' })).toBeVisible();
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('expired-invitation.png'), fullPage: true });
   await page.getByRole('link', { name: 'Find or create another table' }).click();
+  await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click();
+  await page.getByLabel('What should we call you?').fill('Guest');
   await page.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(table(page)).toHaveAttribute('data-connection', 'connected');
   await page.evaluate(() => {

@@ -23,7 +23,7 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
     peer.on('websocket', socket => socket.on('framereceived', event => {
       const text = String(event.payload); frames.get(peer)!.push(text);
       const message = JSON.parse(text) as { type: string; snapshot?: Snapshot };
-      if (message.type === 'snapshot' && message.snapshot) latest.set(peer, message.snapshot);
+      if ((message.type === 'snapshot'||message.type === 'game-snapshot') && message.snapshot) latest.set(peer, message.snapshot);
     }));
   }
   async function synced(minRevision = 0) {
@@ -52,7 +52,8 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
     for (const peer of pages) await fits(peer);
     const identities = pages.map(peer => latest.get(peer)!.you); expect(new Set(identities).size).toBe(4);
     await fifth.goto(invite); await fifth.getByLabel('What should we call you?').fill('Fifth'); await fifth.getByRole('button', { name: 'Join table', exact: true }).click();
-    await expect(fifth.getByRole('alert')).toContainText('four players already');
+    await expect(fifth.getByRole('alert')).toHaveAttribute('data-error-code','TABLE_FULL');
+    await expect(fifth.getByRole('heading',{name:'Table full',exact:true})).toBeVisible();
     await expect(fifth.getByRole('link', { name: 'Find or create another table' })).toBeVisible();
     let revision = latest.get(page)!.revision;
     await page.getByRole('button', { name: 'Open betting' }).click(); await synced(revision + 1);

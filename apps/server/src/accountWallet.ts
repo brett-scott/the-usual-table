@@ -1,6 +1,6 @@
 import { GameError } from '@casual/engine';
 import { walletSummarySchema, type AccountSession } from '@casual/protocol';
-import type { WalletGateway } from './roomWallet';
+import type { WalletGateway } from './tableWallet';
 
 /** Read only, for the verified caller. Never create accounts/grants or derive saved funds from table stacks. */
 export async function readAccountWallet(account: AccountSession, gateway: WalletGateway | undefined, timeoutMs = 3000) {

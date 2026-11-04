@@ -87,8 +87,6 @@ test('public table browser lists a real room and joins through the invitation fl
     await page.getByRole('button', { name: 'Leave table', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
     await peer.goto(invite);
-    await peer.getByLabel('What should we call you?').fill('Late guest');
-    await peer.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(peer.getByRole('heading', { name: 'Table expired' })).toBeVisible();
   } finally { await context.close(); }
 });
@@ -121,7 +119,7 @@ test('one-player private lobbies play successive rounds, reload, admit friends a
   let latest: Snapshot | undefined;
   page.on('websocket', socket => socket.on('framereceived', event => {
     const data = JSON.parse(String(event.payload)) as { type: string; snapshot?: Snapshot };
-    if (data.type === 'snapshot' && data.snapshot) latest = data.snapshot;
+    if ((data.type === 'snapshot'||data.type === 'game-snapshot') && data.snapshot) latest = data.snapshot;
   }));
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Solo host');
@@ -152,6 +150,6 @@ test('one-player private lobbies play successive rounds, reload, admit friends a
   } finally { await context.close(); }
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
-  await page.goto(invite); await page.getByLabel('What should we call you?').fill('Late guest'); await page.getByRole('button', { name: 'Join table', exact: true }).click();
+  await page.goto(invite);
   await expect(page.getByRole('heading', { name: 'Table expired' })).toBeVisible();
 });

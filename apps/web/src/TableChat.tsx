@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
-import { CHAT_MAX_LENGTH, type ChatFeed, type GameClient } from '@casual/protocol';
+import { CHAT_MAX_LENGTH, type ChatFeed,type TableClient } from '@casual/protocol';
 import s from './TableChat.module.css';
 import { useWideChat } from './useWideChat';
 
 const empty: ChatFeed = { messages: [], available: false, unread: 0 };
-export function TableChat({ client, ownTurn, seconds }: { client: GameClient; ownTurn: boolean; seconds: number | null }) {
+export type TableChatClient=Pick<TableClient<unknown,unknown>,'subscribe'|'getConnection'|'getChat'|'markChatRead'|'sendChat'>;
+export function TableChat({ client,playerId, ownTurn, seconds,decisionLabel='round' }: { client: TableChatClient;playerId:string; ownTurn: boolean; seconds: number | null;decisionLabel?:string }) {
   const feed = useSyncExternalStore(client.subscribe, () => client.getChat?.() ?? empty);
   const connection = useSyncExternalStore(client.subscribe, client.getConnection);
   const wide = useWideChat();
@@ -13,7 +14,7 @@ export function TableChat({ client, ownTurn, seconds }: { client: GameClient; ow
   const atBottom = useRef(true);
   const [open, setOpen] = useState(false); const unread = feed.unread;
   const [draft, setDraft] = useState(''); const [sending, setSending] = useState(false); const [error, setError] = useState('');
-  const inFlight = useRef(false); const you = client.getSnapshot().you;
+  const inFlight = useRef(false); const you = playerId;
   useEffect(() => {
     if (!open || wide) return;
     const viewport = window.visualViewport;
@@ -62,7 +63,7 @@ export function TableChat({ client, ownTurn, seconds }: { client: GameClient; ow
   const connected = connection.status === 'connected' && feed.available;
   const content = <>
       <div className={s.heading}><div><h2 id="table-chat-title">Table chat</h2><p>Just the guests at this table · Last 50 messages</p></div>{wide && unread > 0 && <button className={s.newMessages} aria-label={`Show ${unread} new messages`} onClick={() => { atBottom.current = true; if (log.current) log.current.scrollTop = log.current.scrollHeight; client.markChatRead?.(); }}>↓ {unread}</button>}{!wide && <button className={s.close} onClick={() => dialog.current?.close()} aria-label="Close table chat">✕</button>}</div>
-      {!wide && ownTurn && seconds !== null && <button className={s.turn} onClick={() => dialog.current?.close()}>Your hand · {seconds}s left — Back to hand</button>}
+      {!wide && ownTurn && seconds !== null && <button className={s.turn} onClick={() => dialog.current?.close()}>Your {decisionLabel} · {seconds}s left — Back to {decisionLabel}</button>}
       <div ref={log} className={s.messages} role="log" aria-label="Table messages" aria-live={wide || open ? 'polite' : 'off'} aria-relevant="additions" tabIndex={0} onScroll={() => {
         const node = log.current; atBottom.current = !!node && node.scrollHeight - node.scrollTop - node.clientHeight < 48;
         if ((wide ? document.visibilityState === 'visible' && document.hasFocus() : dialog.current?.open) && atBottom.current) client.markChatRead?.();

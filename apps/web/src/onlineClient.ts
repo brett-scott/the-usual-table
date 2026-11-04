@@ -1,12 +1,13 @@
-import { CHAT_CAPABILITY, chatTextSchema, lobbyListSchema, serverEventSchema, sessionResponseSchema, snapshotSchema, type LobbyVisibility, type PlayerIcon, type Action, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
+import { CHAT_CAPABILITY,GAME_ADAPTER_CAPABILITY,gameServerEventSchema,tableInfoSchema,tableSessionResponseSchema, chatTextSchema, lobbyListSchema, sessionResponseSchema, snapshotSchema, type GameId,type GameClientAdapter,type TableClient,type TableSessionResponse,type LobbyVisibility, type PlayerIcon, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
 import { browserAuth } from './authClient';
+import { blackjackClientAdapter } from './gameClientAdapters';
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || `${location.protocol}//${location.hostname}:8787`).replace(/\/$/, '');
 const temporarySessions = new Map<string, GuestSession>();
 export class ApiError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
-async function request(path: string, options: { session?: GuestSession; account?: boolean; body?: unknown; method?: string; signal?: AbortSignal } = {}): Promise<unknown> {
+async function request(path: string, options: { gameId?:GameId;session?: GuestSession; account?: boolean; body?: unknown; method?: string; signal?: AbortSignal } = {}): Promise<unknown> {
   const headers: Record<string, string> = {};
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.account || options.session?.funding === 'account') {
@@ -19,7 +20,7 @@ async function request(path: string, options: { session?: GuestSession; account?
   const timeout = setTimeout(abort, 10_000);
   try {
     let response: Response;
-    try { response = await fetch(`${apiBase}/api/v1/rooms${path}`, { method: options.method ?? 'POST', headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), cache: 'no-store', signal: controller.signal }); }
+    try { response = await fetch(`${apiBase}/api/v1/${options.gameId?`games/${options.gameId}/rooms`:'rooms'}${path}`, { method: options.method ?? 'POST', headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), cache: 'no-store', signal: controller.signal }); }
     catch { throw new ApiError('OFFLINE', 'The table service is unreachable. Check your connection and try again.'); }
     let json: { code?: string; message?: string };
     try { json = await response.json() as { code?: string; message?: string }; }
@@ -40,16 +41,35 @@ export async function createAccountTable(name: string, icon: PlayerIcon | undefi
 export async function joinAccountTable(invite: string, name: string, icon: PlayerIcon | undefined, buyInUnits: number, entryId: string) {
   return parseSession(await request(`/${invite}/join`, { account: true, body: { name, icon, funding: 'account', buyInUnits, entryId } }));
 }
-export async function listLobbies(signal?: AbortSignal) {
+export async function listLobbies(signal?: AbortSignal,gameId:GameId='blackjack') {
   const controller = new AbortController(); const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
   const timeout = setTimeout(abort, 8000);
   let response: Response;
-  try { response = await fetch(`${apiBase}/api/v1/games/blackjack/lobbies`, { signal: controller.signal, cache: 'no-store' }); }
+  try { response = await fetch(`${apiBase}/api/v1/games/${gameId}/lobbies`, { signal: controller.signal, cache: 'no-store' }); }
   catch { throw new Error('The table browser is unavailable. You can still create a private table or play solo.'); }
   finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
   if (!response.ok) throw new Error(response.status === 429 ? 'Please wait a moment before refreshing tables.' : 'The table browser is unavailable. Try again shortly.');
-  return lobbyListSchema.parse(await response.json()).lobbies;
+  const parsed=lobbyListSchema.parse(await response.json());if(parsed.gameId!==gameId||parsed.lobbies.some(lobby=>lobby.gameId!==gameId))throw new Error('The table browser returned a different game.');
+  return parsed.lobbies;
+}
+export async function tableInfo(invite:string,signal?:AbortSignal){const info=tableInfoSchema.parse(await request(`/${invite}/info`,{method:'GET',signal}));if(info.roomId!==invite)throw new ApiError('CLIENT_INCOMPATIBLE','This invitation returned another table.');return info;}
+function parseGameSession<S,A>(value:unknown,adapter:GameClientAdapter<S,A>):TableSessionResponse<S>{
+  const parsed=tableSessionResponseSchema(adapter.snapshotSchema).parse(value);
+  if(parsed.gameId!==adapter.gameId||parsed.adapterVersion!==adapter.version)throw new ApiError('CLIENT_INCOMPATIBLE','This table needs a different game client.');
+  const identity=adapter.identity(parsed.snapshot);
+  if(identity.roomId!==parsed.session.inviteId||identity.playerId!==parsed.session.playerId||identity.gameId&&identity.gameId!==adapter.gameId)throw new ApiError('CLIENT_INCOMPATIBLE','This response belongs to another table or game.');
+  return {...parsed,session:{...parsed.session,gameId:adapter.gameId,adapterVersion:adapter.version}};
+}
+export async function createGameTable<S,A>(adapter:GameClientAdapter<S,A>,entry:{name:string;icon?:PlayerIcon;visibility:LobbyVisibility;funding?:'account';buyInUnits?:number;entryId?:string}){
+  return parseGameSession(await request('',{gameId:adapter.gameId,account:entry.funding==='account',body:entry}),adapter);
+}
+export async function joinGameTable<S,A>(adapter:GameClientAdapter<S,A>,invite:string,entry:{name:string;icon?:PlayerIcon;funding?:'account';buyInUnits?:number;entryId?:string}){
+  return parseGameSession(await request(`/${invite}/join`,{account:entry.funding==='account',body:entry}),adapter);
+}
+export async function resumeTableSession<S,A>(session:GuestSession,adapter:GameClientAdapter<S,A>,signal?:AbortSignal){
+  const value=await request(`/${session.inviteId}/resume`,{session,signal}) as {snapshot:unknown;gameId?:GameId;adapterVersion?:number};
+  return parseGameSession({...value,session},adapter);
 }
 export async function joinGuest(invite: string, name: string, icon?: PlayerIcon) { return parseSession(await request(`/${invite}/join`, { body: { name, icon } })); }
 export async function resumeGuest(session: GuestSession, signal?: AbortSignal): Promise<SessionResponse> {
@@ -75,17 +95,21 @@ export function forgetSession(invite: string) {
   temporarySessions.delete(invite);
   try { localStorage.removeItem(`casual-room:${invite}`); if (localStorage.getItem('casual-last-room') === invite) localStorage.removeItem('casual-last-room'); } catch { /* Best effort. */ }
 }
-export function createOnlineClient(initial: SessionResponse): GameClient {
+export function createTableClient<S,A>(initial:TableSessionResponse<S>,adapter:GameClientAdapter<S,A>):TableClient<S,A> {
+  if((initial.gameId??'blackjack')!==adapter.gameId || (initial.adapterVersion??1)!==adapter.version)throw new ApiError('CLIENT_INCOMPATIBLE','This table needs a different game client.');
   const { session } = initial;
+  let snapshot = adapter.snapshotSchema.parse(initial.snapshot);
+  const initialIdentity=adapter.identity(snapshot);
+  if(initialIdentity.playerId!==session.playerId||initialIdentity.roomId!==session.inviteId||initialIdentity.gameId&&initialIdentity.gameId!==adapter.gameId)throw new ApiError('CLIENT_INCOMPATIBLE','This response belongs to another seat or game.');
   rememberSession(session);
-  let snapshot = initial.snapshot;
+  const eventSchema=gameServerEventSchema(adapter.snapshotSchema);
   let chat: ChatFeed = { messages: [], available: false, unread: 0 };
   let hasChatHistory = false;
   let connection: ConnectionInfo = { status: 'connecting', message: 'Connecting to your table…' };
   const listeners = new Set<() => void>();
   const pending = new Map<string, { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; chat?: boolean }>();
   const claimId = crypto.randomUUID();
-  const claimVersion = initial.snapshot.room?.claimVersion ?? 0;
+  const claimVersion = adapter.identity(snapshot).claimVersion;
   let controllerId: string | undefined;
   let socket: WebSocket | undefined; let disposed = false; let terminal = false;
   let retry: ReturnType<typeof setTimeout> | undefined; let attempt = 0; let generation = 0;
@@ -102,10 +126,10 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
     pending.clear();
   }
   function acceptSnapshot(value: unknown) {
-    const next = snapshotSchema.parse(value);
-    if (next.you !== session.playerId || next.room?.inviteId !== session.inviteId) throw new Error('Snapshot belongs to another seat.');
+    const next = adapter.snapshotSchema.parse(value);const identity=adapter.identity(next);
+    if (identity.playerId !== session.playerId || identity.roomId !== session.inviteId || identity.gameId&&identity.gameId!==adapter.gameId) throw new Error('Snapshot belongs to another seat or game.');
     // Every event is a complete snapshot, so revision gaps recover in one replacement.
-    if (next.revision >= snapshot.revision) { snapshot = next; notify(); }
+    if (identity.revision >= adapter.identity(snapshot).revision) { snapshot = next; notify(); }
   }
   function stopAttempt() {
     generation++; ticketRequest?.abort(); ticketRequest = undefined;
@@ -155,13 +179,13 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
       if (disposed || terminal || version !== generation) return;
       if (!/^[a-f0-9]{64}$/.test(response.ticket)) { fail('CLIENT_INCOMPATIBLE', 'The table returned an invalid connection response. Refresh to reconnect.'); return; }
       const url = new URL(`${apiBase}/api/v1/rooms/${session.inviteId}/socket`); url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      const current = new WebSocket(url, ['casual-v1', `ticket.${response.ticket}`, CHAT_CAPABILITY]); socket = current;
+      const current = new WebSocket(url, ['casual-v1', `ticket.${response.ticket}`, CHAT_CAPABILITY,GAME_ADAPTER_CAPABILITY]); socket = current;
       const active = () => !disposed && !terminal && socket === current && version === generation;
       handshakeTimer = setTimeout(() => { if (active()) lost('The connection timed out. Retrying…'); }, 10_000);
       current.onmessage = event => {
         if (!active()) return;
         try {
-          const message = serverEventSchema.parse(JSON.parse(String(event.data)));
+          const message = eventSchema.parse(JSON.parse(String(event.data)));
           lastReceived = Date.now();
           if (message.type === 'chat') {
             // Count arrivals before notifying React: consecutive history/live frames
@@ -177,7 +201,9 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
           }
           if (message.type === 'connected') { controllerId = message.controllerId; return; }
           if (message.type === 'pong') { connection = { ...connection, clockOffsetMs: message.serverTime - Date.now() }; return; }
-          if (message.type === 'snapshot') {
+          if (message.type === 'snapshot'||message.type==='game-snapshot') {
+            if(message.type==='game-snapshot'&&(message.gameId!==adapter.gameId||message.adapterVersion!==adapter.version))throw new Error('Wrong game snapshot');
+            if(message.type==='snapshot'&&adapter.gameId!=='blackjack')throw new Error('Missing game identity');
             const becameConnected = connection.status !== 'connected';
             connection = { ...connection, clockOffsetMs: message.serverTime - Date.now() };
             acceptSnapshot(message.snapshot); attempt = 0; clearTimeout(handshakeTimer);
@@ -220,14 +246,14 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
     getSnapshot: () => snapshot, getConnection: () => connection, getChat: () => chat,
     markChatRead() { if (chat.unread) { chat = { ...chat, unread: 0 }; notify(); } },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    send(action: Action) {
+    send(action: A) {
       if (disposed || connection.status !== 'connected' || socket?.readyState !== WebSocket.OPEN) return Promise.reject(new Error('Reconnect before playing. Your action was not sent.'));
       const id = crypto.randomUUID();
       const target = socket; const version = generation;
       return new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => { pending.delete(id); reject(new Error('Your action is unconfirmed. Reconnecting to check the current table.')); if (target === socket && version === generation) lost('Checking the current table…'); }, 10_000);
         pending.set(id, { resolve, reject, timer });
-        try { socket!.send(JSON.stringify({ protocol: 1, id, revision: snapshot.revision, roundId: snapshot.roundId, playerId: session.playerId, handId: snapshot.activeHandId ?? undefined, action })); }
+        try { socket!.send(JSON.stringify({type:'game-command',protocol:1,gameId:adapter.gameId,adapterVersion:adapter.version,command:adapter.command(snapshot,action,session.playerId,id)})); }
         catch { clearTimeout(timer); pending.delete(id); reject(new Error('Your action could not be sent. Please reconnect.')); }
       });
     },
@@ -253,3 +279,4 @@ export function createOnlineClient(initial: SessionResponse): GameClient {
     },
   };
 }
+export function createOnlineClient(initial:SessionResponse):GameClient {return createTableClient(initial,blackjackClientAdapter);}

@@ -22,7 +22,7 @@ test('short invitation links join the same private room, survive reload and pres
     await invite.getByRole('button', { name: 'Close invitation' }).click();
     await expect(page.getByRole('region', { name: 'Seat 2 empty', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Leave table', exact: true }).click(); await expect(page.getByRole('link', { name: 'Find a Table', exact: true })).toBeVisible();
-    await guest.goto(short); await guest.getByRole('button', { name: 'Join table', exact: true }).click();
+    await guest.goto(short);
     await expect(guest.getByRole('heading', { name: 'Table expired' })).toBeVisible();
   } finally { await context.close(); }
 });

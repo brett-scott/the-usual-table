@@ -1,17 +1,12 @@
-import { createRoom, expireDecision, GameError, project, transition, type RandomIndex, type RoomState } from '@casual/engine';
+import { createRoom, expireDecision, project, transition, type RandomIndex, type RoomState } from '@casual/engine';
 import { RESULTS_DURATION_MS, resultsRevealDelay, type LobbyVisibility, type PlayerIcon, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
 import { fundedSeat, recordWalletRound, sealWalletSeat, walletActions, walletHasFunds, type RoomWallet } from './roomWallet';
+import { assertRule,disconnectMember,newMember,ROOM_IDLE_MS,type Member } from './roomMembership';
+import type { HostedRoom } from './games/contracts';
+export { assertRule,disconnectMember,newMember,ROOM_IDLE_MS,PRESENCE_MS,RESERVATION_MS } from './roomMembership';
+export type { Member } from './roomMembership';
 
-export const RESERVATION_MS = 60_000;
-export const PRESENCE_MS = 30_000;
-export const ROOM_IDLE_MS = 24 * 60 * 60 * 1000;
-export interface Member {
-  hash: string; connected: boolean; controllerId: string | null; leaveAfterRound: boolean;
-  reservationDeadline: number | null; presenceDeadline: number | null;
-  claimId: string | null; claimVersion: number; retiredClaims: string[];
-  account?: { id: string; expiresAt: number };
-}
-export interface OnlineRoom {
+export interface OnlineRoom extends HostedRoom {
   schema: 2 | 3 | 4; id: string; revision: number; managerId: string; engine: RoomState;
   wallet?: RoomWallet;
   creation?: { entryId: string; buyInUnits: number; visibility: LobbyVisibility };
@@ -22,12 +17,6 @@ export interface OnlineRoom {
   tickets: { hash: string; playerId: string; expires: number; claimId: string; claimVersion: number }[];
   receipts: { id: string; playerId: string; revision: number }[];
   commandRates: Record<string, { start: number; count: number }>;
-}
-export function newMember(hash: string, now: number): Member {
-  return { hash, connected: false, controllerId: null, leaveAfterRound: false, reservationDeadline: now + RESERVATION_MS, presenceDeadline: null, claimId: null, claimVersion: 0, retiredClaims: [] };
-}
-export function assertRule(value: unknown, code: string, message: string): asserts value {
-  if (!value) throw new GameError(code, message);
 }
 export function newRoom(id: string, playerId: string, name: string, hash: string, random: RandomIndex, now: number, icon?: PlayerIcon): OnlineRoom {
   const engine = createRoom(name, random, now, icon); engine.players[0]!.id = playerId;
@@ -144,14 +133,6 @@ export function expireRoomDecisions(previous: OnlineRoom, random: RandomIndex, n
   room.revision++; room.lastActivity = now; return room;
 }
 
-export function disconnectMember(room: OnlineRoom, playerId: string, now: number) {
-  const member = room.members[playerId];
-  if (!member?.connected) return false;
-  member.connected = false; member.presenceDeadline = null;
-  member.reservationDeadline = member.leaveAfterRound ? null : now + RESERVATION_MS;
-  room.lastActivity = Math.max(room.lastActivity, now);
-  return true;
-}
 /** Membership cleanup never changes the shoe or cancels a locked/committed wager. */
 export function collectSeats(room: OnlineRoom, now: number) {
   let changed = false;

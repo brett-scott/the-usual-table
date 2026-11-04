@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { expect, type Page } from '@playwright/test';
-import { PUBLIC_SUPABASE_CONFIG, type PlayerIcon, type SocialProvider } from '@casual/protocol';
+import { BLACKJACK_TABLE_RULES,PUBLIC_SUPABASE_CONFIG, type PlayerIcon, type SocialProvider } from '@casual/protocol';
 
 export const accountId = 'a213ae22-a459-456d-976c-dc115e74abda';
 export async function providerFixture(page: Page, provider: SocialProvider, mode: 'success' | 'cancel' | 'offline' = 'success', savedNickname: string | null = null, savedIcon: PlayerIcon | null = null) {
+  await page.route('**/api/v1/rooms/*/info',route=>route.fulfill({json:{...BLACKJACK_TABLE_RULES,roomId:new URL(route.request().url()).pathname.split('/').at(-2),gameId:'blackjack',adapterVersion:1,visibility:'private'}}));
   let challenge = ''; let refreshes = 0; let exchanges = 0; let verifications = 0;
   let nickname = savedNickname; let failSave = false; let failRead = false;
   let icon = savedIcon; let walletMode: 'ready' | 'offline' | 'not-connected' | 'wrong-account' | 'zero' | 'new' | 'new-offline' = 'ready';

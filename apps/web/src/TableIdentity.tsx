@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { displayNameSchema, PLAYER_ICONS, playerIconSchema, type PlayerIcon } from '@casual/protocol';
+import { BLACKJACK_TABLE_RULES,displayNameSchema, PLAYER_ICONS, playerIconSchema,type GameEntryRules, type PlayerIcon } from '@casual/protocol';
 import { useAccountState } from './AccountControls';
 import s from './App.module.css';
 import { browserAuth } from './authClient';
@@ -22,28 +22,28 @@ export function useTableIdentity() {
     },
   };
 }
-export function useTableFunding() {
+export function useTableFunding(rules:GameEntryRules=BLACKJACK_TABLE_RULES) {
   const account = useAccountState();
   const [mode, setMode] = useState('account'); const [amount, setAmount] = useState('1000');
   const entry = useRef(crypto.randomUUID());
   const units = Number(amount) * 100;
-  const saved = !!account.account && mode === 'account';
-  const valid = !saved || amount.trim() !== '' && Number.isSafeInteger(units) && units >= 1000 && units % 50 === 0 && units <= 9_000_000_000_000
+  const saved = !!account.account && mode === 'account'&&rules.accountFunding==='house';
+  const valid = !saved || amount.trim() !== '' && Number.isSafeInteger(units) && units >= rules.minBuyInUnits && units % rules.buyInStepUnits === 0 && units <= 9_000_000_000_000
     && (account.walletStatus !== 'ready' || !account.wallet || units <= account.wallet.availableUnits);
-  return { saved, mode, amount, units, valid, entryId: entry.current,
+  return { saved, mode, amount, units, valid, rules,entryId: entry.current,
     setMode(value: string) { setMode(value); entry.current = crypto.randomUUID(); },
     setAmount(value: string) { setAmount(value); entry.current = crypto.randomUUID(); } };
 }
 export function BuyInFields({ funding, disabled }: { funding: ReturnType<typeof useTableFunding>; disabled: boolean }) {
   const account = useAccountState(); const id = useId();
   useEffect(() => { if (account.account) void browserAuth().refreshWallet(); }, [account.account?.accountId]);
-  if (!account.account) return null;
+  if (!account.account||funding.rules.accountFunding==='temporary-only') return null;
   const available = account.walletStatus === 'ready' && account.wallet ? new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(account.wallet.availableUnits / 100) : null;
   return <div className={`${s.iconPicker} ${s.buyInFields}`}>
     <label htmlFor={`${id}-funding`}>Play with</label><select id={`${id}-funding`} value={funding.mode} disabled={disabled} onChange={event => funding.setMode(event.target.value)}>
       <option value="account">Saved account chips</option><option value="guest">Temporary chips</option>
     </select>
-    {funding.saved && <><label htmlFor={`${id}-buy-in`}>Buy-in (chips)</label><input id={`${id}-buy-in`} type="number" min="10" step="0.5" value={funding.amount} disabled={disabled} onChange={event => funding.setAmount(event.target.value)} required />
+    {funding.saved && <><label htmlFor={`${id}-buy-in`}>Buy-in (chips)</label><input id={`${id}-buy-in`} type="number" min={funding.rules.minBuyInUnits/100} step={funding.rules.buyInStepUnits/100} value={funding.amount} disabled={disabled} onChange={event => funding.setAmount(event.target.value)} required />
       <p className={s.smallNote}>{available === null ? 'Your saved wallet will be checked before taking a buy-in.' : `${available} chips available in your wallet.`} Remaining table chips return to your wallet when you leave.</p></>}
     {funding.saved && account.walletStatus === 'ready' && account.wallet && funding.units > account.wallet.availableUnits && <p role="alert">Choose a buy-in no larger than your available chips.</p>}
     {!funding.saved && <p className={s.smallNote}>Temporary chips and results are not saved to your account.</p>}

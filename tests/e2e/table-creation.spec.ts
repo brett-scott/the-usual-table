@@ -134,7 +134,7 @@ test('wallet zero, unavailable, loading and unconfigured states stay distinct wi
 
 test('pending creation prevents dismissal and failure preserves choices for a successful retry', async ({ page }, testInfo) => {
   let release!: () => void; const response = new Promise<void>(resolve => { release = resolve; }); let attempts = 0;
-  await page.route('**/api/v1/rooms', async route => {
+  await page.route('**/api/v1/games/blackjack/rooms', async route => {
     const body = route.request().postDataJSON() as { name: string; icon: string; visibility: string; funding?: string };
     expect(body).toMatchObject({ name: 'Friendly fox', icon: '🦊', visibility: 'public' });
     expect(body.funding).toBeUndefined();

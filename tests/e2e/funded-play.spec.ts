@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createDecks, createRoom, project, transition } from '@casual/engine';
-import type { Command, Snapshot, WalletSummary } from '@casual/protocol';
+import { BLACKJACK_TABLE_RULES,type Command,type Snapshot,type WalletSummary } from '@casual/protocol';
 import { accountId, providerFixture } from './authFixture';
 import { expectOneScreen } from './fixtures';
 
@@ -23,8 +23,9 @@ async function savedTable(page: Page, failFirst = false) {
       players: result.players.map(player => ({ ...player, connected: true })) };
   }
   await page.route('**/api/v1/account/wallet', route => route.fulfill({ json: wallet() }));
-  await page.route('**/api/v1/rooms**', async route => {
+  await page.route(url=>/^\/api\/v1\/(?:rooms|games\/blackjack\/rooms)/.test(url.pathname), async route => {
     const request = route.request(); const path = new URL(request.url()).pathname;
+    if(path.endsWith('/info')){await route.fulfill({json:{...BLACKJACK_TABLE_RULES,roomId:inviteId,gameId:'blackjack',adapterVersion:1,visibility:'private'}});return;}
     expect(request.headers().authorization).toMatch(/^Bearer [^.]+\.[^.]+\./);
     if (path.endsWith('/rooms')) {
       const body = request.postDataJSON() as { funding: string; buyInUnits: number; entryId: string };
@@ -33,20 +34,20 @@ async function savedTable(page: Page, failFirst = false) {
       if (entryId) expect(body.entryId).toBe(entryId); entryId = body.entryId;
       if (failFirst && creates === 1) { await route.fulfill({ status: 503, json: { code: 'WALLET_UNAVAILABLE', message: 'Your buy-in could not be confirmed. Retry to check the same entry.' } }); return; }
       if (!created) { created = true; available -= body.buyInUnits; stack = body.buyInUnits; engine.players[0]!.balance = body.buyInUnits / 50; }
-      await route.fulfill({ status: 201, json: { session, snapshot: snapshot() } });
-    } else if (path.endsWith('/resume')) await route.fulfill({ json: { snapshot: snapshot() } });
+      await route.fulfill({ status: 201, json: { gameId:'blackjack',adapterVersion:1,session, snapshot: snapshot() } });
+    } else if (path.endsWith('/resume')) await route.fulfill({ json: { gameId:'blackjack',adapterVersion:1,snapshot: snapshot() } });
     else if (path.endsWith('/ticket')) await route.fulfill({ json: { ticket: 'e'.repeat(64) } });
     else if (path.endsWith('/authorize')) { renewals++; await route.fulfill({ json: { expiresAt: Date.now() + 90000 } }); }
     else throw new Error(`Unexpected saved-table route: ${path}`);
   });
   await page.routeWebSocket('**/api/v1/rooms/*/socket', socket => {
     socket.send(JSON.stringify({ type: 'connected', controllerId: '11111111-1111-4111-8111-111111111111', serverTime: Date.now() }));
-    const sendSnapshot = () => socket.send(JSON.stringify({ type: 'snapshot', snapshot: snapshot(), serverTime: Date.now() }));
+    const sendSnapshot = () => socket.send(JSON.stringify({ type: 'game-snapshot',protocol:1,gameId:'blackjack',adapterVersion:1, snapshot: snapshot(), serverTime: Date.now() }));
     sendSnapshot();
     socket.onMessage(message => {
       if (message === 'ping') { socket.send(JSON.stringify({ type: 'pong', serverTime: Date.now() })); return; }
       if (message === 'snapshot') { sendSnapshot(); return; }
-      const command = JSON.parse(String(message)) as Command;
+      const command = (JSON.parse(String(message)) as {command:Command}).command;
       if (command.action.type === 'StartBetting') bettingOpen = true;
       else if (command.action.type === 'Leave') { available += stack; stack = 0; }
       else {

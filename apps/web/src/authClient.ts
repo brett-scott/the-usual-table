@@ -1,6 +1,6 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { roomIdFromHash } from '@casual/protocol';
+import { gameIdFromHash,roomIdFromHash } from '@casual/protocol';
 import { accountSessionSchema, displayNameSchema, playerIconSchema, PUBLIC_SUPABASE_CONFIG, publicAuthConfigSchema, socialProviderSchema, walletSummarySchema,
   type AccountSession, type PlayerIcon, type SocialProvider, type WalletSummary } from '@casual/protocol';
 
@@ -36,7 +36,7 @@ const INTENT_KEY = 'usual-auth-intent';
 const intentSchema = z.object({ version: z.literal(1), provider: socialProviderSchema,
   hash: z.string(), createdAt: z.number().int().nonnegative(), flowId: z.string().min(1).max(200).optional() }).strict();
 export function safeAuthDestination(hash: string) {
-  return /^#\/games(?:\/blackjack(?:\/lobbies)?)?$/.test(hash) || roomIdFromHash(hash) ? hash : '#/games';
+  return hash==='#/games'||gameIdFromHash(hash)||roomIdFromHash(hash) ? hash : '#/games';
 }
 export function authCallback(url: URL) {
   const fragment = new URLSearchParams(url.hash.slice(1));

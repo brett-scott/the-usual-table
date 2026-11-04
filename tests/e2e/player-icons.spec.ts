@@ -7,8 +7,8 @@ test('optional guest icons persist for lobby creation and can return to initials
   await page.routeWebSocket('**/api/v1/rooms/*/socket', socket => {
     const upstream = socket.connectToServer();
     socket.onMessage(message => {
-      const command = String(message).startsWith('{') ? JSON.parse(String(message)) as { action?: { type: string } } : undefined;
-      if (command?.action?.type === 'Leave') {
+      const command = String(message).startsWith('{') ? JSON.parse(String(message)) as { action?: { type: string };command?:{action?:{type:string}} } : undefined;
+      if ((command?.command?.action?.type??command?.action?.type) === 'Leave') {
         releaseLeave = () => { releaseLeave = undefined; acceptedLeaves++; upstream.send(message); };
       } else upstream.send(message);
     });
