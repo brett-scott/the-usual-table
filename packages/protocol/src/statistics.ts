@@ -22,3 +22,9 @@ export const accountStatisticsSchema = z.object({
 }).strict().refine(value => new Set(value.games.map(game => game.gameId)).size === value.games.length, 'Duplicate game statistics');
 export type GameStatistics = z.infer<typeof gameStatisticsSchema>;
 export type AccountStatistics = z.infer<typeof accountStatisticsSchema>;
+export const blackjackStatisticsSchema = z.object({
+  trackedRounds: count, hands: count, wins: count, losses: count, pushes: count, blackjacks: count,
+  busts: count, doubles: count, splits: count, insuranceTaken: count, insuranceWon: count,
+}).strict();
+export const detailedStatisticsSchema = z.object({accountId:z.string().uuid(),summary:accountStatisticsSchema,blackjack:blackjackStatisticsSchema}).strict()
+  .refine(value=>value.accountId===value.summary.accountId,'Statistics owner mismatch');

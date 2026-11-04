@@ -5,6 +5,8 @@ export * from './wallet';
 export * from './auth';
 export * from './invitations';
 export * from './statistics';
+export * from './rewards';
+export * from './progression';
 
 export const PROTOCOL_VERSION = 1;
 export const RESULTS_DURATION_MS = 10_000;

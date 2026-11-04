@@ -72,6 +72,7 @@ export async function providerFixture(page: Page, provider: SocialProvider, mode
       accountId: walletMode === 'wrong-account' ? 'a213ae22-a459-456d-976c-dc115e74abdb' : accountId,
       status: 'active', version: 1, availableUnits: walletMode === 'new' ? 1000000 : walletMode === 'zero' ? 0 : 123456, atTablesUnits: walletMode === 'new' ? 0 : 25000, pendingReturnUnits: walletMode === 'new' ? 0 : 5050 } });
   });
+  await page.route('**/api/v1/account/allowance',route=>route.fulfill({status:503,json:{code:'REWARDS_NOT_CONNECTED'}}));
   return { counts: () => ({ exchanges, refreshes, verifications, walletCreates }), failSave: (value: boolean) => { failSave = value; },
     failRead: (value: boolean) => { failRead = value; }, renameRemotely: (value: string) => { nickname = value; },
     setWalletMode: (value: typeof walletMode) => { walletMode = value; } };

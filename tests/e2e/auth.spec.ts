@@ -54,6 +54,7 @@ test('returning accounts edit their nickname from a keyboard accessible menu and
   await expect(page.getByRole('menuitem', { name: 'Edit nickname' })).toBeFocused(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Edit player icon' })).toBeFocused(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Statistics', exact: true })).toBeFocused(); await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Progress & achievements', exact: true })).toBeFocused(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused(); await page.keyboard.press('Escape');
   await expect(accountButton).toBeFocused(); await expect(page.getByRole('menu')).toHaveCount(0);
   await accountButton.click(); await page.getByRole('menuitem', { name: 'Edit nickname' }).click();

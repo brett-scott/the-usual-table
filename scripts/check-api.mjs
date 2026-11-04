@@ -12,6 +12,13 @@ try {
   if (body.authProjectUrl !== auth.url) throw new Error('Deploy the updated Worker with the same Supabase project as the frontend before publishing Pages.');
   if (body.accountPlayProtocol !== 1) throw new Error('Deploy the updated Worker for saved-chip Blackjack before publishing Pages.');
   if (body.accountStatisticsProtocol !== 1) throw new Error('Deploy the updated Worker for account statistics before publishing Pages.');
+  if (body.accountRewardsProtocol !== 1) throw new Error('Deploy the updated Worker for account rewards before publishing Pages.');
+  for(const [path,method] of [['allowance','GET'],['allowance','POST'],['progression','GET'],['progression','POST'],['statistics/details','GET']]) {
+    const response=await fetch(`${api}/api/v1/account/${path}`,{method,headers:{Origin:origin},signal:AbortSignal.timeout(15_000)});
+    const value=await response.json();
+    if(response.status!==401||value.code!=='ACCOUNT_SESSION_INVALID'||response.headers.get('Access-Control-Allow-Origin')!==origin)
+      throw new Error('The deployed Worker must expose private account rewards and detailed statistics with frontend CORS.');
+  }
   const statistics = await fetch(`${api}/api/v1/account/statistics`, { headers: { Origin: origin }, signal: AbortSignal.timeout(15_000) });
   const statisticsBody = await statistics.json();
   if (statistics.status !== 401 || statisticsBody.code !== 'ACCOUNT_SESSION_INVALID' || statistics.headers.get('Access-Control-Allow-Origin') !== origin)

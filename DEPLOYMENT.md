@@ -50,6 +50,8 @@ For a project at `https://owner.github.io/the-usual-table/`, use `/the-usual-tab
 
 ## Deploy in order
 
+For daily allowance, XP, achievements and detailed statistics, apply the current [wallet installer](supabase/wallet-setup.sql) first (additive migrations 006–008), then deploy Worker and Pages. The Pages gate requires `accountRewardsProtocol: 1`. Installing migration 008 establishes the progression start time; reruns preserve it. See [account rewards](ACCOUNT_REWARDS.md) for the approved rules, compatibility and live checks.
+
 For the account-statistics increment, first apply [migration 005](packages/wallet/migrations/005_account_statistics.sql), or rerun the full current [wallet installer](supabase/wallet-setup.sql). Existing balances/history are preserved. Then follow Worker before Pages below; the Pages API gate now requires `accountStatisticsProtocol: 1`. No new credentials or bindings are needed. See [account statistics](ACCOUNT_STATISTICS.md) and the [live wallet reconciliation worksheet](LIVE_WALLET_VERIFICATION.md).
 
 1. Confirm **Checks** passes on the intended default-branch commit. Review configuration and the residual limitations in the release checklist.

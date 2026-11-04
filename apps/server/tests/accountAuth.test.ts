@@ -226,3 +226,40 @@ it.each([
   const response = await SELF.fetch('https://api.test/api/v1/account/statistics', { headers: { Origin: origin, Authorization: `Bearer ${await token()}` } });
   const body = await response.json(); expect(body).toMatchObject({ code }); expect(JSON.stringify(body)).not.toContain('private');
 });
+const allowance={contract:1,accountId,amountUnits:100000,cooldownMs:86400000,serverNow:100000,nextEligibleAt:null,canClaim:true,claimed:false,wallet};
+it.each(['allowance','progression'])('rejects guest and body-controlled %s claims before RPC',async path=>{
+  expect((await SELF.fetch(`https://api.test/api/v1/account/${path}`,{method:'POST',headers:{Origin:origin}})).status).toBe(401);
+  const response=await SELF.fetch(`https://api.test/api/v1/account/${path}`,{method:'POST',headers:{Origin:origin,Authorization:`Bearer ${await token()}`},body:JSON.stringify({accountId:crypto.randomUUID(),amount:999999})});
+  expect(response.status).toBe(400);expect(rpc).not.toHaveBeenCalled();
+});
+it.each(['GET','POST'])('uses a caller-scoped allowance RPC for %s and validates real request options',async method=>{
+  rpc.mockImplementationOnce(async(url,init)=>{expect(new Request(url,init).redirect).toBe('manual');expect(init?.body).toBe('{}');return Response.json(allowance);});
+  const response=await SELF.fetch('https://api.test/api/v1/account/allowance',{method,headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});
+  expect(response.status).toBe(200);expect(await response.json()).toEqual(allowance);expect(response.headers.get('Cache-Control')).toBe('no-store');
+  expect(rpc.mock.calls[0]![0]).toContain(method==='POST'?'usual_table_claim_allowance':'usual_table_allowance');
+});
+it.each([null,{...allowance,accountId:crypto.randomUUID()},{...allowance,amountUnits:999}])('refuses malformed or foreign reward responses',async value=>{
+  rpc.mockImplementationOnce(async()=>Response.json(value));
+  const response=await SELF.fetch('https://api.test/api/v1/account/allowance',{headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});
+  expect(response.status).toBe(503);expect(await response.json()).toMatchObject({code:'REWARDS_UNAVAILABLE'});
+});
+it('refuses reward redirects and safely reports a missing migration',async()=>{
+  const headers={Origin:origin,Authorization:`Bearer ${await token()}`};
+  rpc.mockImplementationOnce(async()=>new Response(null,{status:307,headers:{Location:'https://other.test'}}));
+  expect((await SELF.fetch('https://api.test/api/v1/account/allowance',{method:'POST',headers})).status).toBe(503);
+  const missing=await SELF.fetch('https://api.test/api/v1/account/progression',{headers});expect(await missing.json()).toMatchObject({code:'REWARDS_NOT_CONNECTED'});
+});
+it.each(['GET','POST'])('returns verified progression through its fixed %s RPC',async method=>{
+  const progress={contract:1,accountId,policy:'progress-v1',startsAt:1000,xpPerRound:10,xp:'0',level:1,levelStartXp:'0',nextLevelXp:'100',levelRewardUnits:100000,
+    claimedLevel:1,readyRewardUnits:'0',claimedUnits:0,achievements:[],wallet};
+  rpc.mockImplementationOnce(async()=>Response.json(progress));
+  const response=await SELF.fetch('https://api.test/api/v1/account/progression',{method,headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});
+  expect(response.status).toBe(200);expect(await response.json()).toEqual(progress);
+  expect(rpc.mock.calls[0]![0]).toContain(method==='POST'?'usual_table_claim_rewards':'usual_table_progression');
+});
+it('returns caller-owned detailed statistics while retaining the original summary contract',async()=>{
+  const details={accountId,summary:statistics,blackjack:{trackedRounds:'0',hands:'0',wins:'0',losses:'0',pushes:'0',blackjacks:'0',busts:'0',doubles:'0',splits:'0',insuranceTaken:'0',insuranceWon:'0'}};
+  rpc.mockImplementationOnce(async()=>Response.json(details));
+  const response=await SELF.fetch('https://api.test/api/v1/account/statistics/details',{headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});
+  expect(response.status).toBe(200);expect(await response.json()).toEqual(details);expect(rpc.mock.calls[0]![0]).toContain('usual_table_detailed_statistics');
+});

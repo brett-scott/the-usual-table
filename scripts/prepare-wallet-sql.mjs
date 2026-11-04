@@ -6,11 +6,11 @@ function body(name) {
     .replace(/^BEGIN;\s*/, '').replace(/\s*COMMIT;\s*$/, '').trim();
 }
 const schema = body('001_wallet.sql');
-const api = ['002_supabase_wallet_api.sql', '003_welcome_grant.sql', '004_backend_role.sql', '005_account_statistics.sql'].map(body).join('\n\n');
+const api = ['002_supabase_wallet_api.sql', '003_welcome_grant.sql', '004_backend_role.sql', '005_account_statistics.sql', '006_daily_allowance.sql', '007_detailed_statistics.sql', '008_progression.sql'].map(body).join('\n\n');
 const sql = `-- The Usual Table: run this complete file in Supabase SQL Editor.
 -- Safe to rerun on the version-1 wallet schema; preserves balances and history.
 -- New wallet accounts receive one 10,000-chip welcome grant. No purchases or cash value.
--- Daily grants remain disabled. Funded gameplay also requires the Worker Hyperdrive binding.
+-- Daily allowance is 1,000 chips per rolling 24 hours. Funded gameplay requires the Worker Hyperdrive binding.
 BEGIN;
 DO $install$
 BEGIN

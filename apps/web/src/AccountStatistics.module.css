@@ -13,5 +13,12 @@
 .game dt { font-size: 11px; color: #b8c8ba; margin-bottom: 6px; }
 .game dd { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
 .dialog .refresh { display: block; margin: 18px 0 0 auto; }
+.tabs { display:flex; gap:6px; overflow-x:auto; padding:4px 0 10px; margin-top:12px; }
+.tabs button { flex-shrink:0; font-size:12px; }
+.tabs button[aria-selected='true'] { background:#dac18a; color:#14251e; }
+.game progress { width:100%; accent-color:#dac18a; }
+.achievements { display:grid; gap:10px; padding:0; list-style:none; }
+.achievements li { padding:12px; border:1px solid #506354; border-radius:8px; }
+.achievements li p { margin:6px 0; }
 @media (max-width: 520px) { .dialog { padding: 18px; } .game dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } }
 @media (max-height: 500px) { .dialog { padding: 14px 18px; } .game { margin-block: 10px; padding-block: 12px; } .game dl { gap: 12px; } }

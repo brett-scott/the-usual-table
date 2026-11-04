@@ -12,6 +12,7 @@ playwright-report/
 *.tsbuildinfo
 *.log
 docs/
+.codex/agents
 BLACKJACK_AGENT_HANDOFF.md
 CHIP_ECONOMY_PLAN.md
 PLATFORM_FOUNDATIONS.md
@@ -22,3 +23,4 @@ RELEASE_CHECKLIST.md
 DEPLOYMENT.md
 AUTHENTICATION.md
 WALLET_SETUP.md
+ACCOUNT_REWARDS.md

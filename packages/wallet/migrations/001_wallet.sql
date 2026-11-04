@@ -82,6 +82,7 @@ CREATE TABLE wallet_private.results (
   ruleset_version text NOT NULL CHECK (length(ruleset_version) BETWEEN 1 AND 100),
   wagered_units bigint NOT NULL CHECK (wagered_units BETWEEN 1 AND 9000000000000),
   returned_units bigint NOT NULL CHECK (returned_units BETWEEN 0 AND 9000000000000),
+  facts jsonb,
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   PRIMARY KEY (session_id, sequence),
   UNIQUE (session_id, round_id),

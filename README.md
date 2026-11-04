@@ -53,6 +53,8 @@ Chip stacks show the selected/locked bet and each hand's actual wager, including
 
 ## Commands
 
+Account rewards now include a claimable **1,000 chips every 24 hours**, **10 XP per saved round**, **1,000 chips per level-up**, and initial Blackjack achievements. Statistics have General and per-game tabs, including detailed Blackjack counters. See [reward rules and SQL-first rollout](ACCOUNT_REWARDS.md).
+
 | Command | Result |
 | --- | --- |
 | `npm ci` | Install exact locked dependencies |

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GameError } from '@casual/engine';
+import { score } from '@casual/engine';
 import { blackjackUnitsToWallet, walletUnitsToBlackjack, walletCommandSchema, walletReceiptSchema, walletSessionSchema,
   walletUnitsSchema, type ActionType, type WalletCommand, type WalletReceipt, type WalletSession, type WalletSummary } from '@casual/protocol';
 import type { OnlineRoom } from './roomState';
@@ -99,7 +100,12 @@ export function recordWalletRound(room: OnlineRoom) {
     check(finalStack === blackjackUnitsToWallet(player.balance), 'Engine and funded stack disagree.');
     seat.stackUnits = finalStack; seat.sequence++; seat.lastRound = room.engine.roundId;
     enqueue(room, seat, { ...operation(seat), kind: 'settle', funding: 'account', roomId: room.id, gameId: 'blackjack',
-      sequence: seat.sequence, roundId: String(room.engine.roundId), rulesetVersion: 'blackjack-six-deck-v1', wageredUnits, returnedUnits }, 'active');
+      sequence: seat.sequence, roundId: String(room.engine.roundId), rulesetVersion: 'blackjack-six-deck-v1', wageredUnits, returnedUnits,
+      blackjack: { hands: player.hands.length, wins: player.hands.filter(h => h.outcome === 'win' || h.outcome === 'blackjack').length,
+        losses: player.hands.filter(h => h.outcome === 'loss').length, pushes: player.hands.filter(h => h.outcome === 'push').length,
+        blackjacks: player.hands.filter(h => h.naturalEligible && h.cards.length === 2 && score(h.cards).total === 21).length,
+        busts: player.hands.filter(h => score(h.cards).total > 21).length, doubles: player.hands.filter(h => h.wager === player.bet * 2).length,
+        splits: player.hands.length - 1, insuranceTaken: !!insurance?.wager, insuranceWon: (insurance?.returned ?? 0) > 0 } }, 'active');
   }
 }
 

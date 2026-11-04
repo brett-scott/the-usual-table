@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { accountStatisticsSchema, GAME_CATALOG, type AccountStatistics, type GameStatistics } from '@casual/protocol';
-import { browserAuth } from './authClient';
+import { detailedStatisticsSchema, GAME_CATALOG, type GameStatistics } from '@casual/protocol';
+import type { z } from 'zod';
+import { accountRequest } from './accountRequest';
 import s from './AccountStatistics.module.css';
 
 export function statisticsChips(units: string, signed = false) {
@@ -8,71 +9,53 @@ export function statisticsChips(units: string, signed = false) {
   const fraction = String(absolute % 100n).padStart(2, '0').replace(/0+$/, '');
   return `${value < 0n ? '−' : signed && value > 0n ? '+' : ''}${new Intl.NumberFormat('en').format(absolute / 100n)}${fraction ? `.${fraction}` : ''}`;
 }
-const empty: GameStatistics = { gameId: 'blackjack', roundsPlayed: '0', roundsWon: '0', roundsLost: '0', roundsEven: '0', wageredUnits: '0', returnedUnits: '0', netUnits: '0', bestRoundNetUnits: '0' };
-type State = { owner: string | null; status: 'loading' | 'ready' | 'error' | 'not-connected'; data?: AccountStatistics };
-
-export function AccountStatisticsDialog({ open, accountId: owner, onClose }: { open: boolean; accountId: string | null; onClose(): void }) {
-  const dialog = useRef<HTMLDialogElement>(null); const opener = useRef<HTMLElement | null>(null); const titleId = useId();
-  const [refresh, setRefresh] = useState(0); const [state, setState] = useState<State>({ owner: null, status: 'loading' });
-  useEffect(() => {
-    if (open && owner) {
-      if (!dialog.current?.open) { opener.current = document.activeElement as HTMLElement | null; dialog.current?.showModal(); }
-    } else dialog.current?.close();
-  }, [open, owner]);
-  useEffect(() => {
-    if (!open || !owner) return;
-    const request = new AbortController(); let active = true;
-    setState({ owner, status: 'loading' });
-    void (async () => {
-      try {
-        const token = await browserAuth().accessToken();
-        if (!active) return;
-        const base = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8787').replace(/\/$/, '');
-        const response = await fetch(`${base}/api/v1/account/statistics`, { headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store', redirect: 'manual', signal: AbortSignal.any([request.signal, AbortSignal.timeout(8000)]) });
-        const value: unknown = await response.json();
-        if (!response.ok) {
-          if (response.status === 503 && value && typeof value === 'object' && 'code' in value && value.code === 'STATISTICS_NOT_CONNECTED') {
-            if (active) setState({ owner, status: 'not-connected' }); return;
-          }
-          throw new Error('Statistics unavailable');
-        }
-        const data = accountStatisticsSchema.parse(value);
-        if (data.accountId !== owner) throw new Error('Statistics account mismatch');
-        if (active) setState({ owner, status: 'ready', data });
-      } catch { if (active) setState({ owner, status: 'error' }); }
-    })();
-    return () => { active = false; request.abort(); };
-  }, [open, owner, refresh]);
-  const current = state.owner === owner ? state : { owner, status: 'loading' as const };
-  return <dialog ref={dialog} className={s.dialog} aria-labelledby={titleId} onClose={() => {
-    if (document.activeElement === document.body || dialog.current?.contains(document.activeElement)) opener.current?.focus();
-    onClose();
-  }}>
-    <header className={s.heading}><h2 id={titleId}>Your statistics</h2><button type="button" aria-label="Close statistics" onClick={() => dialog.current?.close()}>×</button></header>
+const empty: GameStatistics = {gameId:'blackjack',roundsPlayed:'0',roundsWon:'0',roundsLost:'0',roundsEven:'0',wageredUnits:'0',returnedUnits:'0',netUnits:'0',bestRoundNetUnits:'0'};
+export function generalStatistics(games: GameStatistics[]):GameStatistics {
+  const result={...empty};
+  for(const field of ['roundsPlayed','roundsWon','roundsLost','roundsEven','wageredUnits','returnedUnits','netUnits'] as const)
+    result[field]=games.reduce((sum,game)=>sum+BigInt(game[field]),0n).toString();
+  result.bestRoundNetUnits=games.reduce((best,game)=>BigInt(game.bestRoundNetUnits)>best?BigInt(game.bestRoundNetUnits):best,0n).toString();
+  return result;
+}
+function Summary({game}:{game:GameStatistics}) {
+  return <dl>{[['Rounds played',game.roundsPlayed],['Won',game.roundsWon],['Lost',game.roundsLost],['Even',game.roundsEven],
+    ['Chips wagered',statisticsChips(game.wageredUnits)],['Chips returned',statisticsChips(game.returnedUnits)],['Net chips',statisticsChips(game.netUnits,true)],['Best round',statisticsChips(game.bestRoundNetUnits,true)]]
+    .map(([label,value])=><div key={label}><dt>{label}</dt><dd>{['Rounds played','Won','Lost','Even'].includes(label!)?new Intl.NumberFormat('en').format(BigInt(value!)):value}</dd></div>)}</dl>;
+}
+type Details=z.infer<typeof detailedStatisticsSchema>;
+export function AccountStatisticsDialog({open,accountId:owner,onClose}:{open:boolean;accountId:string|null;onClose():void}) {
+  const dialog=useRef<HTMLDialogElement>(null);const opener=useRef<HTMLElement|null>(null);const title=useId();
+  const [tab,setTab]=useState('general');const [revision,setRevision]=useState(0);
+  const [state,setState]=useState<{owner:string|null;data?:Details;status:'loading'|'ready'|'error'|'not-connected'}>({owner:null,status:'loading'});
+  useEffect(()=>{if(open&&owner){if(!dialog.current?.open){opener.current=document.activeElement as HTMLElement|null;dialog.current?.showModal();}}
+    else dialog.current?.close();},[open,owner]);
+  useEffect(()=>{if(!open||!owner)return;let active=true;const abort=new AbortController();setState({owner,status:'loading'});
+    void accountRequest('statistics/details',owner,detailedStatisticsSchema,'GET',abort.signal).then(data=>{if(active)setState({owner,status:'ready',data});})
+      .catch(error=>{if(active)setState({owner,status:error instanceof Error&&error.message==='STATISTICS_NOT_CONNECTED'?'not-connected':'error'});});
+    return()=>{active=false;abort.abort();};},[open,owner,revision]);
+  const current=state.owner===owner?state:{status:'loading' as const,data:undefined}; const data=current.data;
+  const selected=GAME_CATALOG.find(game=>game.id===tab); const game=tab==='general'?generalStatistics(data?.summary.games??[]):data?.summary.games.find(game=>game.gameId===tab)??{...empty,gameId:selected?.id??'blackjack'};
+  return <dialog ref={dialog} className={s.dialog} aria-labelledby={title} onClose={()=>{if(document.activeElement===document.body||dialog.current?.contains(document.activeElement))opener.current?.focus();onClose();}}>
+    <header className={s.heading}><h2 id={title}>Your statistics</h2><button aria-label="Close statistics" onClick={()=>dialog.current?.close()}>×</button></header>
     <p className={s.note}>Saved-chip games only. Temporary play isn’t recorded.</p>
-    {open && owner && <>
-      {current.status === 'loading' && <p role="status">Loading statistics…</p>}
-      {current.status === 'error' && <p role="alert">Your statistics could not be loaded. Please try again.</p>}
-      {current.status === 'not-connected' && <p role="status">Statistics are not connected yet.</p>}
-      {current.status === 'ready' && current.data && <>
-        {!current.data.games.length && <p>No saved rounds yet. Your results will appear here after you play with saved chips.</p>}
-        {(current.data.games.length ? current.data.games : [empty]).map(game => <section className={s.game} key={game.gameId} aria-label={`${GAME_CATALOG.find(entry => entry.id === game.gameId)?.name ?? game.gameId} statistics`}>
-          <h3>{GAME_CATALOG.find(entry => entry.id === game.gameId)?.name ?? game.gameId}</h3>
-          <dl>
-            <div><dt>Rounds played</dt><dd>{new Intl.NumberFormat('en').format(BigInt(game.roundsPlayed))}</dd></div>
-            <div><dt>Won</dt><dd>{new Intl.NumberFormat('en').format(BigInt(game.roundsWon))}</dd></div>
-            <div><dt>Lost</dt><dd>{new Intl.NumberFormat('en').format(BigInt(game.roundsLost))}</dd></div>
-            <div><dt>Even</dt><dd>{new Intl.NumberFormat('en').format(BigInt(game.roundsEven))}</dd></div>
-            <div><dt>Chips wagered</dt><dd>{statisticsChips(game.wageredUnits)}</dd></div>
-            <div><dt>Chips returned</dt><dd>{statisticsChips(game.returnedUnits)}</dd></div>
-            <div><dt>Net chips</dt><dd>{statisticsChips(game.netUnits, true)}</dd></div>
-            <div><dt>Best round</dt><dd>{statisticsChips(game.bestRoundNetUnits, true)}</dd></div>
-          </dl>
-        </section>)}
-        <p className={s.note}>Each round includes all your hands and insurance. Results update after the round is saved.</p>
-      </>}
-      <button className={s.refresh} type="button" disabled={current.status === 'loading'} onClick={() => setRefresh(value => value + 1)}>{current.status === 'error' || current.status === 'not-connected' ? 'Retry statistics' : 'Refresh statistics'}</button>
+    <div className={s.tabs} role="tablist" aria-label="Statistics categories">{[{id:'general',name:'General'},...GAME_CATALOG].map(item=><button key={item.id} role="tab" aria-selected={tab===item.id} onClick={()=>setTab(item.id)}>{item.name}</button>)}</div>
+    {open&&owner&&<>
+      {current.status==='loading'&&<p role="status">Loading statistics…</p>}
+      {current.status==='error'&&<p role="alert">Your statistics could not be loaded. Please try again.</p>}
+      {current.status==='not-connected'&&<p role="status">Statistics are not connected yet.</p>}
+      {current.status==='ready'&&data&&<section className={s.game} role="tabpanel" aria-label={`${selected?.name??'General'} statistics`}>
+        <h3>{selected?.name??'All games'}</h3>
+        {selected?.status==='coming-soon'?<p>This game is coming soon. Its statistics will be available when it launches.</p>:<>
+          {!data.summary.games.length&&<p>No saved rounds yet. Your results will appear here after you play with saved chips.</p>}
+          <Summary game={game}/>
+          {tab==='general'&&<p>Games played: {data.summary.games.filter(g=>BigInt(g.roundsPlayed)>0n).length}</p>}
+          {tab==='blackjack'&&<><h3>Blackjack details</h3><p className={s.note}>Detailed counters cover {data.blackjack.trackedRounds} rounds recorded since this feature was enabled.</p>
+            <dl>{([['Hands played','hands'],['Hands won','wins'],['Hands lost','losses'],['Hands pushed','pushes'],['Natural blackjacks','blackjacks'],['Busts','busts'],['Doubles','doubles'],['Splits','splits'],['Insurance bets','insuranceTaken'],['Insurance wins','insuranceWon']] as const)
+              .map(([label,key])=><div key={key}><dt>{label}</dt><dd>{new Intl.NumberFormat('en').format(BigInt(data.blackjack[key]))}</dd></div>)}</dl></>}
+          <p className={s.note}>Each round includes all your hands and insurance. Results update after the round is saved.</p>
+        </>}
+      </section>}
+      <button className={s.refresh} disabled={current.status==='loading'} onClick={()=>setRevision(value=>value+1)}>{current.status==='error'||current.status==='not-connected'?'Retry statistics':'Refresh statistics'}</button>
     </>}
   </dialog>;
 }

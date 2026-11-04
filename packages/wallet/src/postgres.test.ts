@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import EmbeddedPostgres from 'embedded-postgres';
 import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { accountStatisticsSchema, type WalletCommand } from '@casual/protocol';
+import { accountStatisticsSchema, allowanceSchema,progressionSchema,type WalletCommand } from '@casual/protocol';
 import { PostgresWalletStore } from './index';
 import { postgresPoolCloser, postgresWalletDatabase } from './postgres';
 import { supabaseAuthFixture } from './supabaseFixture';
@@ -35,6 +35,7 @@ beforeAll(async () => {
   await pool.query(await readFile(new URL('../migrations/003_welcome_grant.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../migrations/004_backend_role.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../migrations/005_account_statistics.sql', import.meta.url), 'utf8'));
+  for(const file of ['006_daily_allowance.sql','007_detailed_statistics.sql','008_progression.sql']) await pool.query(await readFile(new URL(`../migrations/${file}`,import.meta.url),'utf8'));
   const backendPassword = crypto.randomUUID();
   await pool.query(`CREATE ROLE wallet_backend_test LOGIN PASSWORD '${backendPassword}' IN ROLE usual_table_wallet_backend`);
   backendConnection = `postgresql://wallet_backend_test:${backendPassword}@127.0.0.1:${port}/postgres`;
@@ -162,4 +163,21 @@ it('delivers through the production wallet backend using a private login and pre
   expect(await gateway.execute(command)).toEqual(receipt);
   await Promise.all(tasks); expect(tasks).toHaveLength(2);
   expect((await store.getWallet(accountId)).availableUnits).toBe(80000);
+});
+it('serializes concurrent allowance and reward claims across real PostgreSQL connections',async()=>{
+  const accountId=await account();await pool.query('INSERT INTO auth.users(id) VALUES($1)',[accountId]);
+  const rpc=(name:string)=>postgresWalletDatabase(pool).transaction(async tx=>{
+    await tx.query("SELECT set_config('request.jwt.claims',$1,true)",[JSON.stringify({sub:accountId,role:'authenticated',amr:[{method:'oauth'}]})]);
+    await tx.query('SET LOCAL ROLE authenticated');return(await tx.query<{value:unknown}>(`SELECT public.${name}() AS value`)).rows[0]!.value;
+  });
+  const daily=await Promise.all(Array.from({length:6},()=>rpc('usual_table_claim_allowance').then(v=>allowanceSchema.parse(v))));
+  expect(daily.filter(v=>v.claimed)).toHaveLength(1);expect((await store.getWallet(accountId)).availableUnits).toBe(200000);
+  const allocated=(await store.execute(allocate(accountId))).session!;
+  const active=(await store.execute({contract:1,accountId,operationId:crypto.randomUUID(),kind:'activate',sessionId:allocated.sessionId,expectedVersion:allocated.version})).session!;
+  await store.execute({contract:1,accountId,operationId:crypto.randomUUID(),kind:'settle',sessionId:active.sessionId,expectedVersion:active.version,
+    funding:'account',gameId:'blackjack',roomId:active.roomId,sequence:1,roundId:'1',rulesetVersion:'test',wageredUnits:1000,returnedUnits:2000});
+  const before=await store.getWallet(accountId);
+  const rewards=await Promise.all(Array.from({length:6},()=>rpc('usual_table_claim_rewards').then(v=>progressionSchema.parse(v))));
+  expect(rewards.filter(v=>v.claimedUnits>0)).toHaveLength(1);expect((await store.getWallet(accountId)).availableUnits).toBe(before.availableUnits+20000);
+  expect((await pool.query("SELECT count(*)::int AS n FROM wallet_private.ledger WHERE account_id=$1 AND kind='claim_reward'",[accountId])).rows[0].n).toBe(1);
 });

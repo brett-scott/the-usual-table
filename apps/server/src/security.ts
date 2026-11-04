@@ -33,6 +33,8 @@ export async function readJson(request: Request) {
   catch { throw new GameError('INVALID_REQUEST', 'Send a valid JSON request.'); }
 }
 export function errorResponse(error: unknown) {
+  if (error instanceof GameError && ['REWARDS_NOT_CONNECTED','REWARDS_UNAVAILABLE'].includes(error.code))
+    return Response.json({code:error.code,message:error.message},{status:503,headers:{'Cache-Control':'no-store'}});
   const known = error instanceof GameError;
   const code = known ? error.code : 'INTERNAL_ERROR';
   const status = ['SESSION_INVALID', 'SESSION_EXPIRED', 'TICKET_INVALID', 'ACCOUNT_REQUIRED', 'ACCOUNT_SESSION_INVALID'].includes(code) ? 401 : code === 'ORIGIN_DENIED' ? 403 : ['ROOM_EXPIRED', 'WALLET_NOT_FOUND'].includes(code) ? 404 : ['TABLE_FULL', 'STALE_STATE', 'SESSION_REPLACED', 'ROOM_VERSION_UNSUPPORTED', 'ENTRY_CONFLICT'].includes(code) ? 409 : ['ROOM_STATE_INVALID', 'AUTH_UNAVAILABLE', 'WALLET_NOT_CONNECTED', 'WALLET_UNAVAILABLE', 'STATISTICS_NOT_CONNECTED', 'STATISTICS_UNAVAILABLE'].includes(code) ? 503 : code === 'RATE_LIMITED' ? 429 : known ? 400 : 500;

@@ -8,6 +8,7 @@ const project = 'https://npqvazffslqmfjtyyhpn.supabase.co';
 globalThis.fetch = async (input, options) => {
   const path = new URL(input).pathname;
   if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,
+    ...(process.env.CHECK_SCENARIO === 'missing-rewards-protocol' ? {} : {accountRewardsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-account-play' ? {} : {accountPlayProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-statistics-protocol' ? {} : {accountStatisticsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'old-worker' ? {} : {authProjectUrl:process.env.CHECK_SCENARIO === 'wrong-project' ? 'https://wrong.supabase.co' : project})},
@@ -15,6 +16,8 @@ globalThis.fetch = async (input, options) => {
   if (path === '/api/v1/account/session') return Response.json({code:'ACCOUNT_SESSION_INVALID'},
     {status:process.env.CHECK_SCENARIO === 'account-accepted' ? 200 : process.env.CHECK_SCENARIO === 'account-missing' ? 404 : 401,
     headers:{'Access-Control-Allow-Origin':process.env.CHECK_SCENARIO === 'account-cors' ? 'https://wrong.test' : origin}});
+  if(['/api/v1/account/allowance','/api/v1/account/progression','/api/v1/account/statistics/details'].includes(path)) return Response.json({code:'ACCOUNT_SESSION_INVALID'},
+    {status:process.env.CHECK_SCENARIO==='rewards-missing'?404:401,headers:{'Access-Control-Allow-Origin':origin}});
   if (path === '/api/v1/account/wallet') return Response.json({code:'ACCOUNT_SESSION_INVALID'},
     {status:process.env.CHECK_SCENARIO === 'wallet-read-missing' && options.method === 'GET' || process.env.CHECK_SCENARIO === 'wallet-create-missing' && options.method === 'POST' ? 404 : 401,
       headers:{'Access-Control-Allow-Origin':origin}});
@@ -48,3 +51,4 @@ it.each(['wallet-read-missing', 'wallet-create-missing'])('rejects a Worker miss
 it.each(['missing-statistics-protocol', 'statistics-missing', 'statistics-accepted', 'statistics-cors'])('requires the private statistics endpoint before Pages: %s', scenario => {
   const result = check(scenario); expect(result.status).toBe(1); expect(result.stderr).toContain('account statistics');
 });
+it.each(['missing-rewards-protocol','rewards-missing'])('requires the rewards Worker before Pages: %s',scenario=>{const result=check(scenario);expect(result.status).toBe(1);expect(result.stderr).toContain('account rewards');});
