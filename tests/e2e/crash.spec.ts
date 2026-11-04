@@ -72,3 +72,30 @@ test('Crash statistics and game-specific achievements appear in the shared profi
   await menu.click();await page.getByRole('menuitem',{name:'Progress & achievements',exact:true}).click();const progress=page.getByRole('dialog',{name:'Progress & achievements'});await progress.getByRole('tab',{name:'Crash',exact:true}).click();await expect(progress.getByRole('tabpanel')).toContainText('High Flyer');
   await progress.getByRole('button',{name:'Claim 450 reward chips'}).click();await expect(progress.getByRole('button',{name:'No rewards to claim'})).toBeDisabled();await expect(progress).toContainText('450 chips added to your wallet');await page.screenshot({path:info.outputPath('crash-achievements.png')});
 });
+test('the lobby shows all ten latest crash values newest first without clipping and preserves them on reload',async({page},info)=>{
+  const fixture=await crashFixture(page,{players:8});await open(page);
+  if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});
+  const history=page.getByRole('region',{name:'Last 10 Crash results'});
+  await expect(history).toContainText('No completed flights in this lobby yet.');await page.getByRole('button',{name:'Start rounds'}).click();
+  const points=[125,150,200,300,450,600,800,1000,1200,2500,10000,20000];
+  for(let i=0;i<points.length;i++){
+    await page.getByRole('button',{name:'Place bet',exact:true}).click();await expect(page.getByRole('button',{name:'Wager locked'})).toBeDisabled();fixture.fly(points[i]!);fixture.finish();
+    await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');await expect(history.getByRole('listitem')).toHaveCount(Math.min(10,i+1));
+    if(i<points.length-1){fixture.advance(5000);await expect(page.getByRole('button',{name:'Place bet',exact:true})).toBeEnabled();}
+  }
+  const expected=fixture.state().history.map(h=>`${(h.multiplierCents/100).toFixed(2)}×${h.capped?' ✓':''}`);
+  await expect(history.getByRole('listitem')).toHaveText(expected);
+  async function checkHistory(){
+    await fits(page);const area=(await history.boundingBox())!;
+    const readout=(await page.getByLabel('Current multiplier',{exact:true}).locator('..').boundingBox())!;
+    expect(area.y,'history stays below the multiplier and countdown').toBeGreaterThanOrEqual(readout.y+readout.height);
+    for(const item of await history.getByRole('listitem').all()){
+      const box=(await item.boundingBox())!;expect(box.x).toBeGreaterThanOrEqual(area.x);expect(box.x+box.width).toBeLessThanOrEqual(area.x+area.width+1);
+      expect(box.y).toBeGreaterThanOrEqual(area.y);expect(box.y+box.height).toBeLessThanOrEqual(area.y+area.height+1);
+      const size=await item.evaluate(e=>({width:e.clientWidth,content:e.scrollWidth}));expect(size.content).toBeLessThanOrEqual(size.width+1);
+    }
+  }
+  await checkHistory();await page.screenshot({path:info.outputPath('crash-last-ten-results.png')});
+  await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await expect(history.getByRole('listitem')).toHaveText(expected);await checkHistory();
+  if(info.project.name==='desktop')for(const size of [{width:1280,height:720},{width:1024,height:768}]){await page.setViewportSize(size);await checkHistory();}
+});

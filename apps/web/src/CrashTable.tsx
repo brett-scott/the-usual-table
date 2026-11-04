@@ -57,7 +57,13 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
           <path d={path+' L '+(28+progress*590)+' 210 L 28 210 Z'} fill="url(#crash-fill)"/>
           <path d={path} fill="none" stroke="currentColor" strokeWidth="3"/><circle cx={28+progress*590} cy={190-progress*155} r="6" fill="currentColor"/>
         </svg>
-        <div className={s.history} aria-label="Recent Crash results">{state.history.length?state.history.map(h=><span key={h.roundId} data-high={h.multiplierCents>=200}>{crashMultiplier(h.multiplierCents)}{h.capped?' ✓':''}</span>):<span>The next flight starts here.</span>}</div>
+        <section className={s.history} aria-label="Last 10 Crash results">
+          <header><h2>Last 10 results</h2><span>Newest first</span></header>
+          {state.history.length?<ol>{state.history.map(h=><li key={h.roundId} data-high={h.multiplierCents>=200}
+            aria-label={`Round ${h.roundId}: ${crashMultiplier(h.multiplierCents)}${h.capped?', ceiling reached':''}`}>
+            {crashMultiplier(h.multiplierCents)}{h.capped&&<span aria-hidden="true"> ✓</span>}
+          </li>)}</ol>:<p>No completed flights in this lobby yet.</p>}
+        </section>
       </section>
       <section className={s.players} aria-label="Crash players">{state.players.map(other=><article key={other.id} className={s.player} data-own={other.id===p.id} data-cashed={other.cashedOutCents!==null} aria-label={`Seat ${other.seat+1}: ${other.name}`}>
         <ChatBubble client={client} playerId={other.id} name={other.name}/><PlayerAvatar player={other}/><div><strong>{other.name}{other.id===p.id?' · You':''}</strong><span>{other.betUnits>0?other.cashedOutCents!==null?`${crashMultiplier(other.cashedOutCents)} · +${crashChips(other.returnedUnits-other.betUnits)}`:state.phase==='results'?`Lost ${crashChips(other.betUnits)}`:`${crashChips(other.betUnits)} chips locked`:other.leaving?'Leaving':other.connected?'Watching':'Reconnecting'}</span></div>

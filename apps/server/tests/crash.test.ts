@@ -72,3 +72,12 @@ it('fails closed on corrupt Crash accounting, phase and ownership instead of res
     const bad=structuredClone(room);mutate(bad);const before=JSON.stringify(bad);expect(()=>restoreCrashRoom(bad)).toThrowError(expect.objectContaining({code:'ROOM_STATE_INVALID'}));expect(JSON.stringify(bad)).toBe(before);
   }
 });
+it('restores completed history from this lobby only after eviction and exposes it to later joiners',async()=>{
+  const first=await create();const other=await create();
+  const history=Array.from({length:10},(_,i)=>({roundId:10-i,multiplierCents:100+i*25,capped:false}));
+  await edit(first.session.inviteId,r=>{r.engine.roundId=10;r.engine.history=history;});
+  await evictDurableObject(bindings.ROOMS.getByName(first.session.inviteId));expect((await view(first.session)).history).toEqual(history);
+  expect((await view(other.session)).history).toEqual([]);
+  const response=await http(`/${first.session.inviteId}/join`,undefined,{name:'Late watcher'});expect(response.status).toBe(201);
+  expect((await response.json<TableSessionResponse<CrashSnapshot>>()).snapshot.history).toEqual(history);
+});

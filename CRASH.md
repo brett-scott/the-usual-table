@@ -26,6 +26,8 @@ Crash is the second game using the [shared table adapters](GAME_ADAPTERS.md). It
 
 Other players' wagers and cash-outs are visible. Late joiners can watch the current flight and wager in the next betting window. The desktop screen has persistent side chat; smaller screens use the shared chat dialog. Eight-player controls and player status remain on screen in desktop, phone and short-landscape acceptance. Reduced motion hides the moving curve while keeping authoritative figures and actions.
 
+**Last 10 results** shows this lobby's completed crash multipliers, newest first, including ceiling flights. All ten values remain visible in a compact two-row grid on smaller screens. History survives reloads and is shared with late joiners; a new lobby starts empty, and unfinished flights are never added early. This display uses the existing stored history and needs only a frontend redeploy, with no additional SQL or Worker change.
+
 ## Engine and ordering
 
 [`packages/crash`](packages/crash/src/index.ts) contains a pure engine with injected time and randomness. Chips use integer hundredths; multipliers use integer hundredths too (`200` means 2.00×). Wagers are whole multiples of 10 chips, so cent-multiplier payouts are exact in canonical wallet units. The browser never supplies a payout or claimed cash-out multiplier.

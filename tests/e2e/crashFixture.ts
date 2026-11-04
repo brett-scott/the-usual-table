@@ -11,7 +11,8 @@ export async function crashFixture(page:Page,{saved=false,players=1}:{saved?:boo
   let room:CrashRoom=crashRoomAdapter.create({roomId,player:{id:playerId,name:saved?'Crash pilot':'Pilot',seat:0},credentialHash:'c'.repeat(64),now:time,random:()=>0});
   const sockets=new Set<WebSocketRoute>();
   for(let i=1;i<players;i++){const id=`peer-${i}`;crashRoomAdapter.join(room,{id,name:`Flyer ${i}`,seat:i});room.members[id]=newMember('e'.repeat(64),time);}
-  for(const m of Object.values(room.members)){m.connected=true;m.controllerId='controller';m.presenceDeadline=time+120000;m.reservationDeadline=null;}
+  // Simulated connections stay present while multi-round tests fast-forward the fixture clock.
+  for(const m of Object.values(room.members)){m.connected=true;m.controllerId='controller';m.presenceDeadline=time+3600000;m.reservationDeadline=null;}
   const wallet=():WalletSummary=>({contract:1,currency:'virtual-chips',unitsPerChip:100,accountId,status:'active',version:room.revision+1,availableUnits:available,
     atTablesUnits:created?room.engine.players[0]!.balanceUnits+(['betting','running'].includes(room.engine.phase)?room.engine.players[0]!.betUnits-room.engine.players[0]!.returnedUnits:0):0,pendingReturnUnits:0});
   function snapshot(){const value=crashSnapshot(room,playerId);if(saved){value.wallet={status:'active',error:null};value.legalActions=value.legalActions.filter(a=>a!=='Refill');}return value;}

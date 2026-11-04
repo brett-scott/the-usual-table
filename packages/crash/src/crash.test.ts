@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { newCrash,beginBetting,placeBet,cashOut,advanceCrash,drawOutcome,multiplierAt,targetTime,nextCrashAlarm,validCrashState,type CrashState } from './index';
+import { newCrash,beginBetting,placeBet,cashOut,advanceCrash,drawOutcome,multiplierAt,targetTime,nextCrashAlarm,validCrashState,crashStateSchema,type CrashState } from './index';
 
 const randomFor=(cents:number)=>()=>Math.floor(1_000_000_000-97_000_000_000/cents);
 function betting():CrashState{const state=newCrash();state.players.push({id:'one',name:'One',seat:0,balanceUnits:100000,betUnits:0,autoCashoutCents:null,cashedOutCents:null,returnedUnits:0});beginBetting(state,1000);return state;}
@@ -52,4 +52,17 @@ it('rejects inconsistent private phases, payouts and duplicate seats when restor
   expect(validCrashState({...e,phase:'running'})).toBe(false);
   expect(validCrashState({...e,players:[e.players[0]!,e.players[0]!]})).toBe(false);
   const bad=structuredClone(e);bad.players[0]!.returnedUnits=1000;expect(validCrashState(bad)).toBe(false);
+});
+it('retains the newest ten completed crash values across rounds without exposing an unfinished flight',()=>{
+  let state=betting();const completed:{roundId:number;multiplierCents:number;capped:boolean}[]=[];
+  for(let i=0;i<12;i++){
+    if(i>0)beginBetting(state,state.deadline!);
+    const closes=state.deadline!;placeBet(state,state.players[0]!,1000,null,closes-1);
+    const before=structuredClone(state.history);state=advanceCrash(state,closes,randomFor(150+i*50));
+    expect(state.phase).toBe('running');expect(state.history).toEqual(before);
+    state=advanceCrash(state,state.deadline!,()=>0);completed.unshift({roundId:state.roundId,...state.outcome!});
+    state=crashStateSchema.parse(JSON.parse(JSON.stringify(state)));expect(validCrashState(state)).toBe(true);
+    expect(state.history).toEqual(completed.slice(0,10));
+  }
+  expect(state.history.map(h=>h.roundId)).toEqual([12,11,10,9,8,7,6,5,4,3]);expect(newCrash().history).toEqual([]);
 });
