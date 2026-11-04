@@ -69,7 +69,7 @@ async function signIn(page: Page) {
 
 test('saved-chip buy-in retries once, survives reload, settles a round and returns remaining chips on leave', async ({ page }, testInfo) => {
   const fixture = await savedTable(page, true); await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('./#/games'); await signIn(page); await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.goto('./#/games'); await signIn(page); await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click();
   await expect(page.getByLabel('Play with', { exact: true })).toHaveValue('account');
   await page.getByLabel('Buy-in (chips)', { exact: true }).fill('5'); await expect(page.getByRole('button', { name: 'Create table', exact: true })).toBeDisabled();
@@ -93,7 +93,7 @@ test('saved-chip buy-in retries once, survives reload, settles a round and retur
 
 test('signing out stops a saved-chip controller and signing back in restores its existing seat', async ({ page }) => {
   const fixture = await savedTable(page); await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('./#/games'); await signIn(page); await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.goto('./#/games'); await signIn(page); await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await page.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await page.getByRole('button', { name: 'Account menu for Saved player' }).click(); await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();

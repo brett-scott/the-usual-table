@@ -52,7 +52,8 @@ export function AccountStatisticsDialog({open,accountId:owner,onClose}:{open:boo
           {tab==='blackjack'&&<><h3>Blackjack details</h3><p className={s.note}>Detailed counters cover {data.blackjack.trackedRounds} rounds recorded since this feature was enabled.</p>
             <dl>{([['Hands played','hands'],['Hands won','wins'],['Hands lost','losses'],['Hands pushed','pushes'],['Natural blackjacks','blackjacks'],['Busts','busts'],['Doubles','doubles'],['Splits','splits'],['Insurance bets','insuranceTaken'],['Insurance wins','insuranceWon']] as const)
               .map(([label,key])=><div key={key}><dt>{label}</dt><dd>{new Intl.NumberFormat('en').format(BigInt(data.blackjack[key]))}</dd></div>)}</dl></>}
-          <p className={s.note}>Each round includes all your hands and insurance. Results update after the round is saved.</p>
+          {tab==='crash'&&(data.crash?<><h3>Crash details</h3><dl>{[['Successful cash-outs',data.crash.cashouts],['Wagers lost to crashes',data.crash.crashes],['Highest cash-out',`${(Number(data.crash.highestCashoutCents)/100).toFixed(2)}×`]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></>:<p>Crash detail tracking needs the latest database setup.</p>)}
+          <p className={s.note}>{tab==='blackjack'?'Each round includes all your hands and insurance. ':''}Results update after the round is saved.</p>
         </>}
       </section>}
       <button className={s.refresh} disabled={current.status==='loading'} onClick={()=>setRevision(value=>value+1)}>{current.status==='error'||current.status==='not-connected'?'Retry statistics':'Refresh statistics'}</button>

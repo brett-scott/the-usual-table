@@ -17,6 +17,7 @@ import { PlayerAvatar } from './PlayerAvatar';
 import { GameHub } from './GameHub';
 import { AccountControls, AccountProvider } from './AccountControls';
 import { GameRoomEntry } from './GameRoomEntry';
+import { CrashRoom } from './CrashTable';
 import s from './App.module.css';
 
 const money = (units: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(units / 2);
@@ -57,7 +58,7 @@ function AppRoutes() {
   return <GameHub />;
 }
 
-const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom}};
+const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:1,component:CrashRoom}};
 function GameRoomRoute({invite}:{invite:string}){
   const [info,setInfo]=useState<TableInfo|null>(null);const [error,setError]=useState<ApiError|null>(null);const [attempt,setAttempt]=useState(0);
   useEffect(()=>{let active=true;const abort=new AbortController();setError(null);

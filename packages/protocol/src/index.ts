@@ -1,3 +1,4 @@
+import { playerIconSchema,type PlayerIcon } from './identity';
 import { z } from 'zod';
 import { gameIdSchema, lobbyVisibilitySchema, type GameId, type LobbyVisibility } from './games';
 import type { TableClient,TableServerEvent,TableSessionResponse } from './tablePlatform';
@@ -10,6 +11,9 @@ export * from './rewards';
 export * from './progression';
 export * from './tablePlatform';
 export * from './gameRoutes';
+export * from './identity';
+export * from './crash';
+export * from './crashStatistics';
 
 export const PROTOCOL_VERSION = 1;
 export const RESULTS_DURATION_MS = 10_000;
@@ -25,20 +29,6 @@ export const chatCommandSchema = z.object({ type: z.literal('chat'), protocol: z
 export const chatMessageSchema = z.object({ id: z.string().uuid(), playerId: z.string().min(1).max(100), name: z.string().min(1).max(24), seat: z.number().int().min(0).max(11), text: chatTextSchema, sentAt: z.number().int().nonnegative().safe() });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export interface ChatFeed { messages: ChatMessage[]; available: boolean; unread: number; problem?: string; liveMessages?: { message: ChatMessage; receivedAt: number }[] }
-/** Display text only: duplicates are allowed. Account/player IDs determine ownership. */
-export const displayNameSchema = z.string().trim().min(1, 'Enter your name.').max(24, 'Use at most 24 characters.');
-export const PLAYER_ICONS = [
-  { emoji: '😎', label: 'Sunglasses' }, { emoji: '🦊', label: 'Fox' },
-  { emoji: '🐱', label: 'Cat' }, { emoji: '🐶', label: 'Dog' },
-  { emoji: '🐼', label: 'Panda' }, { emoji: '🐸', label: 'Frog' },
-  { emoji: '🦁', label: 'Lion' }, { emoji: '🦉', label: 'Owl' },
-  { emoji: '🦄', label: 'Unicorn' }, { emoji: '🐙', label: 'Octopus' },
-  { emoji: '🤖', label: 'Robot' }, { emoji: '👽', label: 'Alien' },
-  { emoji: '🎩', label: 'Top hat' }, { emoji: '🍀', label: 'Clover' },
-  { emoji: '🔥', label: 'Fire' }, { emoji: '⭐', label: 'Star' },
-] as const;
-export const playerIconSchema = z.enum(PLAYER_ICONS.map(icon => icon.emoji), { error: 'Choose an available player icon.' });
-export type PlayerIcon = z.infer<typeof playerIconSchema>;
 const amount = z.number().int().nonnegative();
 const actions = z.discriminatedUnion('type', [
   z.object({ type: z.literal('PlaceBet'), amount }),

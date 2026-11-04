@@ -14,6 +14,7 @@ try {
   if (body.accountStatisticsProtocol !== 1) throw new Error('Deploy the updated Worker for account statistics before publishing Pages.');
   if (body.accountRewardsProtocol !== 1) throw new Error('Deploy the updated Worker for account rewards before publishing Pages.');
   if (body.gameAdapterProtocol !== 1) throw new Error('Deploy the updated Worker for shared game adapters before publishing Pages.');
+  if (body.crashProtocol !== 1) throw new Error('Deploy the updated Worker for Crash before publishing Pages.');
   for(const [path,method] of [['allowance','GET'],['allowance','POST'],['progression','GET'],['progression','POST'],['statistics/details','GET']]) {
     const response=await fetch(`${api}/api/v1/account/${path}`,{method,headers:{Origin:origin},signal:AbortSignal.timeout(15_000)});
     const value=await response.json();

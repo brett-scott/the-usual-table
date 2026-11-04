@@ -18,10 +18,10 @@ test('short invitation links join the same private room, survive reload and pres
     await guest.goto(legacy); await expect(guest.getByRole('region', { name: 'Your seat' })).toContainText('Short link guest');
     await expect(guest.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
     await guest.screenshot({ path: testInfo.outputPath('short-invitation-resumed.png') });
-    await guest.getByRole('button', { name: 'Leave table', exact: true }).click(); await expect(guest.getByRole('link', { name: 'Find a Table', exact: true })).toBeVisible();
+    await guest.getByRole('button', { name: 'Leave table', exact: true }).click(); await expect(guest.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true })).toBeVisible();
     await invite.getByRole('button', { name: 'Close invitation' }).click();
     await expect(page.getByRole('region', { name: 'Seat 2 empty', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Leave table', exact: true }).click(); await expect(page.getByRole('link', { name: 'Find a Table', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Leave table', exact: true }).click(); await expect(page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true })).toBeVisible();
     await guest.goto(short);
     await expect(guest.getByRole('heading', { name: 'Table expired' })).toBeVisible();
   } finally { await context.close(); }

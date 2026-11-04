@@ -9,6 +9,7 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@casual/crash": "*",
     "@casual/engine": "*",
     "@casual/protocol": "*",
     "@supabase/supabase-js": "2.118.0",

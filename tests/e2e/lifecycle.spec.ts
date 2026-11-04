@@ -76,7 +76,7 @@ test('expired invitations and invalid saved sessions show recovery actions', asy
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('expired-invitation.png'), fullPage: true });
   await page.getByRole('link', { name: 'Find or create another table' }).click();
-  await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click();
   await page.getByLabel('What should we call you?').fill('Guest');
   await page.getByRole('button', { name: 'Create table', exact: true }).click();

@@ -8,6 +8,7 @@ const project = 'https://npqvazffslqmfjtyyhpn.supabase.co';
 globalThis.fetch = async (input, options) => {
   const path = new URL(input).pathname;
   if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,
+    ...(process.env.CHECK_SCENARIO==='missing-crash'?{}:{crashProtocol:1}),
     ...(process.env.CHECK_SCENARIO==='missing-game-adapters'?{}:{gameAdapterProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-rewards-protocol' ? {} : {accountRewardsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-account-play' ? {} : {accountPlayProtocol:1}),
@@ -54,3 +55,4 @@ it.each(['missing-statistics-protocol', 'statistics-missing', 'statistics-accept
 });
 it.each(['missing-rewards-protocol','rewards-missing'])('requires the rewards Worker before Pages: %s',scenario=>{const result=check(scenario);expect(result.status).toBe(1);expect(result.stderr).toContain('account rewards');});
 it('requires the shared game adapter Worker before publishing the new table flow',()=>{const result=check('missing-game-adapters');expect(result.status).toBe(1);expect(result.stderr).toContain('shared game adapters');});
+it('requires the Crash Worker before publishing its game entry',()=>{const result=check('missing-crash');expect(result.status).toBe(1);expect(result.stderr).toContain('Crash');});

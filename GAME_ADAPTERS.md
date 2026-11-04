@@ -1,6 +1,6 @@
 # Shared game adapters
 
-Implemented locally on 4 November 2026. Blackjack is the first registered game. Other catalog games remain coming soon until their engines, views and acceptance checks exist.
+Implemented locally on 4 November 2026. Blackjack and [Crash](CRASH.md) use the registered adapter flow. Other catalog games remain coming soon until their engines, views and acceptance checks exist.
 
 ## One table flow
 

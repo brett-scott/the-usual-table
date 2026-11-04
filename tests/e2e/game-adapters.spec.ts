@@ -27,7 +27,7 @@ test('game-scoped creation, private metadata and tagged commands use the shared 
   await page.getByRole('button',{name:'Open betting'}).click();
   await expect(page.getByRole('alert')).toContainText('different game');await expect(page.getByRole('button',{name:'Open betting'})).toBeEnabled();expect(tampered).toBe(true);
   await page.getByRole('button',{name:'Open betting'}).click();await expect(page.getByRole('button',{name:/^Ready/})).toBeEnabled();
-  await page.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('link',{name:'Find a Table',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true })).toBeVisible();
 });
 test('future game routes stay unavailable until their engine and entry are registered',async({page,request,baseURL})=>{
   await page.goto('./#/games/baccarat');await expect(page.getByRole('heading',{name:'This game is coming soon.'})).toBeVisible();

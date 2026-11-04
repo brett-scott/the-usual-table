@@ -21,7 +21,7 @@ const policySchema = z.object({
 export type WalletGrantPolicies = z.infer<typeof policySchema>;
 export type WalletErrorCode = 'ACCOUNT_NOT_FOUND' | 'ACCOUNT_SUSPENDED' | 'OPERATION_CONFLICT' | 'GRANT_DISABLED'
   | 'GRANT_ALREADY_CLAIMED' | 'GRANT_COOLDOWN' | 'INSUFFICIENT_FUNDS' | 'SESSION_NOT_FOUND'
-  | 'SESSION_EXISTS' | 'SESSION_STATE' | 'STALE_SESSION' | 'RESULT_ORDER' | 'RESULT_CONFLICT'
+  | 'SESSION_EXISTS' | 'SESSION_STATE' | 'STALE_SESSION' | 'RESULT_ORDER' | 'RESULT_CONFLICT' | 'INVALID_RESULT'
   | 'WRONG_GAME' | 'UNSUPPORTED_SETTLEMENT' | 'RETURN_NOT_RECONCILED' | 'BALANCE_LIMIT';
 export class WalletError extends Error {
   constructor(public code: WalletErrorCode, public retryAt?: number) { super(code); this.name = 'WalletError'; }
@@ -141,6 +141,8 @@ export class PostgresWalletStore {
             requireWallet(current.state === 'active', 'SESSION_STATE');
             requireWallet(current.gameId === command.gameId && current.roomId === command.roomId, 'WRONG_GAME');
             requireWallet(!command.blackjack || command.gameId === 'blackjack', 'WRONG_GAME');
+            requireWallet(!command.crash || command.gameId === 'crash', 'WRONG_GAME');
+            if(command.crash)requireWallet(command.returnedUnits===(command.crash.cashedOut?Math.floor(command.wageredUnits*command.crash.cashoutCents!/100):0),'INVALID_RESULT');
             // Poker requires a balanced multi-account transfer operation, never house-minted pot credits.
             requireWallet(current.gameId !== 'texas-holdem', 'UNSUPPORTED_SETTLEMENT');
             const duplicate = await tx.query('SELECT sequence FROM wallet_private.results WHERE session_id = $1 AND round_id = $2', [current.sessionId, command.roundId]);
@@ -152,7 +154,7 @@ export class PostgresWalletStore {
             current.resultSequence = command.sequence;
             await tx.query(`INSERT INTO wallet_private.results (account_id, operation_id, session_id, sequence, round_id, ruleset_version, wagered_units, returned_units, facts)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`, [command.accountId, command.operationId, current.sessionId, command.sequence,
-              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : null]);
+              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):null]);
             break;
           }
           case 'request_return':

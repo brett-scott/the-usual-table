@@ -72,14 +72,14 @@ test('returning accounts edit their nickname from a keyboard accessible menu and
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('nickname-menu.png'), fullPage: true });
   await page.locator('header').getByRole('link').first().click(); await expect(page.getByRole('menu')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await expect(page.getByLabel('What should we call you?')).toHaveCount(0); await expect(page.getByRole('combobox', { name: /^Player icon/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page); await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await renamed.click(); await page.getByRole('menuitem', { name: 'Edit nickname' }).click(); await field.fill('River');
   await page.getByRole('button', { name: 'Save nickname' }).click(); await expect(page.getByRole('button', { name: 'Account menu for River' })).toBeVisible();
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
-  await page.getByRole('link', { name: 'Find a Table', exact: true }).click(); await expect(page.getByLabel('What should we call you?')).toHaveCount(0);
+  await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click(); await expect(page.getByLabel('What should we call you?')).toHaveCount(0);
   fixture.renameRemotely('From another device'); await page.reload();
   const remoteName = page.getByRole('button', { name: 'Account menu for From another device' });
   await expect(remoteName).toBeVisible();
@@ -115,7 +115,7 @@ test('profile icons follow the account into private lobbies and shared tables wi
   await expect(editor.getByLabel('Player icon')).toHaveValue('🦊'); await editor.getByLabel('Player icon').selectOption('🐱');
   await editor.getByRole('button', { name: 'Save profile' }).click(); await expect(account).toContainText('🐱');
   await page.reload(); await expect(account).toContainText('🐱');
-  await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'What should we call you?' })).toHaveCount(0); await expect(page.getByRole('combobox', { name: /^Player icon/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create a table', exact: true }).click();
   const creation = page.getByRole('dialog', { name: 'Create a table', exact: true });
@@ -125,7 +125,7 @@ test('profile icons follow the account into private lobbies and shared tables wi
   await expect(page.getByRole('region', { name: 'Your seat', exact: true }).getByRole('img', { name: 'Cat player icon' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
-  await page.getByRole('button', { name: 'Leave table', exact: true }).click(); await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.getByRole('button', { name: 'Leave table', exact: true }).click(); await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page); await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await expect(page.getByRole('region', { name: 'Your seat', exact: true }).getByRole('img', { name: 'Cat player icon' })).toBeVisible();
   const peer = await page.context().browser()!.newContext({ viewport: page.viewportSize()! }); const guest = await peer.newPage();
@@ -140,7 +140,7 @@ test('profile icons follow the account into private lobbies and shared tables wi
   await account.click(); await page.getByRole('menuitem', { name: 'Edit player icon' }).click();
   await editor.getByLabel('Player icon').selectOption(''); await editor.getByRole('button', { name: 'Save profile' }).click();
   await page.reload(); await expect(account).not.toContainText('🐱');
-  await page.getByRole('link', { name: 'Find a Table', exact: true }).click(); await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
+  await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click(); await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await expect(page.getByRole('region', { name: 'Your seat', exact: true }).getByRole('img')).toHaveCount(0);
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
@@ -161,7 +161,7 @@ test('the profile menu shows saved wallet units, honest unavailable states and r
   await expect(balance).not.toContainText('0 chips available'); await page.keyboard.press('Escape');
   fixture.setWalletMode('offline'); await account.click(); await expect(balance).toContainText('Unavailable');
   fixture.setWalletMode('ready'); await page.getByRole('menuitem', { name: 'Retry wallet balance' }).click(); await expect(balance).toContainText('1,234.56');
-  await page.keyboard.press('Escape'); await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.keyboard.press('Escape'); await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page); await expect(page.getByRole('region', { name: 'Game controls' })).toContainText('1,000');
   await account.click(); await expect(balance).toContainText('1,234.56');
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
@@ -176,7 +176,7 @@ test('a first wallet receives 10,000 chips once, retries safely and survives rel
   fixture.setWalletMode('new'); await page.getByRole('menuitem', { name: 'Retry wallet balance' }).click();
   await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(2);
   await page.reload(); await account.click(); await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(2);
-  await page.keyboard.press('Escape'); await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.keyboard.press('Escape'); await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await expect(page.getByRole('region', { name: 'Game controls' })).toContainText('1,000');

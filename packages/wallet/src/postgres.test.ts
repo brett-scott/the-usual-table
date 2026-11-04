@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import EmbeddedPostgres from 'embedded-postgres';
 import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { accountStatisticsSchema, allowanceSchema,progressionSchema,type WalletCommand } from '@casual/protocol';
+import { accountStatisticsSchema, allowanceSchema,progressionSchema,detailedStatisticsSchema,type WalletCommand,type GameId } from '@casual/protocol';
 import { PostgresWalletStore } from './index';
 import { postgresPoolCloser, postgresWalletDatabase } from './postgres';
 import { supabaseAuthFixture } from './supabaseFixture';
@@ -35,7 +35,7 @@ beforeAll(async () => {
   await pool.query(await readFile(new URL('../migrations/003_welcome_grant.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../migrations/004_backend_role.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../migrations/005_account_statistics.sql', import.meta.url), 'utf8'));
-  for(const file of ['006_daily_allowance.sql','007_detailed_statistics.sql','008_progression.sql']) await pool.query(await readFile(new URL(`../migrations/${file}`,import.meta.url),'utf8'));
+  for(const file of ['006_daily_allowance.sql','007_detailed_statistics.sql','008_progression.sql','009_crash.sql']) await pool.query(await readFile(new URL(`../migrations/${file}`,import.meta.url),'utf8'));
   const backendPassword = crypto.randomUUID();
   await pool.query(`CREATE ROLE wallet_backend_test LOGIN PASSWORD '${backendPassword}' IN ROLE usual_table_wallet_backend`);
   backendConnection = `postgresql://wallet_backend_test:${backendPassword}@127.0.0.1:${port}/postgres`;
@@ -54,7 +54,7 @@ async function account() {
   await store.execute({ contract: 1, operationId: crypto.randomUUID(), accountId, kind: 'claim_grant', source: 'welcome' });
   return accountId;
 }
-function allocate(accountId: string, gameId: 'blackjack' | 'baccarat' = 'blackjack', amountUnits = 20_000): Extract<WalletCommand, { kind: 'allocate' }> {
+function allocate(accountId: string, gameId: GameId = 'blackjack', amountUnits = 20_000): Extract<WalletCommand, { kind: 'allocate' }> {
   return { contract: 1, operationId: crypto.randomUUID(), accountId, kind: 'allocate', sessionId: crypto.randomUUID(),
     roomId: crypto.randomUUID(), gameId, funding: 'account', amountUnits };
 }
@@ -180,4 +180,21 @@ it('serializes concurrent allowance and reward claims across real PostgreSQL con
   const rewards=await Promise.all(Array.from({length:6},()=>rpc('usual_table_claim_rewards').then(v=>progressionSchema.parse(v))));
   expect(rewards.filter(v=>v.claimedUnits>0)).toHaveLength(1);expect((await store.getWallet(accountId)).availableUnits).toBe(before.availableUnits+20000);
   expect((await pool.query("SELECT count(*)::int AS n FROM wallet_private.ledger WHERE account_id=$1 AND kind='claim_reward'",[accountId])).rows[0].n).toBe(1);
+});
+it('deduplicates Crash results and rewards across independent backend connections with exact facts and returns',async()=>{
+  const accountId=await account();await pool.query('INSERT INTO auth.users(id) VALUES($1)',[accountId]);const base=postgresWalletDatabase(pool);
+  const restricted=new PostgresWalletStore({query:(sql,params)=>base.transaction(async tx=>{await tx.query('SET LOCAL ROLE usual_table_wallet_backend');return tx.query(sql,params);}),
+    transaction:work=>base.transaction(async tx=>{await tx.query('SET LOCAL ROLE usual_table_wallet_backend');return work(tx);})});
+  const allocated=(await restricted.execute(allocate(accountId,'crash',20000))).session!;
+  const active=(await restricted.execute({contract:1,accountId,operationId:crypto.randomUUID(),kind:'activate',sessionId:allocated.sessionId,expectedVersion:allocated.version})).session!;
+  const result:WalletCommand={contract:1,accountId,operationId:crypto.randomUUID(),kind:'settle',sessionId:active.sessionId,expectedVersion:active.version,roomId:active.roomId,gameId:'crash',funding:'account',sequence:1,roundId:'1',rulesetVersion:'crash-97-v1',wageredUnits:1000,returnedUnits:1500,
+    crash:{cashedOut:true,cashoutCents:150,crashCents:200,capped:false}};
+  const receipts=await Promise.all(Array.from({length:6},()=>restricted.execute(result)));expect(receipts.every(r=>r.session!.stackUnits===20500)).toBe(true);
+  const rpc=(name:string)=>base.transaction(async tx=>{await tx.query("SELECT set_config('request.jwt.claims',$1,true)",[JSON.stringify({sub:accountId,role:'authenticated',amr:[{method:'oauth'}]})]);await tx.query('SET LOCAL ROLE authenticated');return(await tx.query<{value:unknown}>(`SELECT public.${name}() AS value`)).rows[0]!.value;});
+  const details=detailedStatisticsSchema.parse(await rpc('usual_table_detailed_statistics_v2'));expect(details.crash).toEqual({trackedRounds:'1',cashouts:'1',crashes:'0',highestCashoutCents:'150'});
+  const claimed=await Promise.all(Array.from({length:6},()=>rpc('usual_table_claim_rewards').then(v=>progressionSchema.parse(v))));expect(claimed.filter(v=>v.claimedUnits>0)).toHaveLength(1);
+  expect(progressionSchema.parse(await rpc('usual_table_progression'))).toMatchObject({xp:'10',readyRewardUnits:'0'});
+  const settled=receipts[0]!.session!;const returning=(await restricted.execute({contract:1,accountId,operationId:crypto.randomUUID(),kind:'request_return',sessionId:settled.sessionId,expectedVersion:settled.version,finalSequence:1,finalStackUnits:20500})).session!;
+  await restricted.execute({contract:1,accountId,operationId:crypto.randomUUID(),kind:'complete_return',sessionId:returning.sessionId,expectedVersion:returning.version});
+  expect(await store.getWallet(accountId)).toMatchObject({availableUnits:120500,atTablesUnits:0,pendingReturnUnits:0});
 });

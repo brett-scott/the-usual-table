@@ -50,6 +50,8 @@ For a project at `https://owner.github.io/the-usual-table/`, use `/the-usual-tab
 
 ## Deploy in order
 
+For **Crash**, apply [migration 009](packages/wallet/migrations/009_crash.sql) after the prior wallet migrations, or rerun the current [wallet installer](supabase/wallet-setup.sql). Then deploy Worker before Pages; the Pages gate requires `crashProtocol: 1`. Existing balances, claims, progression dates and Blackjack rooms are preserved. No new variable, secret or Durable Object binding/migration is needed. Follow the [Crash live acceptance steps](CRASH.md#activate-on-the-live-site).
+
 For the shared game adapter update, deploy Worker before Pages. The Pages gate requires `gameAdapterProtocol: 1` because the frontend now uses game-scoped creation and invitation metadata. This refactor adds no SQL migration, secret, binding or Durable Object migration tag, and retains existing Blackjack storage and wallet units. See [adapter compatibility and rollout](GAME_ADAPTERS.md#compatibility-and-rollout).
 
 For daily allowance, XP, achievements and detailed statistics, apply the current [wallet installer](supabase/wallet-setup.sql) first (additive migrations 006–008), then deploy Worker and Pages. The Pages gate requires `accountRewardsProtocol: 1`. Installing migration 008 establishes the progression start time; reruns preserve it. See [account rewards](ACCOUNT_REWARDS.md) for the approved rules, compatibility and live checks.
@@ -88,7 +90,7 @@ To validate production Worker configuration offline, set the documented Worker v
 
 ## Production smoke test
 
-- Check the landing page shows Blackjack as playable and Baccarat, Roulette and Texas Hold'em as coming soon. Open Blackjack, create a public table and find/join it from an independent browser's **Find a table** page. A private table must stay absent from that list. Verify seat counts, full-table removal and stale-listing recovery; invitation links remain usable for either type.
+- Check the landing page shows Blackjack and Crash as playable, with the six remaining games coming soon. For each playable game, create a public table and find/join it from an independent browser's **Find a table** page; private tables must stay absent. Verify seat counts, per-game separation, full-table removal and stale-listing recovery. Follow the additional [Crash wallet/reconnect checks](CRASH.md#activate-on-the-live-site).
 - Open the actual Pages URL: title, scripts, styles and card assets load with no 404s. Select Find a Table, create a private one-player lobby, finish a round and refresh under the repository path. Confirm the home tile has one entry action, public discovery and public/private creation are available, friends can join later and the desktop table/controls/chat fit without page scrolling.
 - Create an online room; open its copied `#/room/…` invitation in independent browser profiles/devices. Play with four guests; confirm a fifth is rejected and duplicate names remain distinct seats.
 - Choose different optional emoji Player icons when creating/joining. Verify every guest sees the correct seat icons on desktop and phone, reload restores them, and skipping the picker uses the player's initial.

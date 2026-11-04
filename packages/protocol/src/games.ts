@@ -10,7 +10,7 @@ export const GAME_CATALOG = [
   { id: 'keno', name: 'Keno', symbol: '#', badge: '7', status: 'coming-soon', description: 'Pick your numbers. See what the draw brings.' },
   { id: 'duck-race', name: 'Duck Race', symbol: '🦆', badge: 'GO', status: 'coming-soon', description: 'Pick a duck. Follow the race with your friends.' },
   { id: 'penguin-cross', name: 'Penguin Cross', symbol: '🐧', badge: '→', status: 'coming-soon', description: 'A little timing. A little nerve. A new game ahead.' },
-  { id: 'crash', name: 'Crash', symbol: '↗', badge: '×', status: 'coming-soon', description: 'Watch the multiplier. Choose your moment.' },
+  { id: 'crash', name: 'Crash', symbol: '↗', badge: '×', status: 'available', description: 'Watch the multiplier. Choose your moment.' },
 ] as const satisfies ReadonlyArray<{ id: GameId; name: string; symbol: string; badge: string; status: 'available' | 'coming-soon'; description: string }>;
 export const lobbyVisibilitySchema = z.enum(['public', 'private']);
 export type LobbyVisibility = z.infer<typeof lobbyVisibilitySchema>;

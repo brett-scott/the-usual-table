@@ -27,12 +27,12 @@ async function expectCatalogFits(page: Page) {
 
 test('game hub offers Blackjack and clearly marks future games without changing existing invitations', async ({ page }, testInfo) => {
   await page.goto('./'); await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
-  for (const name of ['Baccarat', 'Roulette', 'Texas Hold’em', 'Keno', 'Duck Race', 'Penguin Cross', 'Crash']) await expect(page.getByRole('article', { name, exact: true })).toContainText('COMING SOON');
+  for (const name of ['Baccarat', 'Roulette', 'Texas Hold’em', 'Keno', 'Duck Race', 'Penguin Cross']) await expect(page.getByRole('article', { name, exact: true })).toContainText('COMING SOON');
   const catalog = page.getByRole('region', { name: 'Game catalog' });
   await expectCatalogFits(page);
-  await expect(catalog.getByRole('link')).toHaveCount(1);
+  await expect(catalog.getByRole('link')).toHaveCount(2);
   await page.screenshot({ path: testInfo.outputPath('game-hub.png'), fullPage: true });
-  await page.getByRole('link', { name: 'Find a Table', exact: true }).click();
+  await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Find a Table', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /practice/i })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await expect(page.getByLabel('What should we call you?')).toBeVisible();
@@ -64,7 +64,7 @@ test('public table browser lists a real room and joins through the invitation fl
     await expect(page.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
     const invite = page.url();
     await peer.goto(invite); await expect(peer.getByLabel('What should we call you?')).toBeVisible();
-    await peer.getByRole('link', { name: 'All games' }).click(); await peer.getByRole('link', { name: 'Find a Table', exact: true }).click();
+    await peer.getByRole('link', { name: 'All games' }).click(); await peer.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
     await expect(peer.getByRole('heading', { name: 'Find a Table', exact: true })).toBeVisible();
     await expect(peer.getByRole('link', { name: `Join ${hostName}’s table`, exact: true })).toBeVisible();
     if (testInfo.project.name !== 'desktop') await expectOneScreen(peer);
