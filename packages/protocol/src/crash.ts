@@ -7,6 +7,8 @@ export const CRASH_RULES = {capacity:8,minPlayers:1,guestStartingChips:1000,minB
 export const CRASH_BETTING_MS=10_000;
 export const CRASH_RESULTS_MS=5_000;
 export const CRASH_GROWTH_MS=10_000;
+export const CRASH_PROGRESS_CAPABILITY='usual-crash-progress-v1';
+export const CRASH_PROGRESS_INTERVAL_MS=250;
 export const CRASH_MAX_MULTIPLIER=10_000; // Integer hundredths: 10,000 = 100.00x.
 export const crashBetSchema=z.number().int().min(1000).max(100000).multipleOf(1000);
 export const crashTargetSchema=z.number().int().min(101).max(CRASH_MAX_MULTIPLIER);
@@ -27,6 +29,7 @@ export const crashSnapshotSchema=z.object({gameId:z.literal('crash'),roomId:z.st
   claimVersion:z.number().int().nonnegative().safe(),managerId:z.string(),roundId:z.number().int().nonnegative().safe(),phase:z.enum(['waiting','betting','running','results']),
   bettingDeadline:z.number().int().nonnegative().safe().nullable(),startedAt:z.number().int().nonnegative().safe().nullable(),resultsDeadline:z.number().int().nonnegative().safe().nullable(),
   outcome:crashOutcomeSchema.nullable(),history:crashHistorySchema,
+  progress:z.object({multiplierCents:z.number().int().min(100).max(CRASH_MAX_MULTIPLIER),elapsedMs:z.number().int().nonnegative().safe(),sampledAt:z.number().int().nonnegative().safe()}).strict().nullable().optional(),
   players:z.array(crashPlayerSchema.extend({connected:z.boolean(),leaving:z.boolean()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','CashOut','Leave','Refill'])),
   wallet:z.object({status:z.string(),error:z.string().nullable()}).optional(),
 }).strict();

@@ -13,7 +13,8 @@ import { verifyPlayingAccount } from './accountPlay';
 import { errorResponse, hashSecret, originAllowed, randomSecret, readJson, secureRandomIndex } from './security';
 import type { Env } from './env';
 
-interface Attachment { playerId: string; controllerId: string; chat?: boolean; accountId?: string; gameAdapter?:boolean }
+interface Attachment { playerId: string; controllerId: string; chat?: boolean; accountId?: string; gameAdapter?:boolean;capabilities?:string[] }
+const publicCapabilities=(values:readonly string[])=>values.filter(value=>/^usual-[a-z-]+-v\d+$/.test(value)&&value.length<=64).slice(0,8);
 const entryFields = { name: displayNameSchema, icon: playerIconSchema.optional(), funding: z.enum(['guest', 'account']).optional(),
   buyInUnits: z.number().int().min(1).max(9_000_000_000_000).optional(), entryId: z.string().uuid().transform(value => value.toLowerCase()).optional() };
 const validFunding = (body: { funding?: string; buyInUnits?: number; entryId?: string }) => body.funding === 'account'
@@ -29,11 +30,11 @@ export class TableRoom extends DurableObject<Env> {
     assertRule(game.accountFunding==='house','GAME_UNAVAILABLE','Saved chips are not available for this game yet.');
     assertRule(body.buyInUnits!==undefined&&body.buyInUnits>=game.minBuyInUnits&&body.buyInUnits%game.buyInStepUnits===0,'INVALID_NAME','Choose a valid buy-in for this game.');
   }
-  private snapshot(room:HostedRoom,playerId:string){return this.game(room).snapshot(room,playerId);}
+  private snapshot(room:HostedRoom,playerId:string,capabilities:readonly string[]=[]){return this.game(room).snapshot(room,playerId,{now:Date.now(),capabilities});}
   private metadata(room:HostedRoom){const adapter=this.game(room);return {gameId:adapter.gameId,adapterVersion:adapter.version};}
   private sendSnapshot(ws:WebSocket,room:HostedRoom) {
     const adapter=this.game(room);const attachment=ws.deserializeAttachment() as Attachment;
-    const snapshot=adapter.snapshot(room,attachment.playerId);
+    const snapshot=this.snapshot(room,attachment.playerId,attachment.capabilities);
     this.send(ws,attachment.gameAdapter?{type:'game-snapshot',protocol:1,gameId:adapter.gameId,adapterVersion:adapter.version,snapshot,serverTime:Date.now()}
       :{type:'snapshot',snapshot,serverTime:Date.now()});
   }
@@ -146,6 +147,7 @@ export class TableRoom extends DurableObject<Env> {
       try {
         assertRule(originAllowed(request, this.env.ALLOWED_ORIGINS, request.headers.get('Upgrade')?.toLowerCase() === 'websocket'), 'ORIGIN_DENIED', 'This website is not allowed to connect.');
         const url = new URL(request.url); const operation = url.pathname.split('/').at(-1);
+        const capabilities=publicCapabilities((url.searchParams.get('capabilities')??'').split(','));
         if (url.pathname === '/api/v1/rooms' && request.method === 'POST') {
           const game=gameAdapters.available(request.headers.get('X-Game-Id')??'blackjack');
           const body = createBody.safeParse(await readJson(request)); assertRule(body.success, 'INVALID_NAME', 'Enter a display name of 1–24 characters and choose public or private.');
@@ -158,7 +160,7 @@ export class TableRoom extends DurableObject<Env> {
             assertRule(own, 'ACCOUNT_REQUIRED', 'This table entry belongs to another account.');
             assertRule(!room.creation || room.creation.buyInUnits === body.data.buyInUnits && room.creation.visibility === (body.data.visibility ?? 'private'),
               'ENTRY_CONFLICT', `This entry already used a ${room.creation?.visibility} table and ${(room.creation?.buyInUnits ?? 0) / 100} chips. Retry those settings.`);
-            return Response.json({ ...this.metadata(room), session: { inviteId: room.id, playerId: own, credential: randomSecret(), funding: 'account' }, snapshot: this.snapshot(room, own) });
+            return Response.json({ ...this.metadata(room), session: { inviteId: room.id, playerId: own, credential: randomSecret(), funding: 'account' }, snapshot: this.snapshot(room, own,capabilities) });
           }
           assertRule(!existing, 'INVALID_REQUEST', 'This table already exists.');
           const credential = randomSecret(); const playerId = crypto.randomUUID(); const inviteId = request.headers.get('X-Room-Id')!;
@@ -169,7 +171,7 @@ export class TableRoom extends DurableObject<Env> {
             room.creation = { entryId: body.data.entryId!, buyInUnits: body.data.buyInUnits!, visibility: room.visibility! };
           }
           await this.save(room);
-          return Response.json({ ...this.metadata(room), session: { inviteId, playerId, credential, ...(account ? { funding: 'account' } : {}) }, snapshot: this.snapshot(room, playerId) }, { status: 201 });
+          return Response.json({ ...this.metadata(room), session: { inviteId, playerId, credential, ...(account ? { funding: 'account' } : {}) }, snapshot: this.snapshot(room, playerId,capabilities) }, { status: 201 });
         }
         const room = await this.catchUp(await this.load());
         // Closed rooms may still be settling hands/returns internally. Old invitations cannot revive them.
@@ -186,7 +188,7 @@ export class TableRoom extends DurableObject<Env> {
             const own = Object.keys(room.members).find(id => room.members[id]!.account?.id === account.id);
             if (own) {
               assertRule(!room.members[own]!.leaveAfterRound, 'INVALID_ACTION', 'Your previous hand is finishing. Wait for your chips to return.');
-              return Response.json({ ...this.metadata(room), session: { inviteId: room.id, playerId: own, credential: randomSecret(), funding: 'account' }, snapshot: this.snapshot(room, own) });
+              return Response.json({ ...this.metadata(room), session: { inviteId: room.id, playerId: own, credential: randomSecret(), funding: 'account' }, snapshot: this.snapshot(room, own,capabilities) });
             }
           }
           const game=this.game(room);const players=game.players(room);
@@ -199,7 +201,7 @@ export class TableRoom extends DurableObject<Env> {
           let next = room;
           if (account) { room.members[playerId]!.account = account; next = this.game(room).fund(room, playerId, account.id, body.data.buyInUnits!, body.data.entryId!); }
           next.revision++; next.lastActivity = Date.now(); await this.save(next); this.broadcast(next);
-          return Response.json({ ...this.metadata(next), session: { inviteId: next.id, playerId, credential, ...(account ? { funding: 'account' } : {}) }, snapshot: this.snapshot(next, playerId) }, { status: 201 });
+          return Response.json({ ...this.metadata(next), session: { inviteId: next.id, playerId, credential, ...(account ? { funding: 'account' } : {}) }, snapshot: this.snapshot(next, playerId,capabilities) }, { status: 201 });
         }
         if (operation === 'socket' && request.method === 'GET') {
           assertRule(request.headers.get('Upgrade')?.toLowerCase() === 'websocket', 'INVALID_REQUEST', 'A WebSocket connection is required.');
@@ -220,7 +222,7 @@ export class TableRoom extends DurableObject<Env> {
           await this.save(room);
           for (const previous of this.ctx.getWebSockets(playerId)) { this.send(previous, { type: 'replaced', message: 'This seat is now controlled by another tab.' }); previous.close(4001, 'Seat opened in another tab'); }
           const pair = new WebSocketPair(); const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
-          server.serializeAttachment({ playerId, controllerId, chat: protocols.includes(CHAT_CAPABILITY),gameAdapter:protocols.includes(GAME_ADAPTER_CAPABILITY), ...(account ? { accountId: account.id } : {}) } satisfies Attachment);
+          server.serializeAttachment({ playerId, controllerId, chat: protocols.includes(CHAT_CAPABILITY),gameAdapter:protocols.includes(GAME_ADAPTER_CAPABILITY),capabilities:publicCapabilities(protocols), ...(account ? { accountId: account.id } : {}) } satisfies Attachment);
           this.ctx.acceptWebSocket(server, [playerId]); this.send(server, { type: 'connected', controllerId, serverTime: Date.now() }); this.broadcast(room);
           await this.chatHistory(server);
           return new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': 'casual-v1' } });
@@ -232,7 +234,7 @@ export class TableRoom extends DurableObject<Env> {
           assertRule(room.members[playerId]!.account && room.members[playerId]!.controllerId === body.data.controllerId, 'SESSION_REPLACED', 'This connection no longer controls your account seat.');
           await this.save(room); return Response.json({ expiresAt: room.members[playerId]!.account!.expiresAt });
         }
-        if ((operation === 'resume' && request.method === 'POST') || (operation === 'snapshot' && request.method === 'GET')) return Response.json({ ...this.metadata(room), snapshot: this.snapshot(room, playerId) });
+        if ((operation === 'resume' && request.method === 'POST') || (operation === 'snapshot' && request.method === 'GET')) return Response.json({ ...this.metadata(room), snapshot: this.snapshot(room, playerId,capabilities) });
         if (operation === 'ticket' && request.method === 'POST') {
           const parsed = ticketBody.safeParse(await readJson(request));
           assertRule(parsed.success, 'CLIENT_INCOMPATIBLE', 'Refresh the app before reconnecting to this table.');
@@ -255,9 +257,9 @@ export class TableRoom extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
     return this.exclusive(async () => {
       let commandId: string | undefined; let room: HostedRoom | undefined; let playerId: string | undefined;
-      let authenticated = false;
+      let authenticated = false;let capabilities:string[]|undefined;
       try {
-        const attachment = ws.deserializeAttachment() as Attachment; playerId = attachment.playerId;
+        const attachment = ws.deserializeAttachment() as Attachment; playerId = attachment.playerId;capabilities=attachment.capabilities;
         room = await this.catchUp(await this.load());
         assertRule(room.members[playerId]?.controllerId === attachment.controllerId && room.members[playerId]?.connected, 'SESSION_INVALID', 'This connection no longer controls your seat.');
         const account = room.members[playerId]!.account;
@@ -308,7 +310,7 @@ export class TableRoom extends DurableObject<Env> {
       } catch (error) {
         const known = error instanceof GameError;
         this.send(ws, { type: 'error', commandId, code: known ? error.code : 'INTERNAL_ERROR', message: known ? error.message : 'Your action could not be completed. Please reconnect.',
-          snapshot: authenticated && room && playerId && room.members[playerId] ? this.snapshot(room, playerId) : undefined });
+          snapshot: authenticated && room && playerId && room.members[playerId] ? this.snapshot(room, playerId,capabilities) : undefined });
       }
     });
   }

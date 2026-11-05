@@ -1,19 +1,19 @@
 import { SELF,evictDurableObject,runInDurableObject,runDurableObjectAlarm } from 'cloudflare:test';
 import { expect,it } from 'vitest';
-import { GAME_ADAPTER_CAPABILITY,type CrashAction,type CrashSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
+import { GAME_ADAPTER_CAPABILITY,CRASH_PROGRESS_CAPABILITY,CRASH_PROGRESS_INTERVAL_MS,crashSnapshotSchema,type CrashAction,type CrashSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
 import { targetTime } from '@casual/crash';
-import { crashRoomAdapter,restoreCrashRoom,type CrashRoom } from '../src/games/crash';
+import { crashRoomAdapter,crashSnapshot,restoreCrashRoom,type CrashRoom } from '../src/games/crash';
 import { bindings,http,origin } from './helpers';
 
 async function create(visibility='private'){
   const result=await SELF.fetch('https://example.test/api/v1/games/crash/rooms',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'Pilot',visibility})});
   expect(result.status).toBe(201);return result.json<TableSessionResponse<CrashSnapshot>>();
 }
-async function view(session:GuestSession){const response=await http(`/${session.inviteId}/snapshot`,session,undefined,'GET');expect(response.status).toBe(200);return(await response.json<{snapshot:CrashSnapshot}>()).snapshot;}
+async function view(session:GuestSession,confirmed=false){const response=await http(`/${session.inviteId}/snapshot${confirmed?`?capabilities=${CRASH_PROGRESS_CAPABILITY}`:''}`,session,undefined,'GET');expect(response.status).toBe(200);return(await response.json<{snapshot:CrashSnapshot}>()).snapshot;}
 async function edit(invite:string,change:(r:CrashRoom)=>void){return runInDurableObject(bindings.ROOMS.getByName(invite),async(_instance,state)=>{const room=(await state.storage.get<CrashRoom>('room'))!;change(room);await state.storage.put('room',room);});}
 async function connect(session:GuestSession){
   const initial=await view(session);const ticket=await http(`/${session.inviteId}/ticket`,session,{claimId:crypto.randomUUID(),claimVersion:initial.claimVersion});
-  const result=await SELF.fetch(`https://example.test/api/v1/rooms/${session.inviteId}/socket`,{headers:{Origin:origin,Upgrade:'websocket','Sec-WebSocket-Protocol':`casual-v1, ticket.${(await ticket.json<{ticket:string}>()).ticket}, ${GAME_ADAPTER_CAPABILITY}, casual-chat-v1`}});
+  const result=await SELF.fetch(`https://example.test/api/v1/rooms/${session.inviteId}/socket`,{headers:{Origin:origin,Upgrade:'websocket','Sec-WebSocket-Protocol':`casual-v1, ticket.${(await ticket.json<{ticket:string}>()).ticket}, ${GAME_ADAPTER_CAPABILITY}, ${CRASH_PROGRESS_CAPABILITY}, casual-chat-v1`}});
   expect(result.status).toBe(101);const ws=result.webSocket!;ws.accept();
   const events:Record<string,unknown>[]=[];ws.addEventListener('message',event=>{events.push(JSON.parse(String(event.data)));});
   return{ws,events,async send(action:CrashAction,overrides:Record<string,unknown>={}){
@@ -80,4 +80,33 @@ it('restores completed history from this lobby only after eviction and exposes i
   expect((await view(other.session)).history).toEqual([]);
   const response=await http(`/${first.session.inviteId}/join`,undefined,{name:'Late watcher'});expect(response.status).toBe(201);
   expect((await response.json<TableSessionResponse<CrashSnapshot>>()).snapshot.history).toEqual(history);
+});
+it('clamps confirmed public progress before the crash even after slow serialization and keeps legacy snapshots compatible',()=>{
+  const room=crashRoomAdapter.create({roomId:'a'.repeat(32),player:{id:'one',name:'One',seat:0},credentialHash:'b'.repeat(64),now:1000,random:()=>0});
+  for(const crashCents of [101,200,298,10000]){
+    room.engine.phase='running';room.engine.startedAt=1000;room.engine.outcome={multiplierCents:crashCents,capped:false};room.engine.deadline=targetTime(1000,crashCents);
+    for(const now of [1000,2000,room.engine.deadline,room.engine.deadline+60000]){
+      const current=crashSnapshot(room,'one',{now,capabilities:[CRASH_PROGRESS_CAPABILITY]});
+      expect(current.progress!.multiplierCents).toBeLessThan(crashCents);expect(current.progress!.sampledAt).toBe(now);expect(current.outcome).toBeNull();expect(current).not.toHaveProperty('deadline');
+      expect(crashSnapshotSchema.safeParse(current).success).toBe(true);
+    }
+    const legacy=crashSnapshot(room,'one',{now:room.engine.deadline+1000,capabilities:[]});expect(legacy).not.toHaveProperty('progress');
+    expect(crashSnapshotSchema.omit({progress:true}).strict().safeParse(legacy).success).toBe(true);
+  }
+});
+it('publishes periodic confirmed snapshots through the existing alarm without revealing the crash deadline',async()=>{
+  const initial=await create();const a=await connect(initial.session);
+  try{
+    await a.send({type:'StartBetting'});await a.send({type:'PlaceBet',amountUnits:1000,autoCashoutCents:null});
+    await edit(initial.session.inviteId,r=>{r.engine.phase='running';r.engine.startedAt=Date.now()-1000;r.engine.outcome={multiplierCents:298,capped:false};r.engine.deadline=targetTime(r.engine.startedAt,298);r.lastActivity=Date.now()-CRASH_PROGRESS_INTERVAL_MS;});
+    const legacy=await view(initial.session);expect(legacy).not.toHaveProperty('progress');
+    const current=await view(initial.session,true);expect(current.progress!.multiplierCents).toBeGreaterThan(100);
+    await expect.poll(async()=>{await runDurableObjectAlarm(bindings.ROOMS.getByName(initial.session.inviteId));
+      const snapshots=a.events.filter(e=>e.type==='game-snapshot').map(e=>e.snapshot as CrashSnapshot);
+      return snapshots.at(-1)?.progress?.multiplierCents??0;
+    }).toBeGreaterThan(current.progress!.multiplierCents);
+    const alarm=await runInDurableObject(bindings.ROOMS.getByName(initial.session.inviteId),(_instance,state)=>state.storage.getAlarm());expect(alarm).not.toBeNull();expect(alarm!).toBeLessThanOrEqual(Date.now()+CRASH_PROGRESS_INTERVAL_MS+5);
+    for(const event of a.events.filter(e=>e.type==='game-snapshot')){const snapshot=event.snapshot as CrashSnapshot;if(snapshot.phase==='running'){expect(snapshot.progress!.multiplierCents).toBeLessThan(298);expect(snapshot.outcome).toBeNull();}}
+    await evictDurableObject(bindings.ROOMS.getByName(initial.session.inviteId));expect((await view(initial.session,true)).progress).toBeDefined();
+  }finally{a.ws.close();}
 });

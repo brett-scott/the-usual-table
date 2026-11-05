@@ -99,3 +99,48 @@ test('the lobby shows all ten latest crash values newest first without clipping 
   await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await expect(history.getByRole('listitem')).toHaveText(expected);await checkHistory();
   if(info.project.name==='desktop')for(const size of [{width:1280,height:720},{width:1024,height:768}]){await page.setViewportSize(size);await checkHistory();}
 });
+test('confirmed flight values cannot overshoot a delayed crash while the graph stays visible with reduced motion',async({page},info)=>{
+  const fixture=await crashFixture(page,{players:8});await page.emulateMedia({reducedMotion:'reduce'});await open(page);
+  if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});
+  await page.getByRole('button',{name:'Start rounds'}).click();const timer=page.getByRole('timer',{name:'Betting countdown'});
+  await expect(timer).toContainText('10s');expect((await timer.locator('strong').boundingBox())!.height).toBeGreaterThanOrEqual(36);
+  await page.getByRole('button',{name:'Place bet',exact:true}).click();fixture.advance(7000);await expect(timer).toContainText('3s');await expect(timer).toHaveAttribute('data-urgent','true');
+  const graph=page.getByRole('img',{name:'Crash flight graph'});await expect(graph).toBeVisible();const area=(await graph.boundingBox())!;expect(area.width).toBeGreaterThan(80);expect(area.height).toBeGreaterThan(40);
+  await fits(page);await page.screenshot({path:info.outputPath('crash-prominent-countdown.png')});
+  fixture.fly(298);fixture.advance(10900);const multiplier=page.getByLabel('Current multiplier',{exact:true});await expect(multiplier).toHaveText('2.97×');
+  await page.evaluate(()=>{
+    const node=document.querySelector('[aria-label="Current multiplier"]')!;const seen:string[]=[];
+    (window as unknown as {crashSeen:string[]}).crashSeen=seen;new MutationObserver(()=>{seen.push(node.textContent??'');}).observe(node,{childList:true,characterData:true,subtree:true});
+  });
+  fixture.holdUpdates();fixture.finish();await page.clock.install();await page.clock.fastForward(5000);
+  await expect(multiplier).toHaveText('2.97×');await expect(graph).toHaveAttribute('data-confirmed-cents','297');
+  fixture.resumeUpdates();await expect(multiplier).toHaveText('2.98×');await expect(graph).toHaveAttribute('data-confirmed-cents','298');
+  const seen=await page.evaluate(()=>(window as unknown as {crashSeen:string[]}).crashSeen);
+  expect(seen.length).toBeGreaterThan(0);for(const value of seen)expect(Number.parseFloat(value)).toBeLessThanOrEqual(2.98);
+  await fits(page);await page.screenshot({path:info.outputPath('crash-confirmed-result-reduced-motion.png')});
+});
+test('the flight curves smoothly and zooms out continuously as confirmed samples arrive',async({page},info)=>{
+  test.setTimeout(60000);const fixture=await crashFixture(page,{players:8});await page.clock.install();await page.emulateMedia({reducedMotion:'no-preference'});await open(page);
+  if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});
+  await page.getByRole('button',{name:'Start rounds'}).click();await page.getByRole('button',{name:'Place bet',exact:true}).click();fixture.fly(20000);
+  await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','running');
+  await page.evaluate(()=>{
+    const frames:{at:number;x:number;y:number;cents:number;maxTime:number;maxValue:number}[]=[];
+    const recording={active:true,frames};(window as unknown as {crashAnimation:typeof recording}).crashAnimation=recording;
+    const sample=()=>{const graph=document.querySelector('svg[data-rendered-cents]');const path=graph?.querySelector('[data-flight-line]') as SVGPathElement|null;
+      if(graph&&path){const tip=path.getPointAtLength(path.getTotalLength());frames.push({at:performance.now(),x:tip.x,y:tip.y,cents:Number(graph.getAttribute('data-rendered-cents')),maxTime:Number(graph.getAttribute('data-time-domain')),maxValue:Number(graph.getAttribute('data-multiplier-domain'))});}
+      if(recording.active)requestAnimationFrame(sample);};requestAnimationFrame(sample);
+  });
+  for(let i=0;i<80;i++){await page.clock.runFor(250);fixture.advance(250);await expect(page.locator('[data-revision]')).toHaveAttribute('data-revision',String(fixture.state().revision));}
+  const frames=await page.evaluate(()=>{const recording=(window as unknown as {crashAnimation:{active:boolean;frames:{at:number;x:number;y:number;cents:number;maxTime:number;maxValue:number}[]}}).crashAnimation;recording.active=false;return recording.frames;});
+  expect(frames.length).toBeGreaterThan(500);expect(new Set(frames.map(f=>f.cents.toFixed(4))).size).toBeGreaterThan(240);expect(frames.some(f=>!Number.isInteger(f.cents))).toBe(true);
+  const ceiling=fixture.state().progress!.multiplierCents;
+  for(let i=1;i<frames.length;i++){
+    const before=frames[i-1]!;const after=frames[i]!;const dt=after.at-before.at;
+    expect(after.cents).toBeGreaterThanOrEqual(before.cents);expect(after.cents).toBeLessThanOrEqual(ceiling);
+    expect(after.maxTime).toBeGreaterThanOrEqual(before.maxTime);expect(after.maxValue).toBeGreaterThanOrEqual(before.maxValue);
+    expect(Math.hypot(after.x-before.x,after.y-before.y),`curve endpoint must not jump when the camera scale expands: ${JSON.stringify({before,after})}`).toBeLessThanOrEqual(Math.max(3,dt*.15));
+  }
+  await fits(page);await page.screenshot({path:info.outputPath('crash-smooth-zoom.png')});
+  fixture.holdUpdates();await page.clock.runFor(1000);const graph=page.getByRole('img',{name:'Crash flight graph'});const stopped=await graph.getAttribute('data-rendered-cents');await page.clock.runFor(3000);await expect(graph).toHaveAttribute('data-rendered-cents',stopped!);
+});

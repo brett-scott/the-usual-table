@@ -18,6 +18,7 @@ export interface TableClient<S,A> {
 }
 export interface GameClientAdapter<S,A> {
   gameId:GameId;version:number;snapshotSchema:z.ZodType<S>;entry:GameEntryRules;
+  capabilities?:readonly string[];
   identity(snapshot:S):{playerId:string;roomId:string|undefined;revision:number;claimVersion:number;gameId?:GameId};
   command(snapshot:S,action:A,playerId:string,id:string):unknown;
 }

@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { GameError } from '@casual/engine';
-import { newCrash,beginBetting,placeBet,cashOut,advanceCrash,nextCrashAlarm,validCrashState,crashStateSchema,CrashError,type CrashState } from '@casual/crash';
-import { CRASH_RULES,crashCommandSchema,type CrashSnapshot,type CrashAction } from '@casual/protocol';
+import { newCrash,beginBetting,placeBet,cashOut,advanceCrash,nextCrashAlarm,validCrashState,crashStateSchema,CrashError,multiplierAt,targetTime,type CrashState } from '@casual/crash';
+import { CRASH_RULES,CRASH_PROGRESS_CAPABILITY,CRASH_PROGRESS_INTERVAL_MS,crashCommandSchema,type CrashSnapshot,type CrashAction } from '@casual/protocol';
 import { newMember,disconnectMember } from '../roomMembership';
 import { fundedSeat,roomWalletSchema,walletHasFunds } from '../tableWallet';
 import { crashFunding,crashWalletReady,recordCrashResult,sealCrashSeat,flushCrashWallet,validCrashWallet } from './crashWallet';
-import type { GameRoomAdapter,HostedRoom,SeatIdentity } from './contracts';
+import type { GameRoomAdapter,HostedRoom,SeatIdentity,SnapshotContext } from './contracts';
 
 export interface CrashRoom extends HostedRoom {schema:1;gameId:'crash';adapterVersion:1;engine:CrashState}
 function requireRule(value:unknown,code:string,message:string):asserts value{if(!value)throw new GameError(code,message);}
@@ -21,11 +21,17 @@ export function crashActions(room:CrashRoom,id:string):CrashAction['type'][] {
   }
   return actions;
 }
-export function crashSnapshot(room:CrashRoom,id:string):CrashSnapshot{
+export function crashSnapshot(room:CrashRoom,id:string,context?:SnapshotContext):CrashSnapshot{
   requireRule(room.members[id],'SESSION_INVALID','Your seat is no longer available.');const e=room.engine;const seat=fundedSeat(room,id);
+  let progress:CrashSnapshot['progress']=null;
+  if(e.phase==='running'&&context){
+    // Serialization can follow slow persistence/wallet delivery. Never publish past the private crash, even then.
+    const multiplierCents=Math.min(multiplierAt(e.startedAt!,context.now),Math.max(100,e.outcome!.multiplierCents-1));
+    progress={multiplierCents,elapsedMs:targetTime(0,multiplierCents),sampledAt:context.now};
+  }
   return{gameId:'crash',roomId:room.id,you:id,revision:room.revision,claimVersion:room.members[id]!.claimVersion,managerId:room.managerId,roundId:e.roundId,phase:e.phase,
     bettingDeadline:e.phase==='betting'?e.deadline:null,startedAt:e.startedAt,resultsDeadline:e.phase==='results'?e.deadline:null,
-    outcome:e.phase==='results'?e.outcome:null,history:e.history,players:e.players.map(p=>({...p,connected:room.members[p.id]!.connected,leaving:room.members[p.id]!.leaveAfterRound})),
+    outcome:e.phase==='results'?e.outcome:null,history:e.history,...(context?.capabilities.includes(CRASH_PROGRESS_CAPABILITY)?{progress}:{}),players:e.players.map(p=>({...p,connected:room.members[p.id]!.connected,leaving:room.members[p.id]!.leaveAfterRound})),
     legalActions:crashActions(room,id),...(seat?{wallet:{status:seat.status,error:room.wallet?.error??null}}:{})};
 }
 export function collectCrashSeats(room:CrashRoom,now:number){
@@ -88,7 +94,8 @@ export const crashRoomAdapter:GameRoomAdapter<CrashRoom>={
   },
   expire(previous,random,now){
     const engine=advanceCrash(previous.engine,now,random);const resultsOver=previous.engine.phase==='results'&&previous.engine.deadline!==null&&now>=previous.engine.deadline;
-    if(engine===previous.engine&&!resultsOver)return previous;
+    const progressDue=engine.phase==='running'&&Object.values(previous.members).some(m=>m.connected&&!m.leaveAfterRound)&&now>=previous.lastActivity+CRASH_PROGRESS_INTERVAL_MS;
+    if(engine===previous.engine&&!resultsOver&&!progressDue)return previous;
     const room=structuredClone(previous);room.engine=engine===previous.engine?structuredClone(engine):engine;
     recordCrashResult(room);
     if(resultsOver){
@@ -99,6 +106,7 @@ export const crashRoomAdapter:GameRoomAdapter<CrashRoom>={
     room.revision++;room.lastActivity=now;return room;
   },collectSeats:collectCrashSeats,
   nextAlarm(room){const times=[nextCrashAlarm(room.engine),...Object.values(room.members).flatMap(m=>[m.presenceDeadline,m.reservationDeadline])];
+    if(room.engine.phase==='running'&&Object.values(room.members).some(m=>m.connected&&!m.leaveAfterRound))times.push(room.lastActivity+CRASH_PROGRESS_INTERVAL_MS);
     if(room.wallet?.outbox.length)times.push(room.wallet.retryAt??0);
     if(!Object.values(room.members).some(m=>m.connected)&&!walletHasFunds(room))times.push(room.lastActivity+86_400_000);
     const pending=times.filter((t):t is number=>t!==null);return pending.length?Math.min(...pending):null;},

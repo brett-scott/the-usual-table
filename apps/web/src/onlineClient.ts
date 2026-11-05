@@ -7,7 +7,7 @@ const temporarySessions = new Map<string, GuestSession>();
 export class ApiError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
-async function request(path: string, options: { gameId?:GameId;session?: GuestSession; account?: boolean; body?: unknown; method?: string; signal?: AbortSignal } = {}): Promise<unknown> {
+async function request(path: string, options: { gameId?:GameId;capabilities?:readonly string[];session?: GuestSession; account?: boolean; body?: unknown; method?: string; signal?: AbortSignal } = {}): Promise<unknown> {
   const headers: Record<string, string> = {};
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.account || options.session?.funding === 'account') {
@@ -20,7 +20,8 @@ async function request(path: string, options: { gameId?:GameId;session?: GuestSe
   const timeout = setTimeout(abort, 10_000);
   try {
     let response: Response;
-    try { response = await fetch(`${apiBase}/api/v1/${options.gameId?`games/${options.gameId}/rooms`:'rooms'}${path}`, { method: options.method ?? 'POST', headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), cache: 'no-store', signal: controller.signal }); }
+    const query=options.capabilities?.length?`?capabilities=${encodeURIComponent(options.capabilities.join(','))}`:'';
+    try { response = await fetch(`${apiBase}/api/v1/${options.gameId?`games/${options.gameId}/rooms`:'rooms'}${path}${query}`, { method: options.method ?? 'POST', headers, body: options.body === undefined ? undefined : JSON.stringify(options.body), cache: 'no-store', signal: controller.signal }); }
     catch { throw new ApiError('OFFLINE', 'The table service is unreachable. Check your connection and try again.'); }
     let json: { code?: string; message?: string };
     try { json = await response.json() as { code?: string; message?: string }; }
@@ -62,13 +63,13 @@ function parseGameSession<S,A>(value:unknown,adapter:GameClientAdapter<S,A>):Tab
   return {...parsed,session:{...parsed.session,gameId:adapter.gameId,adapterVersion:adapter.version}};
 }
 export async function createGameTable<S,A>(adapter:GameClientAdapter<S,A>,entry:{name:string;icon?:PlayerIcon;visibility:LobbyVisibility;funding?:'account';buyInUnits?:number;entryId?:string}){
-  return parseGameSession(await request('',{gameId:adapter.gameId,account:entry.funding==='account',body:entry}),adapter);
+  return parseGameSession(await request('',{gameId:adapter.gameId,capabilities:adapter.capabilities,account:entry.funding==='account',body:entry}),adapter);
 }
 export async function joinGameTable<S,A>(adapter:GameClientAdapter<S,A>,invite:string,entry:{name:string;icon?:PlayerIcon;funding?:'account';buyInUnits?:number;entryId?:string}){
-  return parseGameSession(await request(`/${invite}/join`,{account:entry.funding==='account',body:entry}),adapter);
+  return parseGameSession(await request(`/${invite}/join`,{capabilities:adapter.capabilities,account:entry.funding==='account',body:entry}),adapter);
 }
 export async function resumeTableSession<S,A>(session:GuestSession,adapter:GameClientAdapter<S,A>,signal?:AbortSignal){
-  const value=await request(`/${session.inviteId}/resume`,{session,signal}) as {snapshot:unknown;gameId?:GameId;adapterVersion?:number};
+  const value=await request(`/${session.inviteId}/resume`,{session,signal,capabilities:adapter.capabilities}) as {snapshot:unknown;gameId?:GameId;adapterVersion?:number};
   return parseGameSession({...value,session},adapter);
 }
 export async function joinGuest(invite: string, name: string, icon?: PlayerIcon) { return parseSession(await request(`/${invite}/join`, { body: { name, icon } })); }
@@ -179,7 +180,7 @@ export function createTableClient<S,A>(initial:TableSessionResponse<S>,adapter:G
       if (disposed || terminal || version !== generation) return;
       if (!/^[a-f0-9]{64}$/.test(response.ticket)) { fail('CLIENT_INCOMPATIBLE', 'The table returned an invalid connection response. Refresh to reconnect.'); return; }
       const url = new URL(`${apiBase}/api/v1/rooms/${session.inviteId}/socket`); url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      const current = new WebSocket(url, ['casual-v1', `ticket.${response.ticket}`, CHAT_CAPABILITY,GAME_ADAPTER_CAPABILITY]); socket = current;
+      const current = new WebSocket(url, ['casual-v1', `ticket.${response.ticket}`, CHAT_CAPABILITY,GAME_ADAPTER_CAPABILITY,...(adapter.capabilities??[])]); socket = current;
       const active = () => !disposed && !terminal && socket === current && version === generation;
       handshakeTimer = setTimeout(() => { if (active()) lost('The connection timed out. Retrying…'); }, 10_000);
       current.onmessage = event => {

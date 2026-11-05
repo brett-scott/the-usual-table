@@ -13,7 +13,7 @@ export function hostGame<R extends HostedRoom>(adapter:GameRoomAdapter<R>):GameR
   }
   return {...adapter,create:input=>{const created=adapter.create(input);room(created);return created;},restore:(raw,now)=>{const restored=adapter.restore(raw,now);room(restored.room);return restored;},
     players:r=>adapter.players(room(r)),lobbyPhase:r=>adapter.lobbyPhase(room(r)),join:(r,p)=>adapter.join(room(r),p),
-    snapshot:(r,p)=>adapter.snapshot(room(r),p),apply:(r,c,random,now)=>adapter.apply(room(r),c,random,now),
+    snapshot:(r,p,context)=>adapter.snapshot(room(r),p,context),apply:(r,c,random,now)=>adapter.apply(room(r),c,random,now),
     expire:(r,random,now)=>adapter.expire(room(r),random,now),collectSeats:(r,now)=>adapter.collectSeats(room(r),now),
     nextAlarm:r=>adapter.nextAlarm(room(r)),fund:(r,p,a,u,e)=>adapter.fund(room(r),p,a,u,e),flushWallet:(r,g,p)=>adapter.flushWallet(room(r),g,p)};
 }

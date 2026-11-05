@@ -1,0 +1,76 @@
+.flight { --flight-accent: #dac18a; height: 100%; min-height: 0; color: #f2ead9; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; container-type: size; border: 1px solid #7a714e; border-radius: 18px; background: radial-gradient(ellipse at 70% 90%, #21463888, transparent 80%), #14271f; overflow: hidden; }
+.header { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 0; }
+.header h1 { display: flex; align-items: baseline; gap: 14px; margin: 0; color: #dac18a; font: italic 28px/1.1 Georgia, serif; }
+.subtitle { color: #b8c8ba; font: italic 12px/1.3 Georgia, serif; }
+.phase { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #b8c8ba; white-space: nowrap; }
+.phase i { width: 6px; height: 6px; background: #b8c8ba; border-radius: 50%; }
+.phase[data-flight-status='running'] { color: #cce9b7; }
+.phase[data-flight-status='running'] i { background: #b6dc9c; box-shadow: 0 0 0 4px #b6dc9c16; }
+.stage { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.6fr); align-items: stretch; gap: 12px; min-height: 0; padding: 10px 20px 10px 24px; }
+.readout { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding-block: 4px; }
+.multiplier { color: var(--flight-accent); font: 64px/.98 Georgia, serif; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+.hint, .nextRound { display: block; color: #b8c8ba; font-size: 12px; line-height: 1.4; margin-top: 9px; }
+.countdown { max-width: 200px; color: var(--flight-accent); }
+.countdown strong { display: block; font: 700 76px/.95 Georgia, serif; letter-spacing: -3px; font-variant-numeric: tabular-nums; }
+.countdown > span { display: block; font-size: 12px; line-height: 1.3; margin-top: 8px; color: #e5d8b5; }
+.countdown progress { appearance: none; display: block; width: 100%; height: 4px; margin-top: 14px; border: 0; border-radius: 3px; overflow: hidden; background: #dac18a20; accent-color: var(--flight-accent); }
+.countdown progress::-webkit-progress-bar { background: #dac18a20; }
+.countdown progress::-webkit-progress-value { background: var(--flight-accent); }
+.countdown progress::-moz-progress-bar { background: var(--flight-accent); }
+.countdown[data-urgent='true'] { --flight-accent: #ffc7ad; }
+.graph { display: block; width: 100%; height: 100%; min-height: 0; overflow: visible; color: var(--flight-accent); }
+.gridLine { stroke: #c9d8bd12; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.axisLabel { fill: #b0c1ad; font: 10px 'Segoe UI', sans-serif; }
+.baseline { stroke: #9dae9950; stroke-width: 1; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; }
+.trajectory { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.endpoint { transform-origin: 0 0; }
+.plane { fill: currentColor; stroke: #14271f; stroke-width: 1; filter: drop-shadow(0 0 5px #dac18a25); }
+.impact { fill: #14271f; stroke: currentColor; stroke-width: 3; }
+.impactMark { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.flight[data-flight-phase='results']:not([data-capped='true']) { --flight-accent: #f2b69f; }
+.flight[data-flight-phase='results'][data-capped='true'] { --flight-accent: #c3e4ac; }
+.history { min-width: 0; padding: 9px 20px 12px; border-top: 1px solid #7d8c693b; background: #081e162b; }
+.history header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.history h2 { margin: 0; font: 600 11px/1.2 'Segoe UI', sans-serif; color: #e9e6d4; }
+.history header > span { color: #a6b8ab; font-size: 10px; }
+.history ol { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; list-style: none; padding: 0; margin: 0; }
+.history li { min-width: 0; color: #bacabb; border: 1px solid #75876842; border-radius: 5px; padding: 5px 3px; background: #ffffff04; text-align: center; font-size: 11px; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.history li[data-high='true'] { color: #eed59a; border-color: #dac18a60; background: #dac18a09; }
+.history p { margin: 0; color: #a6b8ab; font-size: 11px; line-height: 1.4; }
+@container (max-width: 680px) {
+  .header { padding: 10px 14px 0; }
+  .header h1 { font-size: 24px; }
+  .subtitle { display: none; }
+  .stage { gap: 5px; padding: 9px 12px 8px 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .multiplier { font-size: 48px; }
+  .multiplier[data-large='true'] { font-size: 40px; }
+  .countdown strong { font-size: 60px; }
+  .history { padding: 8px 12px 10px; }
+  .history ol { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+}
+@container (max-width: 390px) {
+  .phase { font-size: 10px; gap: 5px; }
+  .stage { padding-left: 14px; padding-right: 8px; }
+  .multiplier { font-size: 40px; letter-spacing: -1px; }
+  .multiplier[data-large='true'] { font-size: 34px; }
+  .countdown strong { font-size: 54px; }
+  .countdown > span { font-size: 11px; }
+  .hint, .nextRound { font-size: 11px; }
+  .axisLabel { font-size: 9px; }
+  .history { padding-inline: 10px; }
+}
+@container (max-height: 230px) {
+  .header { padding-top: 7px; }
+  .header h1 { font-size: 20px; }
+  .stage { padding-top: 4px; padding-bottom: 4px; gap: 4px; }
+  .readout { padding-block: 0; }
+  .multiplier { font-size: 38px; letter-spacing: -1px; }
+  .multiplier[data-large='true'] { font-size: 32px; }
+  .countdown strong { font-size: 44px; letter-spacing: -2px; }
+  .countdown > span { font-size: 10px; margin-top: 3px; }
+  .countdown progress { margin-top: 4px; height: 3px; }
+  .hint, .nextRound { font-size: 10px; margin-top: 5px; }
+  .history { padding-top: 6px; padding-bottom: 7px; }
+  .history header { margin-bottom: 5px; }
+  .history li { padding-block: 3px; font-size: 10px; }
+}
