@@ -108,7 +108,7 @@ describe('accounts and grants', () => {
 describe('funded sessions and settlement', () => {
   it('prevents simultaneous cross-game allocations from spending the same balance', async () => {
     const id = await account();
-    const attempts = await Promise.allSettled([store.execute(allocation(id, 'blackjack', 75_000)), store.execute(allocation(id, 'baccarat', 75_000))]);
+    const attempts = await Promise.allSettled([store.execute(allocation(id, 'blackjack', 75_000)), store.execute(allocation(id, 'roulette', 75_000))]);
     expect(attempts.filter(attempt => attempt.status === 'fulfilled')).toHaveLength(1);
     expect(attempts.find(attempt => attempt.status === 'rejected')).toMatchObject({ reason: { code: 'INSUFFICIENT_FUNDS' } });
     expect(await store.getWallet(id)).toMatchObject({ availableUnits: 25_000, atTablesUnits: 75_000, pendingReturnUnits: 0 });
@@ -228,7 +228,7 @@ describe('sealed returns and durable recovery', () => {
   });
   it('retains uncertain activation, settled results, sealed returns and receipts across database reload', async () => {
     const id = await account(); const pending = (await store.execute(allocation(id))).session!;
-    const playing = await active(id, 'baccarat'); const command = result(playing, { wageredUnits: 100, returnedUnits: 195 });
+    const playing = await active(id, 'roulette'); const command = result(playing, { wageredUnits: 100, returnedUnits: 195 });
     const settled = (await store.execute(command)).session!;
     const sealed = (await store.execute({ ...next(settled), kind: 'request_return', finalSequence: 1, finalStackUnits: settled.stackUnits })).session!;
     const copy = await PGlite.create({ loadDataDir: await db.dumpDataDir() });

@@ -6,7 +6,12 @@ function body(name) {
     .replace(/^BEGIN;\s*/, '').replace(/\s*COMMIT;\s*$/, '').trim();
 }
 const schema = body('001_wallet.sql');
-const api = ['002_supabase_wallet_api.sql', '003_welcome_grant.sql', '004_backend_role.sql', '005_account_statistics.sql', '006_daily_allowance.sql', '007_detailed_statistics.sql', '008_progression.sql','009_crash.sql'].map(body).join('\n\n');
+const migrations = ['002_supabase_wallet_api.sql', '003_welcome_grant.sql', '004_backend_role.sql', '005_account_statistics.sql', '006_daily_allowance.sql', '007_detailed_statistics.sql', '008_progression.sql','009_crash.sql','010_baccarat.sql'].map(body).join('\n\n');
+// Reinstalling earlier increments must not temporarily reject achievement definitions added by later games.
+const metricConstraint=/ALTER TABLE wallet_private\.achievement_definitions ADD CONSTRAINT achievement_definitions_metric_check CHECK\([^;]+;/g;
+const latestMetricConstraint=[...migrations.matchAll(metricConstraint)].at(-1)?.[0];
+if(!latestMetricConstraint)throw new Error('Missing final achievement metric constraint');
+const api=migrations.replace(metricConstraint,latestMetricConstraint);
 const sql = `-- The Usual Table: run this complete file in Supabase SQL Editor.
 -- Safe to rerun on the version-1 wallet schema; preserves balances and history.
 -- New wallet accounts receive one 10,000-chip welcome grant. No purchases or cash value.

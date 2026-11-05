@@ -16,8 +16,8 @@ it('serves the game catalog and rejects lobby discovery for unavailable games', 
   const response = await SELF.fetch('https://example.test/api/v1/games', { headers: { Origin: origin } });
   const { games } = await response.json<{ games: { id: string; status: string }[] }>();
   expect(games.map(game => game.id)).toEqual(['blackjack', 'baccarat', 'roulette', 'texas-holdem', 'keno', 'duck-race', 'penguin-cross', 'crash']);
-  expect(games.filter(game => game.status === 'available').map(game => game.id)).toEqual(['blackjack','crash']);
-  for (const id of ['baccarat', 'roulette', 'texas-holdem', 'keno', 'duck-race', 'penguin-cross', 'unknown']) {
+  expect(games.filter(game => game.status === 'available').map(game => game.id)).toEqual(['blackjack','baccarat','crash']);
+  for (const id of ['roulette', 'texas-holdem', 'keno', 'duck-race', 'penguin-cross', 'unknown']) {
     const result = await SELF.fetch(`https://example.test/api/v1/games/${id}/lobbies`, { headers: { Origin: origin } });
     expect(result.status).toBe(400); expect(await result.json()).toMatchObject({ code: 'GAME_UNAVAILABLE' });
   }

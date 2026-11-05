@@ -27,10 +27,10 @@ async function expectCatalogFits(page: Page) {
 
 test('game hub offers Blackjack and clearly marks future games without changing existing invitations', async ({ page }, testInfo) => {
   await page.goto('./'); await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
-  for (const name of ['Baccarat', 'Roulette', 'Texas Hold’em', 'Keno', 'Duck Race', 'Penguin Cross']) await expect(page.getByRole('article', { name, exact: true })).toContainText('COMING SOON');
+  for (const name of ['Roulette', 'Texas Hold’em', 'Keno', 'Duck Race', 'Penguin Cross']) await expect(page.getByRole('article', { name, exact: true })).toContainText('COMING SOON');
   const catalog = page.getByRole('region', { name: 'Game catalog' });
   await expectCatalogFits(page);
-  await expect(catalog.getByRole('link')).toHaveCount(2);
+  await expect(catalog.getByRole('link')).toHaveCount(3);
   await page.screenshot({ path: testInfo.outputPath('game-hub.png'), fullPage: true });
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Find a Table', exact: true })).toBeVisible();

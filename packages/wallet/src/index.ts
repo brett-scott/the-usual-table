@@ -1,3 +1,4 @@
+import { baccaratReturned } from '@casual/protocol';
 import { z } from 'zod';
 import {
   MAX_WALLET_UNITS, walletCommandSchema, walletReceiptSchema, walletSessionSchema, walletSummarySchema,
@@ -142,6 +143,8 @@ export class PostgresWalletStore {
             requireWallet(current.gameId === command.gameId && current.roomId === command.roomId, 'WRONG_GAME');
             requireWallet(!command.blackjack || command.gameId === 'blackjack', 'WRONG_GAME');
             requireWallet(!command.crash || command.gameId === 'crash', 'WRONG_GAME');
+            requireWallet(!command.baccarat || command.gameId === 'baccarat', 'WRONG_GAME');
+            if(command.gameId==='baccarat'){requireWallet(!!command.baccarat&&command.rulesetVersion==='baccarat-no-commission-v1','INVALID_RESULT');requireWallet(command.wageredUnits===command.baccarat.mainUnits+command.baccarat.tieUnits&&command.returnedUnits===baccaratReturned(command.baccarat),'INVALID_RESULT');}
             if(command.crash)requireWallet(command.returnedUnits===(command.crash.cashedOut?Math.floor(command.wageredUnits*command.crash.cashoutCents!/100):0),'INVALID_RESULT');
             // Poker requires a balanced multi-account transfer operation, never house-minted pot credits.
             requireWallet(current.gameId !== 'texas-holdem', 'UNSUPPORTED_SETTLEMENT');
@@ -154,7 +157,7 @@ export class PostgresWalletStore {
             current.resultSequence = command.sequence;
             await tx.query(`INSERT INTO wallet_private.results (account_id, operation_id, session_id, sequence, round_id, ruleset_version, wagered_units, returned_units, facts)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`, [command.accountId, command.operationId, current.sessionId, command.sequence,
-              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):null]);
+              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):command.baccarat?JSON.stringify(command.baccarat):null]);
             break;
           }
           case 'request_return':

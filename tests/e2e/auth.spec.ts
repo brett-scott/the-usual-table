@@ -185,11 +185,24 @@ test('a first wallet receives 10,000 chips once, retries safely and survives rel
 });
 
 test('provider cancellation restores the invitation and leaves guest private lobbies available', async ({ page }, testInfo) => {
-  const fixture = await providerFixture(page, 'google', 'cancel'); await page.goto(`./#/room/${invite}`);
+  const fixture = await providerFixture(page, 'google', 'cancel');
+  let holdTableInfo = false; let releaseTableInfo!: () => void;
+  const tableInfoReady = new Promise<void>(resolve => { releaseTableInfo = resolve; });
+  await page.route(`**/api/v1/rooms/${invite}/info`, async route => {
+    if (holdTableInfo) await tableInfoReady;
+    await route.fallback();
+  });
+  await page.goto(`./#/room/${invite}`);
   await page.getByLabel('What should we call you?').fill('Guest');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('button', { name: 'Continue with Google' }).click();
-  await expect(page).toHaveURL(new RegExp(`#\\/room\\/${invite}$`));
-  await expect(page.getByRole('status')).toContainText('Guest play is available');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  // Keep both legitimate statuses visible together instead of relying on a fast table-info response.
+  holdTableInfo = true;
+  try {
+    await page.getByRole('button', { name: 'Continue with Google' }).click();
+    await expect(page).toHaveURL(new RegExp(`#\\/room\\/${invite}$`));
+    await expect(page.getByRole('status').filter({ hasText: 'Opening your table…' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Guest play is available' })).toBeVisible();
+  } finally { holdTableInfo = false; releaseTableInfo(); }
   expect(fixture.counts().exchanges).toBe(0); expect(page.url()).not.toContain('private-provider-message');
   await page.getByRole('link', { name: 'Find or create another table' }).click(); await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
@@ -200,7 +213,7 @@ test('an unavailable account API never blocks guest entry or creates a funded ba
   await providerFixture(page, 'discord', 'offline'); await page.goto('./#/games/blackjack');
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await page.getByLabel('What should we call you?').fill('Still a guest'); await page.getByRole('button', { name: 'Close create table' }).click();
   await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('button', { name: 'Continue with Discord' }).click();
-  await expect(page.getByRole('status')).toContainText('Guest play is available');
+  await expect(page.getByRole('status').filter({ hasText: 'Guest play is available' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Discord account' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();

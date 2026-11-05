@@ -30,9 +30,9 @@ test('game-scoped creation, private metadata and tagged commands use the shared 
   await page.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true })).toBeVisible();
 });
 test('future game routes stay unavailable until their engine and entry are registered',async({page,request,baseURL})=>{
-  await page.goto('./#/games/baccarat');await expect(page.getByRole('heading',{name:'This game is coming soon.'})).toBeVisible();
+  await page.goto('./#/games/roulette');await expect(page.getByRole('heading',{name:'This game is coming soon.'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Create a table',exact:true})).toHaveCount(0);
-  const response=await request.post(`http://127.0.0.1:${process.env.E2E_API_PORT||8787}/api/v1/games/baccarat/rooms`,{headers:{Origin:new URL(baseURL!).origin},data:{name:'No engine'}});
+  const response=await request.post(`http://127.0.0.1:${process.env.E2E_API_PORT||8787}/api/v1/games/roulette/rooms`,{headers:{Origin:new URL(baseURL!).origin},data:{name:'No engine'}});
   expect(response.status()).toBe(400);expect(await response.json()).toMatchObject({code:'GAME_UNAVAILABLE'});
 });
 for(const unsupported of [{gameId:'baccarat',adapterVersion:7},{gameId:'blackjack',adapterVersion:99}])test(`an unsupported ${unsupported.gameId} adapter ${unsupported.adapterVersion} invitation never uses Blackjack entry`,async({page})=>{

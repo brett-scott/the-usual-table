@@ -65,7 +65,7 @@ it('uses independent PostgreSQL backends and locks a wallet against concurrent c
     const ids = await Promise.all([first.query('SELECT pg_backend_pid() AS pid'), second.query('SELECT pg_backend_pid() AS pid')]);
     expect(ids[0]!.rows[0].pid).not.toBe(ids[1]!.rows[0].pid);
     await first.query('BEGIN'); await first.query('SELECT account_id FROM wallet_private.accounts WHERE account_id = $1 FOR UPDATE', [accountId]);
-    const attempts = [store.execute(allocate(accountId, 'blackjack', 75_000)), store.execute(allocate(accountId, 'baccarat', 75_000))];
+    const attempts = [store.execute(allocate(accountId, 'blackjack', 75_000)), store.execute(allocate(accountId, 'roulette', 75_000))];
     // Both independent transactions must be blocked on the held account lock before it is released.
     try {
       await expect.poll(async () => Number((await second.query(`SELECT count(*) AS n FROM pg_stat_activity WHERE datname = current_database()

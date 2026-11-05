@@ -16,7 +16,8 @@
     "@casual/wallet": "*",
     "pg": "8.23.1",
     "jose": "6.2.14",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@casual/baccarat": "*"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",

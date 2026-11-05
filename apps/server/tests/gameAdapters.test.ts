@@ -46,10 +46,10 @@ it('hosts a non-card adapter with its own version, capacity, round key, commands
   expect(()=>adapter.fund(room,'one',crypto.randomUUID(),1000,crypto.randomUUID())).toThrow('No house funding');
 });
 it('keeps future games unavailable and rejects unknown or corrupted stored adapter identities without resetting them',()=>{
-  for(const id of ['baccarat','roulette','texas-holdem','keno','duck-race','penguin-cross','unknown'])expect(()=>gameAdapters.available(id)).toThrow('not available');
+  for(const id of ['roulette','texas-holdem','keno','duck-race','penguin-cross','unknown'])expect(()=>gameAdapters.available(id)).toThrow('not available');
   const room=blackjackRoomAdapter.create({roomId:'a'.repeat(32),player:{id:'one',name:'One',seat:0},credentialHash:'b'.repeat(64),now:100,random:max=>max-1});
   expect(gameAdapters.restore(room,100).room.id).toBe(room.id);
-  for(const metadata of [{gameId:'baccarat'},{gameId:null},{adapterVersion:9},{adapterVersion:null}]){
+  for(const metadata of [{gameId:'roulette'},{gameId:null},{adapterVersion:9},{adapterVersion:null}]){
     const invalid={...room,...metadata};const before=JSON.stringify(invalid);expect(()=>gameAdapters.restore(invalid,100)).toThrow('adapter version');expect(JSON.stringify(invalid)).toBe(before);
   }
   const legacy={...room};delete legacy.gameId;delete legacy.adapterVersion;expect(gameAdapters.restore(legacy,100).room.id).toBe(room.id);

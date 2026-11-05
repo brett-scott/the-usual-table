@@ -4,7 +4,7 @@ export const gameIdSchema = z.enum(['blackjack', 'baccarat', 'roulette', 'texas-
 export type GameId = z.infer<typeof gameIdSchema>;
 export const GAME_CATALOG = [
   { id: 'blackjack', name: 'Blackjack', symbol: '♠', badge: '21', status: 'available', description: 'Find your twenty-one. Play solo or share a table with friends.' },
-  { id: 'baccarat', name: 'Baccarat', symbol: '♦', badge: '9', status: 'coming-soon', description: 'Player or banker. A new table is on the way.' },
+  { id: 'baccarat', name: 'Baccarat', symbol: '♦', badge: '9', status: 'available', description: 'Player, Banker or Tie. Share the reveal.' },
   { id: 'roulette', name: 'Roulette', symbol: '◉', badge: '00', status: 'coming-soon', description: 'Pick your numbers. Watch the wheel.' },
   { id: 'texas-holdem', name: 'Texas Hold’em', symbol: '♣', badge: 'A K', status: 'coming-soon', description: 'Community cards, shared pots, and a little table talk.' },
   { id: 'keno', name: 'Keno', symbol: '#', badge: '7', status: 'coming-soon', description: 'Pick your numbers. See what the draw brings.' },

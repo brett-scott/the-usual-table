@@ -11,9 +11,11 @@ type Props = {
   theme: Theme;
   onThemeChange(next: Theme): void;
   rules: ReactNode;
+  timerNote?: string;
+  rulesSummary?: string;
 };
 
-export function TableOptions({ appearance, onAppearanceChange, theme, onThemeChange, rules }: Props) {
+export function TableOptions({ appearance, onAppearanceChange, theme, onThemeChange, rules, timerNote = 'Your hand timer keeps running.', rulesSummary = 'Six decks · Dealer stands on 17' }: Props) {
   const id = useId(); const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const menuButtons = useRef<Partial<Record<Exclude<View, 'menu'>, HTMLButtonElement | null>>>({});
@@ -45,7 +47,7 @@ export function TableOptions({ appearance, onAppearanceChange, theme, onThemeCha
         {view === 'menu' && <div className={s.menu}>
           <p className={s.intro}>The rules of the table, and a look of your own.</p>
           <button ref={node => { menuButtons.current.rules = node; }} className={s.menuItem} type="button" aria-label="Rules" aria-describedby={`${id}-rules-detail`} onClick={() => visit('rules')}>
-            <span className={s.menuIcon} aria-hidden="true">♣</span><span><strong>Rules</strong><small id={`${id}-rules-detail`}>Six decks · Dealer stands on 17</small></span><span className={s.chevron} aria-hidden="true">›</span>
+            <span className={s.menuIcon} aria-hidden="true">♣</span><span><strong>Rules</strong><small id={`${id}-rules-detail`}>{rulesSummary}</small></span><span className={s.chevron} aria-hidden="true">›</span>
           </button>
           <button ref={node => { menuButtons.current.cards = node; }} className={s.menuItem} type="button" aria-label="Cards" aria-describedby={`${id}-cards-detail`} onClick={() => visit('cards')}>
             <span className={s.menuIcon} aria-hidden="true">♠</span><span><strong>Cards</strong><small id={`${id}-cards-detail`}>{currentFace} faces · {currentBack} backs</small></span><span className={s.chevron} aria-hidden="true">›</span>
@@ -70,7 +72,7 @@ export function TableOptions({ appearance, onAppearanceChange, theme, onThemeCha
           </label>)}
         </fieldset>}
       </div>
-      <footer className={s.footer}><span>Saved in this browser.</span><span>Your hand timer keeps running.</span></footer>
+      <footer className={s.footer}><span>Saved in this browser.</span><span>{timerNote}</span></footer>
     </dialog>
   </>;
 }

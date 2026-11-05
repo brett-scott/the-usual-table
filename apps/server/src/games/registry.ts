@@ -2,6 +2,7 @@ import { GameError } from '@casual/engine';
 import { GAME_CATALOG,gameIdSchema,type GameId } from '@casual/protocol';
 import { blackjackRoomAdapter } from './blackjack';
 import { crashRoomAdapter } from './crash';
+import { baccaratRoomAdapter } from './baccarat';
 import type { GameRoomAdapter,HostedRoom } from './contracts';
 
 /** Erase an adapter's private engine type only at the validated registry boundary. */
@@ -47,4 +48,4 @@ export class GameAdapterRegistry {
     return adapter.restore(value,now);
   }
 }
-export const gameAdapters=new GameAdapterRegistry([hostGame(blackjackRoomAdapter),hostGame(crashRoomAdapter)]);
+export const gameAdapters=new GameAdapterRegistry([hostGame(blackjackRoomAdapter),hostGame(crashRoomAdapter),hostGame(baccaratRoomAdapter)]);
