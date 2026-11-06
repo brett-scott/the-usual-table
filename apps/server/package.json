@@ -17,7 +17,8 @@
     "pg": "8.23.1",
     "jose": "6.2.14",
     "zod": "4.6.7",
-    "@casual/baccarat": "*"
+    "@casual/baccarat": "*",
+    "@casual/duck-race": "*"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",

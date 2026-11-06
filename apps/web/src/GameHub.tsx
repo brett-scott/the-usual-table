@@ -68,3 +68,4 @@ function LobbyBrowser({ identity,gameId }: { identity: ReturnType<typeof useTabl
       onClose={() => { identity.saveDraft(); createButton.current?.focus(); }} />
   </main>;
 }
+

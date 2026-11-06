@@ -144,6 +144,11 @@ export class PostgresWalletStore {
             requireWallet(!command.blackjack || command.gameId === 'blackjack', 'WRONG_GAME');
             requireWallet(!command.crash || command.gameId === 'crash', 'WRONG_GAME');
             requireWallet(!command.baccarat || command.gameId === 'baccarat', 'WRONG_GAME');
+            requireWallet(!command.duckRace || command.gameId==='duck-race','WRONG_GAME');
+            if(command.gameId==='duck-race'){
+              requireWallet(!!command.duckRace&&command.rulesetVersion==='duck-race-four-v1','INVALID_RESULT');
+              requireWallet(command.wageredUnits>=1000&&command.wageredUnits<=100000&&command.wageredUnits%1000===0&&command.returnedUnits===(command.duckRace.duckIndex===command.duckRace.winner?command.wageredUnits*4:0),'INVALID_RESULT');
+            }
             if(command.gameId==='baccarat'){
               requireWallet(!!command.baccarat,'INVALID_RESULT');
               requireWallet(command.rulesetVersion===('factsVersion' in command.baccarat?'baccarat-no-commission-v2':'baccarat-no-commission-v1'),'INVALID_RESULT');
@@ -161,7 +166,7 @@ export class PostgresWalletStore {
             current.resultSequence = command.sequence;
             await tx.query(`INSERT INTO wallet_private.results (account_id, operation_id, session_id, sequence, round_id, ruleset_version, wagered_units, returned_units, facts)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`, [command.accountId, command.operationId, current.sessionId, command.sequence,
-              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):command.baccarat?JSON.stringify(command.baccarat):null]);
+              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):command.baccarat?JSON.stringify(command.baccarat):command.duckRace?JSON.stringify(command.duckRace):null]);
             break;
           }
           case 'request_return':
