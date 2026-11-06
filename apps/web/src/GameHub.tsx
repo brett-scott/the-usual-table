@@ -16,8 +16,8 @@ export function GameHub({ browse = false,gameId='blackjack' }: { browse?: boolea
       <p className={s.eyebrow}>GOOD GAMES. EASY COMPANY.</p><h1>A game for every table.</h1><p className={s.intro}>Pick your game. Bring your friends. Nothing on the line.</p>
       <div className={s.catalog} role="region" aria-label="Game catalog" tabIndex={0}>{GAME_CATALOG.map(game => <article key={game.id} className={s.game} data-game={game.id} aria-label={game.name}>
         <div className={s.art} aria-hidden="true"><span>{game.symbol}</span><i>{game.badge}</i></div>
-        <div className={s.gameHeading}><h2>{game.name}</h2><span>{game.status === 'available' ? 'PLAY NOW' : 'COMING SOON'}</span></div><p>{game.description}</p>
-        {game.status === 'available' ? <div className={s.gameLinks}><a className={s.primary} href={`#/games/${game.id}`}>Find a Table <span aria-hidden="true">↗</span></a></div> : <span className={s.soon}>More good hands ahead.</span>}
+        <div className={s.gameHeading}><h2>{game.name}</h2><span>{game.id === 'duck-race' ? 'PRACTICE' : game.status === 'available' ? 'PLAY NOW' : 'COMING SOON'}</span></div><p>{game.description}</p>
+        {game.id === 'duck-race' ? <div className={s.gameLinks}><a className={s.primary} href="#/duck-race">Play practice <span aria-hidden="true">↗</span></a></div> : game.status === 'available' ? <div className={s.gameLinks}><a className={s.primary} href={`#/games/${game.id}`}>Find a Table <span aria-hidden="true">↗</span></a></div> : <span className={s.soon}>More good hands ahead.</span>}
       </article>)}</div>
     </main>}
     <footer className={s.footer}>Play chips only · No purchases. No cash value.</footer>
@@ -68,3 +68,4 @@ function LobbyBrowser({ identity,gameId }: { identity: ReturnType<typeof useTabl
       onClose={() => { identity.saveDraft(); createButton.current?.focus(); }} />
   </main>;
 }
+

@@ -1,3 +1,4 @@
+import { DuckRace } from './DuckRace';
 import { useEffect, useRef, useState, useSyncExternalStore,type ComponentType, type CSSProperties, type RefObject } from 'react';
 import type { Action, GameClient, PublicHand, PublicPlayer, VisibleCard } from '@casual/protocol';
 import { gameIdFromHash,roomIdFromHash,type GameId,type TableInfo } from '@casual/protocol';
@@ -54,6 +55,7 @@ function AppRoutes() {
   useEffect(() => { const changed = () => setHash(location.hash); window.addEventListener('hashchange', changed); return () => window.removeEventListener('hashchange', changed); }, []);
   const invite = roomIdFromHash(hash);
   if (invite) return <GameRoomRoute key={invite} invite={invite} />;
+  if (hash === '#/duck-race') return <DuckRace />;
   const gameId=gameIdFromHash(hash);
   if (gameId) return <GameHub key={gameId} browse gameId={gameId}/>;
   return <GameHub />;
@@ -207,3 +209,4 @@ export function Table({ client, onLeave }: { client: GameClient; onLeave: (endSe
     </main>
   </div></CardAppearance.Provider>;
 }
+
