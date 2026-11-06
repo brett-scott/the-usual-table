@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { displayNameSchema,playerIconSchema } from './identity';
 import { walletUnitsSchema } from './wallet';
-import { baccaratWagerSchema,baccaratSideSchema } from './baccaratStatistics';
+import { baccaratWagerSchema } from './baccaratStatistics';
+import { baccaratResultSchema,baccaratRoadmapSchema } from './baccaratHistory';
+export { baccaratResultSchema } from './baccaratHistory';
 import type { GameEntryRules } from './tablePlatform';
 export const BACCARAT_RULES={capacity:8,minPlayers:1,guestStartingChips:1000,minBuyInUnits:1000,buyInStepUnits:1000,accountFunding:'house'} as const satisfies GameEntryRules;
 export const BACCARAT_BETTING_MS=15000;
@@ -18,11 +20,10 @@ export type BaccaratAction=z.infer<typeof baccaratActionSchema>;
 export const baccaratCommandSchema=z.object({id:z.string().uuid(),playerId:z.string().min(1).max(100),revision:integer,roundId:integer,action:baccaratActionSchema}).strict();
 export const baccaratPlayerSchema=z.object({id:z.string().min(1).max(100),name:displayNameSchema,icon:playerIconSchema.optional(),seat:z.number().int().min(0).max(7),
   balanceUnits:walletUnitsSchema,wager:baccaratWagerSchema,returnedUnits:walletUnitsSchema}).strict();
-export const baccaratResultSchema=z.object({roundId:integer.min(1),outcome:baccaratSideSchema,playerTotal:z.number().int().min(0).max(9),bankerTotal:z.number().int().min(0).max(9)}).strict();
 export const baccaratDealSchema=z.object({side:z.enum(['player','banker']),card:baccaratCardSchema}).strict();
 export const baccaratSnapshotSchema=z.object({gameId:z.literal('baccarat'),roomId:z.string().regex(/^[a-f0-9]{32}$/),you:z.string(),revision:integer,claimVersion:integer,managerId:z.string(),roundId:integer,
   phase:z.enum(['waiting','betting','dealing','results']),bettingDeadline:integer.nullable(),startedAt:integer.nullable(),resultsDeadline:integer.nullable(),
-  cards:z.array(baccaratDealSchema).max(6),outcome:baccaratResultSchema.nullable(),history:z.array(baccaratResultSchema).max(20),
+  cards:z.array(baccaratDealSchema).max(6),outcome:baccaratResultSchema.nullable(),history:z.array(baccaratResultSchema).max(20),roadmap:baccaratRoadmapSchema.optional(),
   shoe:z.object({decks:z.literal(8),remaining:z.number().int().min(0).max(416),shuffled:z.boolean()}).strict(),
   players:z.array(baccaratPlayerSchema.extend({connected:z.boolean(),leaving:z.boolean()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','NextRound','Leave','Refill'])),
   wallet:z.object({status:z.string(),error:z.string().nullable()}).optional(),

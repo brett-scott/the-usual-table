@@ -22,7 +22,7 @@ export default {
       else if (url.pathname === '/api/v1/health' && request.method === 'GET') {
         const auth = supabaseUrlSchema.safeParse(env.SUPABASE_URL ?? PUBLIC_SUPABASE_CONFIG.url);
         response = Response.json({ status: 'ok', protocol: 1, authProjectUrl: auth.success ? auth.data : null,
-          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:1 });
+          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:3 });
       }
       else if (url.pathname === '/api/v1/games' && request.method === 'GET') response = Response.json({ games: GAME_CATALOG });
       else if (url.pathname === '/api/v1/account/session' && request.method === 'GET') {

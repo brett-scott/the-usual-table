@@ -16,6 +16,8 @@ export interface ParsedGameCommand {id:string;playerId:string;action:{type:strin
 export interface SnapshotContext {now:number;capabilities:readonly string[]}
 export interface GameRoomAdapter<R extends HostedRoom> extends GameEntryRules {
   gameId:GameId;version:number;capacity:number;minBuyInUnits:number;buyInStepUnits:number;
+  /** Explicit older storage versions this adapter can migrate before normal runtime validation. */
+  storedVersions?:readonly number[];
   /** House settlement is unsuitable for poker pot transfers. */
   accountFunding:'house'|'temporary-only';
   create(input:GameRoomCreation):R;restore(raw:unknown,now:number):{room:R;migrated:boolean};

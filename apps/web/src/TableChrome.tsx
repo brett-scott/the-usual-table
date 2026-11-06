@@ -11,7 +11,7 @@ export function TableHeader({client,playerId,online,ownTurn,seconds,decisionLabe
   return <header className={s.header}><a href="#" className={s.brand} aria-label="The Usual Table"><span className={s.brandMark}>♣</span><span>The Usual Table</span></a>
     <div className={s.headerActions}>
       {online&&<TableChat client={client} playerId={playerId} ownTurn={ownTurn} seconds={seconds} decisionLabel={decisionLabel}/>}
-      {online&&<TableInvite/>}{children}<AccountControls signedInOnly={!showAccountSignIn}/>
+      {online&&<TableInvite/>}{children}<AccountControls compact signedInOnly={!showAccountSignIn}/>
     </div>
   </header>;
 }

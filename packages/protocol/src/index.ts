@@ -125,3 +125,6 @@ export const serverEventSchema = gameServerEventSchema(snapshotSchema);
 
 export * from './baccarat';
 export * from './baccaratStatistics';
+export * from './baccaratSideBets';
+
+export * from './baccaratHistory';

@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { baccaratReturned,baccaratRoundFactsSchema,BACCARAT_CARD_STEP_MS,BACCARAT_CARD_READY_MS } from '@casual/protocol';
+import { baccaratReturned,baccaratRoundFactsSchema,baccaratPairOutcomes,baccaratWagerUnits,MAX_WALLET_UNITS,BACCARAT_CARD_STEP_MS,BACCARAT_CARD_READY_MS } from '@casual/protocol';
 import { newBaccarat,baccaratTotal,bankerDraws,beginBaccaratBetting,setBaccaratBet,advanceBaccarat,validBaccaratState,type BaccaratState } from './index';
 function table(ranks:string[]=[]){const s=newBaccarat(n=>n-1);s.players.push({id:'one',name:'One',seat:0,balanceUnits:100000,wager:{mainSide:null,mainUnits:0,tieUnits:0},returnedUnits:0});ranks.forEach((rank,i)=>{const j=s.shoe.findIndex((c,j)=>j>=i&&c.rank===rank);[s.shoe[i],s.shoe[j]]=[s.shoe[j]!,s.shoe[i]!];});beginBaccaratBetting(s,100);return s;}
 function finish(s:BaccaratState){s=advanceBaccarat(s,15100,n=>n-1);return advanceBaccarat(s,s.startedAt!+(s.deal.length-1)*BACCARAT_CARD_STEP_MS+BACCARAT_CARD_READY_MS,n=>n-1);}
@@ -35,4 +35,26 @@ it('reveals one card at each deadline, retains a full five-second results window
 });
 it('validates trusted outcome facts against totals and supports main pushes plus Tie wins without commission',()=>{
  const facts={mainSide:'player' as const,mainUnits:1000,tieUnits:1000,outcome:'tie' as const,playerTotal:8,bankerTotal:8,commissionUnits:0 as const};expect(baccaratRoundFactsSchema.safeParse(facts).success).toBe(true);expect(baccaratReturned(facts)).toBe(10000);expect(baccaratRoundFactsSchema.safeParse({...facts,bankerTotal:7}).success).toBe(false);
+});
+it('accepts 1,000 chips per tile across all five wager legs, replaces them atomically and cancels every leg',()=>{
+ const s=table();const p=s.players[0]!;p.balanceUnits=500000;
+ const wager={mainSide:'banker' as const,mainUnits:100000,tieUnits:100000,sideBets:{playerPairUnits:100000,bankerPairUnits:100000,superSixUnits:100000}};
+ setBaccaratBet(s,p,wager,101);expect(p.balanceUnits).toBe(0);expect(baccaratWagerUnits(p.wager)).toBe(500000);
+ expect(()=>setBaccaratBet(s,p,{...wager,sideBets:{...wager.sideBets,superSixUnits:101000}},102)).toThrow();expect(p.balanceUnits).toBe(0);
+ setBaccaratBet(s,p,{mainSide:'banker',mainUnits:100000,tieUnits:100000,sideBets:{playerPairUnits:100000,bankerPairUnits:0,superSixUnits:0}},103);expect(p.balanceUnits).toBe(200000);
+ setBaccaratBet(s,p,{mainSide:null,mainUnits:0,tieUnits:0},104);expect(p.balanceUnits).toBe(500000);
+ p.balanceUnits=MAX_WALLET_UNITS;expect(()=>setBaccaratBet(s,p,wager,105)).toThrow('balance limit');
+});
+it('settles all side bets with Banker-six half-profit mains and validates the persisted exact result',()=>{
+ let s=table(['2','3','3','3','J']);const wager={mainSide:'banker' as const,mainUnits:1000,tieUnits:1000,sideBets:{playerPairUnits:1000,bankerPairUnits:1000,superSixUnits:1000}};
+ setBaccaratBet(s,s.players[0]!,wager,101);s=finish(s);expect(s.players[0]).toMatchObject({returnedUnits:26500,balanceUnits:121500});expect(validBaccaratState(s)).toBe(true);
+ const facts={...wager,...s.outcome!,...baccaratPairOutcomes(s.deal),commissionUnits:0,factsVersion:2};delete (facts as Partial<typeof facts>).roundId;
+ expect(baccaratRoundFactsSchema.safeParse(facts).success).toBe(true);expect(baccaratReturned(facts)).toBe(26500);
+ const bad=structuredClone(s);bad.players[0]!.returnedUnits=1500;expect(validBaccaratState(bad)).toBe(false);
+ expect(baccaratRoundFactsSchema.safeParse({...facts,factsVersion:undefined}).success).toBe(false);
+ expect(baccaratRoundFactsSchema.safeParse({...facts,playerPair:undefined}).success).toBe(false);
+});
+it('supports side bets alone, pays both pairs on a tie and preserves the five-second result deadline',()=>{
+ let s=table(['4','4','4','4']);setBaccaratBet(s,s.players[0]!,{mainSide:null,mainUnits:0,tieUnits:0,sideBets:{playerPairUnits:1000,bankerPairUnits:1000,superSixUnits:1000}},101);
+ s=finish(s);expect(s.outcome!.outcome).toBe('tie');expect(s.players[0]).toMatchObject({returnedUnits:24000,balanceUnits:121000});expect(validBaccaratState(s)).toBe(true);
 });

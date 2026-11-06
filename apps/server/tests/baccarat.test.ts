@@ -1,9 +1,11 @@
 import { SELF,evictDurableObject,runInDurableObject,runDurableObjectAlarm } from 'cloudflare:test';
 import { expect,it } from 'vitest';
-import { GAME_ADAPTER_CAPABILITY,baccaratSnapshotSchema,type BaccaratAction,type BaccaratSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
+import { GAME_ADAPTER_CAPABILITY,BACCARAT_ROADMAP_CAPABILITY,seedBaccaratRoadmap,baccaratSnapshotSchema,type BaccaratAction,type BaccaratSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
 import { advanceBaccarat } from '@casual/baccarat';
 import { baccaratRoomAdapter,restoreBaccaratRoom,type BaccaratRoom } from '../src/games/baccarat';
 import { bindings,http,origin } from './helpers';
+import { gameAdapters } from '../src/games/registry';
+import { parseGameCommand } from '../src/games/commands';
 
 async function create(visibility='private'){
   const result=await SELF.fetch('https://example.test/api/v1/games/baccarat/rooms',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'Pilot',visibility})});
@@ -11,14 +13,14 @@ async function create(visibility='private'){
 }
 async function view(session:GuestSession){const response=await http(`/${session.inviteId}/snapshot`,session,undefined,'GET');expect(response.status).toBe(200);return(await response.json<{snapshot:BaccaratSnapshot}>()).snapshot;}
 async function edit(invite:string,change:(r:BaccaratRoom)=>void){return runInDurableObject(bindings.ROOMS.getByName(invite),async(_instance,state)=>{const room=(await state.storage.get<BaccaratRoom>('room'))!;change(room);await state.storage.put('room',room);});}
-async function connect(session:GuestSession){
+async function connect(session:GuestSession,roadmap=false){
   const initial=await view(session);const ticket=await http(`/${session.inviteId}/ticket`,session,{claimId:crypto.randomUUID(),claimVersion:initial.claimVersion});
-  const result=await SELF.fetch(`https://example.test/api/v1/rooms/${session.inviteId}/socket`,{headers:{Origin:origin,Upgrade:'websocket','Sec-WebSocket-Protocol':`casual-v1, ticket.${(await ticket.json<{ticket:string}>()).ticket}, ${GAME_ADAPTER_CAPABILITY}, casual-chat-v1`}});
+  const result=await SELF.fetch(`https://example.test/api/v1/rooms/${session.inviteId}/socket`,{headers:{Origin:origin,Upgrade:'websocket','Sec-WebSocket-Protocol':`casual-v1, ticket.${(await ticket.json<{ticket:string}>()).ticket}, ${GAME_ADAPTER_CAPABILITY}${roadmap?`, ${BACCARAT_ROADMAP_CAPABILITY}`:''}, casual-chat-v1`}});
   expect(result.status).toBe(101);const ws=result.webSocket!;ws.accept();
   const events:Record<string,unknown>[]=[];ws.addEventListener('message',event=>{events.push(JSON.parse(String(event.data)));});
   return{ws,events,async send(action:BaccaratAction,overrides:Record<string,unknown>={}){
     const s=await view(session);const command={id:crypto.randomUUID(),playerId:session.playerId,roundId:s.roundId,revision:s.revision,action,...overrides};
-    ws.send(JSON.stringify({type:'game-command',protocol:1,gameId:'baccarat',adapterVersion:1,command}));
+    ws.send(JSON.stringify({type:'game-command',protocol:1,gameId:'baccarat',adapterVersion:2,command}));
     await expect.poll(()=>events.find(e=>e.commandId===command.id)).toBeDefined();return events.find(e=>e.commandId===command.id)!;
   }};
 }
@@ -57,4 +59,29 @@ it('respects a reservation expiring before the betting deadline even when both a
  let room=baccaratRoomAdapter.create({roomId:'f'.repeat(32),player:{id:'one',name:'One',seat:0},credentialHash:'a'.repeat(64),now:100,random:n=>n-1});
  for(const action of [{type:'StartBetting'},{type:'PlaceBet',wager:{mainSide:'player',mainUnits:1000,tieUnits:0}}])room=baccaratRoomAdapter.apply(room,baccaratRoomAdapter.parseCommand({id:crypto.randomUUID(),playerId:'one',roundId:room.engine.roundId,revision:room.revision,action}),n=>n-1,101);
  room.members.one!.reservationDeadline=10000;room=baccaratRoomAdapter.expire(room,n=>n-1,30000);expect(room.engine.phase).toBe('waiting');expect(room.engine.players).toEqual([]);expect(room.engine.history).toEqual([]);expect(room.engine.cursor).toBe(0);
+});
+it('persists expanded lobby roads through eviction and shares them with late joiners while legacy clients keep twenty results',async()=>{
+ const initial=await create();const session=initial.session;
+ const results=Array.from({length:35},(_,i)=>({roundId:35-i,outcome:'banker' as const,playerTotal:5,bankerTotal:6}));
+ await edit(session.inviteId,r=>{r.engine.roundId=35;r.engine.history=results.slice(0,20);r.engine.roadmap=seedBaccaratRoadmap(results);});
+ await evictDurableObject(bindings.ROOMS.getByName(session.inviteId));
+ const legacy=await view(session);expect(legacy.history).toHaveLength(20);expect(legacy).not.toHaveProperty('roadmap');expect(baccaratSnapshotSchema.omit({roadmap:true}).strict().safeParse(legacy).success).toBe(true);
+ const response=await http(`/${session.inviteId}/snapshot?capabilities=${BACCARAT_ROADMAP_CAPABILITY}`,session,undefined,'GET');expect(response.status).toBe(200);const confirmed=baccaratSnapshotSchema.parse((await response.json<{snapshot:BaccaratSnapshot}>()).snapshot);expect(confirmed.roadmap).toMatchObject({completedHands:35,bankerWins:35,bankerSixWins:35,currentStreak:35});expect(confirmed.roadmap!.results).toHaveLength(35);
+ const joined=await http(`/${session.inviteId}/join?capabilities=${BACCARAT_ROADMAP_CAPABILITY}`,undefined,{name:'Late viewer'});expect(joined.status).toBe(201);expect((await joined.json<TableSessionResponse<BaccaratSnapshot>>()).snapshot.roadmap).toEqual(confirmed.roadmap);
+ const socket=await connect(session,true);try{await expect.poll(()=>socket.events.find(e=>e.type==='game-snapshot')).toMatchObject({snapshot:{roadmap:{completedHands:35}}});}finally{socket.ws.close();}
+});
+it('migrates old twenty-result rooms without inventing earlier data or changing live cards, bets and balances',()=>{
+ let room=baccaratRoomAdapter.create({roomId:'e'.repeat(32),player:{id:'one',name:'One',seat:0},credentialHash:'a'.repeat(64),now:100,random:n=>n-1});
+ room=baccaratRoomAdapter.apply(room,baccaratRoomAdapter.parseCommand({id:crypto.randomUUID(),playerId:'one',revision:room.revision,roundId:room.engine.roundId,action:{type:'StartBetting'}}),n=>n-1,101);
+ const old=structuredClone(room);delete old.engine.roadmap;old.engine.roundId=50;old.engine.history=Array.from({length:20},(_,i)=>({roundId:49-i,outcome:'player',playerTotal:8,bankerTotal:6}));
+ const before=structuredClone(old);const migrated=restoreBaccaratRoom(old);expect(migrated.migrated).toBe(true);expect(migrated.room.engine.roadmap).toMatchObject({firstRoundId:30,completedHands:20,playerWins:20});const after=structuredClone(migrated.room);delete after.engine.roadmap;expect(after).toEqual(before);expect(restoreBaccaratRoom(migrated.room).migrated).toBe(false);
+ const bad=structuredClone(migrated.room);bad.engine.roadmap!.playerWins++;expect(()=>restoreBaccaratRoom(bad)).toThrow('inconsistent');
+});
+it('migrates explicitly supported version-one storage without replacing wagers, while rejecting old wire commands',()=>{
+ const current=baccaratRoomAdapter.create({roomId:'d'.repeat(32),player:{id:'one',name:'One',seat:0},credentialHash:'a'.repeat(64),now:100,random:n=>n-1});
+ const old={...structuredClone(current),adapterVersion:1};const before=structuredClone(old);
+ const restored=gameAdapters.restore(old,101);expect(restored.migrated).toBe(true);expect(restored.room.adapterVersion).toBe(2);expect({...restored.room,adapterVersion:1}).toEqual(before);expect(old).toEqual(before);
+ expect(()=>gameAdapters.restore({...old,adapterVersion:99},101)).toThrow('adapter version');
+ expect(()=>parseGameCommand(restored.room,{type:'game-command',protocol:1,gameId:'baccarat',adapterVersion:1,command:{id:crypto.randomUUID(),playerId:'one',roundId:0,revision:0,action:{type:'StartBetting'}}})).toThrow('different game version');
+ const invalid=structuredClone(old);invalid.engine.players[0]!.wager.sideBets={playerPairUnits:1000,bankerPairUnits:0,superSixUnits:0};expect(()=>gameAdapters.restore(invalid,101)).toThrow('inconsistent wagers');
 });

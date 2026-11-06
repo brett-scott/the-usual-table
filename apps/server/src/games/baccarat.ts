@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { GameError } from '@casual/engine';
 import { newBaccarat,beginBaccaratBetting,setBaccaratBet,advanceBaccarat,clearBaccaratRound,emptyWager,wagerUnits,validBaccaratState,baccaratStateSchema,BaccaratError,type BaccaratState } from '@casual/baccarat';
-import { BACCARAT_RULES,baccaratCommandSchema,type BaccaratSnapshot,type BaccaratAction } from '@casual/protocol';
+import { BACCARAT_RULES,BACCARAT_ROADMAP_CAPABILITY,seedBaccaratRoadmap,legacyBaccaratWagerSchema,baccaratCommandSchema,type BaccaratSnapshot,type BaccaratAction } from '@casual/protocol';
 import { newMember,disconnectMember } from '../roomMembership';
 import { fundedSeat,roomWalletSchema,walletHasFunds } from '../tableWallet';
 import { baccaratFunding,baccaratWalletReady,recordBaccaratResult,sealBaccaratSeat,flushBaccaratWallet,validBaccaratWallet } from './baccaratWallet';
-import type { GameRoomAdapter,HostedRoom,SeatIdentity } from './contracts';
-export interface BaccaratRoom extends HostedRoom{schema:1;gameId:'baccarat';adapterVersion:1;engine:BaccaratState}
+import type { GameRoomAdapter,HostedRoom,SeatIdentity,SnapshotContext } from './contracts';
+export interface BaccaratRoom extends HostedRoom{schema:1;gameId:'baccarat';adapterVersion:2;engine:BaccaratState}
 function requireRule(value:unknown,code:string,message:string):asserts value{if(!value)throw new GameError(code,message);}
 function player(identity:SeatIdentity){return{...identity,balanceUnits:BACCARAT_RULES.guestStartingChips*100,wager:emptyWager(),returnedUnits:0};}
 export function baccaratActions(room:BaccaratRoom,id:string):BaccaratAction['type'][] {
@@ -18,11 +18,11 @@ export function baccaratActions(room:BaccaratRoom,id:string):BaccaratAction['typ
   if(!fundedSeat(room,id)&&p.balanceUnits<1000&&!wagerUnits(p))actions.push('Refill');
  }return actions;
 }
-export function baccaratSnapshot(room:BaccaratRoom,id:string):BaccaratSnapshot{
+export function baccaratSnapshot(room:BaccaratRoom,id:string,context?:SnapshotContext):BaccaratSnapshot{
  requireRule(room.members[id],'SESSION_INVALID','Your seat is no longer available.');const e=room.engine;const seat=fundedSeat(room,id);
  return{gameId:'baccarat',roomId:room.id,you:id,revision:room.revision,claimVersion:room.members[id]!.claimVersion,managerId:room.managerId,roundId:e.roundId,phase:e.phase,
  bettingDeadline:e.phase==='betting'?e.deadline:null,startedAt:e.startedAt,resultsDeadline:e.phase==='results'?e.deadline:null,
- cards:e.deal.slice(0,e.revealed),outcome:e.phase==='results'?e.outcome:null,history:e.history,
+ cards:e.deal.slice(0,e.revealed),outcome:e.phase==='results'?e.outcome:null,history:e.history,...(context?.capabilities.includes(BACCARAT_ROADMAP_CAPABILITY)?{roadmap:e.roadmap??seedBaccaratRoadmap(e.history)}:{}),
  shoe:{decks:8,remaining:416-e.cursor+e.deal.length-e.revealed,shuffled:e.shuffled},players:e.players.map(p=>({...p,connected:room.members[p.id]!.connected,leaving:room.members[p.id]!.leaveAfterRound})),
  legalActions:baccaratActions(room,id),...(seat?{wallet:{status:seat.status,error:room.wallet?.error??null}}:{})};
 }
@@ -44,23 +44,24 @@ export function collectBaccaratSeats(room:BaccaratRoom,now:number){
 const integer=z.number().int().nonnegative().safe();const time=integer.nullable();const id=z.string().min(1).max(100);const hash=z.string().regex(/^[a-f0-9]{64}$/);
 const memberSchema=z.object({hash,connected:z.boolean(),controllerId:id.nullable(),leaveAfterRound:z.boolean(),reservationDeadline:time,presenceDeadline:time,
   claimId:id.nullable(),claimVersion:integer,retiredClaims:z.array(id).max(8),account:z.object({id:z.string().uuid(),expiresAt:integer}).strict().optional()}).strict();
-const roomSchema=z.object({schema:z.literal(1),gameId:z.literal('baccarat'),adapterVersion:z.literal(1),visibility:z.enum(['public','private']).optional(),id:z.string().regex(/^[a-f0-9]{32}$/),
+const roomSchema=z.object({schema:z.literal(1),gameId:z.literal('baccarat'),adapterVersion:z.union([z.literal(1),z.literal(2)]),visibility:z.enum(['public','private']).optional(),id:z.string().regex(/^[a-f0-9]{32}$/),
   revision:integer,managerId:z.string().max(100),engine:baccaratStateSchema,members:z.record(id,memberSchema),lastActivity:integer,wallet:roomWalletSchema.optional(),
   tickets:z.array(z.object({hash,playerId:id,expires:integer,claimId:id,claimVersion:integer}).strict()).max(8),
   receipts:z.array(z.object({id,playerId:id,revision:integer}).strict()).max(128),commandRates:z.record(id,z.object({start:integer,count:integer}).strict()),
   creation:z.object({entryId:z.string().uuid(),buyInUnits:integer.min(1000).max(9_000_000_000_000),visibility:z.enum(['public','private'])}).strict().optional(),
 }).strict();
 export function restoreBaccaratRoom(raw:unknown):{room:BaccaratRoom;migrated:boolean}{
-  const parsed=roomSchema.safeParse(raw);requireRule(parsed.success,'ROOM_STATE_INVALID','This Baccarat table could not be safely restored.');const room=parsed.data;
+  const parsed=roomSchema.safeParse(raw);requireRule(parsed.success,'ROOM_STATE_INVALID','This Baccarat table could not be safely restored.');const room={...parsed.data,adapterVersion:2 as const};
   const e=room.engine;
+  requireRule(parsed.data.adapterVersion!==1||e.players.every(p=>legacyBaccaratWagerSchema.safeParse(p.wager).success),'ROOM_STATE_INVALID','This older Baccarat table has inconsistent wagers.');
   requireRule(validBaccaratState(e)&&validBaccaratWallet(room)&&Object.keys(room.members).length===e.players.length&&e.players.every(p=>room.members[p.id])
     &&(!room.managerId||room.members[room.managerId])&&Object.values(room.members).every(m=>m.connected?!!m.controllerId&&m.presenceDeadline!==null&&m.reservationDeadline===null:m.presenceDeadline===null)
     &&(!room.creation||room.wallet?.seats[room.creation.entryId]&&room.creation.visibility===(room.visibility??'private')),'ROOM_STATE_INVALID','This Baccarat table has inconsistent state.');
-  return{room,migrated:false};
+  const migrated=e.roadmap===undefined||parsed.data.adapterVersion===1;if(e.roadmap===undefined)e.roadmap=seedBaccaratRoadmap(e.history);return{room,migrated};
 }
 export const baccaratRoomAdapter:GameRoomAdapter<BaccaratRoom>={
- ...BACCARAT_RULES,gameId:'baccarat',version:1,
- create(input){const engine=newBaccarat(input.random);engine.players.push(player(input.player));return{schema:1,gameId:'baccarat',adapterVersion:1,id:input.roomId,revision:0,managerId:input.player.id,engine,members:{[input.player.id]:newMember(input.credentialHash,input.now)},lastActivity:input.now,tickets:[],receipts:[],commandRates:{}};},
+ ...BACCARAT_RULES,gameId:'baccarat',version:2,storedVersions:[1],
+ create(input){const engine=newBaccarat(input.random);engine.players.push(player(input.player));return{schema:1,gameId:'baccarat',adapterVersion:2,id:input.roomId,revision:0,managerId:input.player.id,engine,members:{[input.player.id]:newMember(input.credentialHash,input.now)},lastActivity:input.now,tickets:[],receipts:[],commandRates:{}};},
  restore:restoreBaccaratRoom,players:r=>r.engine.players,lobbyPhase:r=>r.engine.phase==='waiting'||r.engine.phase==='betting'?'waiting':'playing',join(r,p){r.engine.players.push(player(p));r.engine.players.sort((a,b)=>a.seat-b.seat);},snapshot:baccaratSnapshot,
  parseCommand(raw){const parsed=baccaratCommandSchema.safeParse(raw);requireRule(parsed.success,'INVALID_COMMAND','Send a valid Baccarat command.');return parsed.data;},
  apply(previous,input,_random,now){

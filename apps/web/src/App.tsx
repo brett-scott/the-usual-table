@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore,type ComponentType, t
 import type { Action, GameClient, PublicHand, PublicPlayer, VisibleCard } from '@casual/protocol';
 import { gameIdFromHash,roomIdFromHash,type GameId,type TableInfo } from '@casual/protocol';
 import { ApiError,tableInfo } from './onlineClient';
-import { blackjackClientAdapter } from './gameClientAdapters';
+import { blackjackClientAdapter,crashClientAdapter,baccaratClientAdapter } from './gameClientAdapters';
 import { PlayingCard } from './PlayingCard';
 import { dealerKey, playerCardKey, type CardTimeline } from './cardTimeline';
 import { useTablePresentation } from './useTablePresentation';
@@ -59,7 +59,7 @@ function AppRoutes() {
   return <GameHub />;
 }
 
-const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:1,component:CrashRoom},baccarat:{version:1,component:BaccaratRoom}};
+const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:crashClientAdapter.version,component:CrashRoom},baccarat:{version:baccaratClientAdapter.version,component:BaccaratRoom}};
 function GameRoomRoute({invite}:{invite:string}){
   const [info,setInfo]=useState<TableInfo|null>(null);const [error,setError]=useState<ApiError|null>(null);const [attempt,setAttempt]=useState(0);
   useEffect(()=>{let active=true;const abort=new AbortController();setError(null);

@@ -1,4 +1,4 @@
-import { baccaratReturned } from '@casual/protocol';
+import { baccaratReturned,baccaratWagerUnits } from '@casual/protocol';
 import { z } from 'zod';
 import {
   MAX_WALLET_UNITS, walletCommandSchema, walletReceiptSchema, walletSessionSchema, walletSummarySchema,
@@ -144,7 +144,11 @@ export class PostgresWalletStore {
             requireWallet(!command.blackjack || command.gameId === 'blackjack', 'WRONG_GAME');
             requireWallet(!command.crash || command.gameId === 'crash', 'WRONG_GAME');
             requireWallet(!command.baccarat || command.gameId === 'baccarat', 'WRONG_GAME');
-            if(command.gameId==='baccarat'){requireWallet(!!command.baccarat&&command.rulesetVersion==='baccarat-no-commission-v1','INVALID_RESULT');requireWallet(command.wageredUnits===command.baccarat.mainUnits+command.baccarat.tieUnits&&command.returnedUnits===baccaratReturned(command.baccarat),'INVALID_RESULT');}
+            if(command.gameId==='baccarat'){
+              requireWallet(!!command.baccarat,'INVALID_RESULT');
+              requireWallet(command.rulesetVersion===('factsVersion' in command.baccarat?'baccarat-no-commission-v2':'baccarat-no-commission-v1'),'INVALID_RESULT');
+              requireWallet(command.wageredUnits===baccaratWagerUnits(command.baccarat)&&command.returnedUnits===baccaratReturned(command.baccarat),'INVALID_RESULT');
+            }
             if(command.crash)requireWallet(command.returnedUnits===(command.crash.cashedOut?Math.floor(command.wageredUnits*command.crash.cashoutCents!/100):0),'INVALID_RESULT');
             // Poker requires a balanced multi-account transfer operation, never house-minted pot credits.
             requireWallet(current.gameId !== 'texas-holdem', 'UNSUPPORTED_SETTLEMENT');

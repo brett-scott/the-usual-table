@@ -71,7 +71,7 @@ function NicknameForm({ auth, state, required, focusIcon, onSaved }: { auth: Aut
   </form>;
 }
 
-export function AccountControls({ beforeSignIn, signedInOnly = false }: { beforeSignIn?: () => void; signedInOnly?: boolean }) {
+export function AccountControls({ beforeSignIn, signedInOnly = false, compact = false }: { beforeSignIn?: () => void; signedInOnly?: boolean; compact?:boolean }) {
   const [statisticsOpen, setStatisticsOpen] = useState(false);
   const [progressOpen,setProgressOpen] = useState(false);
   const { auth, editNickname, editIcon } = useContext(AuthContext)!;
@@ -91,7 +91,7 @@ export function AccountControls({ beforeSignIn, signedInOnly = false }: { before
   }, [expanded]);
   function closeMenu() { setExpanded(false); trigger.current?.focus(); }
   if (signedInOnly && !state.hasSession) return null;
-  return <div className={`${s.controls} ${signedInOnly ? s.compact : ''}`} ref={controls}
+  return <div className={`${s.controls} ${state.account&&(signedInOnly||compact) ? s.compact : ''}`} ref={controls}
     onKeyDown={event => { if (event.key === 'Escape' && expanded) { event.preventDefault(); closeMenu(); } }}>
     <button className={s.trigger} ref={trigger} aria-haspopup={state.account ? 'menu' : 'dialog'} aria-expanded={state.account ? expanded : undefined}
       aria-controls={state.account && expanded ? menuId : undefined} aria-label={state.account ? `Account menu for ${state.nickname ?? 'your account'}` : undefined}

@@ -11,7 +11,7 @@ export const crashClientAdapter:GameClientAdapter<CrashSnapshot,CrashAction>={
   command:(s,action,playerId,id)=>({id,playerId,revision:s.revision,roundId:s.roundId,action}),
 };
 
-import { BACCARAT_RULES,baccaratSnapshotSchema,type BaccaratSnapshot,type BaccaratAction } from '@casual/protocol';
-export const baccaratClientAdapter:GameClientAdapter<BaccaratSnapshot,BaccaratAction>={gameId:'baccarat',version:1,snapshotSchema:baccaratSnapshotSchema,entry:BACCARAT_RULES,
+import { BACCARAT_RULES,BACCARAT_ROADMAP_CAPABILITY,baccaratSnapshotSchema,type BaccaratSnapshot,type BaccaratAction } from '@casual/protocol';
+export const baccaratClientAdapter:GameClientAdapter<BaccaratSnapshot,BaccaratAction>={gameId:'baccarat',version:2,capabilities:[BACCARAT_ROADMAP_CAPABILITY],snapshotSchema:baccaratSnapshotSchema,entry:BACCARAT_RULES,
  identity:s=>({playerId:s.you,roomId:s.roomId,revision:s.revision,claimVersion:s.claimVersion,gameId:s.gameId}),
  command:(s,action,playerId,id)=>({id,playerId,revision:s.revision,roundId:s.roundId,action})};

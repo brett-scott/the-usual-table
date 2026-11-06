@@ -44,7 +44,9 @@ export class GameAdapterRegistry {
   }
   restore(value:unknown,now:number) {
     if(!value || typeof value!=='object')throw new GameError('ROOM_EXPIRED','This table invitation has expired or does not exist. Create a new table.');
-    const metadata=value as HostedRoom;const adapter=this.forRoom(metadata);
+    const metadata=value as HostedRoom;const id=metadata.gameId===undefined?'blackjack':metadata.gameId;
+    const adapter=this.adapters.get(id);const version=metadata.adapterVersion===undefined&&id==='blackjack'?1:metadata.adapterVersion;
+    if(!adapter||version!==adapter.version&&!adapter.storedVersions?.includes(version!))throw new GameError('ROOM_VERSION_UNSUPPORTED','This table needs its original game adapter version.');
     return adapter.restore(value,now);
   }
 }
