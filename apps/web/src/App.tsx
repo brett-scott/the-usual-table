@@ -1,9 +1,9 @@
-import { DuckRace } from './DuckRace';
+import { DuckRaceRoom } from './DuckRace';
 import { useEffect, useRef, useState, useSyncExternalStore,type ComponentType, type CSSProperties, type RefObject } from 'react';
 import type { Action, GameClient, PublicHand, PublicPlayer, VisibleCard } from '@casual/protocol';
 import { gameIdFromHash,roomIdFromHash,type GameId,type TableInfo } from '@casual/protocol';
 import { ApiError,tableInfo } from './onlineClient';
-import { blackjackClientAdapter,crashClientAdapter,baccaratClientAdapter } from './gameClientAdapters';
+import { blackjackClientAdapter,crashClientAdapter,baccaratClientAdapter,duckRaceClientAdapter } from './gameClientAdapters';
 import { PlayingCard } from './PlayingCard';
 import { dealerKey, playerCardKey, type CardTimeline } from './cardTimeline';
 import { useTablePresentation } from './useTablePresentation';
@@ -55,13 +55,13 @@ function AppRoutes() {
   useEffect(() => { const changed = () => setHash(location.hash); window.addEventListener('hashchange', changed); return () => window.removeEventListener('hashchange', changed); }, []);
   const invite = roomIdFromHash(hash);
   if (invite) return <GameRoomRoute key={invite} invite={invite} />;
-  if (hash === '#/duck-race') return <DuckRace />;
+  if (hash === '#/duck-race') return <GameHub browse gameId="duck-race"/>;
   const gameId=gameIdFromHash(hash);
   if (gameId) return <GameHub key={gameId} browse gameId={gameId}/>;
   return <GameHub />;
 }
 
-const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:crashClientAdapter.version,component:CrashRoom},baccarat:{version:baccaratClientAdapter.version,component:BaccaratRoom}};
+const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={'duck-race':{version:duckRaceClientAdapter.version,component:DuckRaceRoom},blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:crashClientAdapter.version,component:CrashRoom},baccarat:{version:baccaratClientAdapter.version,component:BaccaratRoom}};
 function GameRoomRoute({invite}:{invite:string}){
   const [info,setInfo]=useState<TableInfo|null>(null);const [error,setError]=useState<ApiError|null>(null);const [attempt,setAttempt]=useState(0);
   useEffect(()=>{let active=true;const abort=new AbortController();setError(null);

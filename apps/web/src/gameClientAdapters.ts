@@ -15,3 +15,8 @@ import { BACCARAT_RULES,BACCARAT_ROADMAP_CAPABILITY,baccaratSnapshotSchema,type 
 export const baccaratClientAdapter:GameClientAdapter<BaccaratSnapshot,BaccaratAction>={gameId:'baccarat',version:2,capabilities:[BACCARAT_ROADMAP_CAPABILITY],snapshotSchema:baccaratSnapshotSchema,entry:BACCARAT_RULES,
  identity:s=>({playerId:s.you,roomId:s.roomId,revision:s.revision,claimVersion:s.claimVersion,gameId:s.gameId}),
  command:(s,action,playerId,id)=>({id,playerId,revision:s.revision,roundId:s.roundId,action})};
+
+import { DUCK_RACE_RULES,duckRaceSnapshotSchema,type DuckRaceSnapshot,type DuckRaceAction } from '@casual/protocol';
+export const duckRaceClientAdapter:GameClientAdapter<DuckRaceSnapshot,DuckRaceAction>={gameId:'duck-race',version:1,snapshotSchema:duckRaceSnapshotSchema,entry:DUCK_RACE_RULES,
+ identity:s=>({playerId:s.you,roomId:s.roomId,revision:s.revision,claimVersion:s.claimVersion,gameId:s.gameId}),
+ command:(s,action,playerId,id)=>({id,playerId,revision:s.revision,roundId:s.roundId,action})};

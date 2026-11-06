@@ -8,7 +8,7 @@ export const GAME_CATALOG = [
   { id: 'roulette', name: 'Roulette', symbol: '◉', badge: '00', status: 'coming-soon', description: 'Pick your numbers. Watch the wheel.' },
   { id: 'texas-holdem', name: 'Texas Hold’em', symbol: '♣', badge: 'A K', status: 'coming-soon', description: 'Community cards, shared pots, and a little table talk.' },
   { id: 'keno', name: 'Keno', symbol: '#', badge: '7', status: 'coming-soon', description: 'Pick your numbers. See what the draw brings.' },
-  { id: 'duck-race', name: 'Duck Race', symbol: '🦆', badge: 'GO', status: 'coming-soon', description: 'Pick a duck. Follow the race with your friends.' },
+  { id: 'duck-race', name: 'Duck Race', symbol: '🦆', badge: 'GO', status: 'available', description: 'Pick a duck. Follow the race with your friends.' },
   { id: 'penguin-cross', name: 'Penguin Cross', symbol: '🐧', badge: '→', status: 'coming-soon', description: 'A little timing. A little nerve. A new game ahead.' },
   { id: 'crash', name: 'Crash', symbol: '↗', badge: '×', status: 'available', description: 'Watch the multiplier. Choose your moment.' },
 ] as const satisfies ReadonlyArray<{ id: GameId; name: string; symbol: string; badge: string; status: 'available' | 'coming-soon'; description: string }>;
