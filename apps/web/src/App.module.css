@@ -37,8 +37,8 @@
 .card:nth-child(even) { transform: rotate(4deg) translateY(2px); }
 .card:nth-child(n+5) { margin-left: -42px; }
 .red { color: #b63f42; }
-.cardBack { padding: 5px; border: 4px solid #f0e9d7; background: repeating-linear-gradient(45deg, #bdaa6e22 0 1px, transparent 1px 6px), repeating-linear-gradient(-45deg, #bdaa6e22 0 1px, transparent 1px 6px), #264435; display: grid; place-items: center; transform: rotateY(180deg); }
-.cardBack span { display: grid; place-items: center; border: 1px solid #b7a877; border-radius: 50%; width: 31px; height: 42px; font-size: 25px; color: #c7b780; }
+.cardBack { padding: min(5px, calc(var(--card-height, 90px) * .055)); border: min(4px, calc(var(--card-height, 90px) * .045)) solid #f0e9d7; background: repeating-linear-gradient(45deg, #bdaa6e22 0 1px, transparent 1px 6px), repeating-linear-gradient(-45deg, #bdaa6e22 0 1px, transparent 1px 6px), #264435; display: grid; place-items: center; transform: rotateY(180deg); }
+.cardBack span { display: grid; place-items: center; border: 1px solid #b7a877; border-radius: 50%; width: min(31px, calc(var(--card-height, 90px) * .35)); height: min(42px, calc(var(--card-height, 90px) * .46)); font-size: min(25px, calc(var(--card-height, 90px) * .27)); line-height: 1; color: #c7b780; }
 .cardSpaces { display: flex; justify-content: center; gap: 8px; }
 .cardSpaces span { width: 62px; height: 86px; border: 1px solid #d0dabc30; border-radius: 5px; }
 .feltLettering { text-align: center; color: #e5d7a9b0; margin: 8px 0 22px; }
@@ -193,8 +193,6 @@
   .cards { container-type: inline-size; width: 100%; max-width: 100%; min-height: 0; padding: 4px 0; flex-wrap: nowrap; }
   .cards .card { --card-width: calc(var(--card-height, 72px) * 76 / 106); width: var(--card-width); height: var(--card-height, 72px); margin-left: calc(-1 * max(var(--card-overlap, 12px), (var(--card-count, 2) * var(--card-width) - 100cqw + 12px) / max(1, var(--card-count, 2) - 1))); }
   .cards .card:first-child { margin-left: 0; }
-  .cardBack { padding: 2px; border-width: 3px; }
-  .cardBack span { width: 24px; height: 31px; font-size: 19px; }
   .seats { height: 100%; min-height: 0; margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(48px, .3fr) minmax(0, 1fr); gap: 8px 6px; align-items: stretch; }
   .ownSeat { container-type: size; --hand-overhead: 82px; min-height: 0; grid-column: 1 / -1; grid-row: 2; order: 2; padding: 7px; display: flex; flex-direction: column; }
   .ownSeat:has(.handTabs) { --hand-overhead: 132px; }

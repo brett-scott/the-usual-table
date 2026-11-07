@@ -3,7 +3,7 @@ import { accountId, providerFixture } from './authFixture';
 
 const game = { gameId: 'blackjack', roundsPlayed: '4', roundsWon: '2', roundsLost: '1', roundsEven: '1', wageredUnits: '4000', returnedUnits: '5500', netUnits: '1500', bestRoundNetUnits: '1500' };
 const statistics = { contract: 1, accountId, unitsPerChip: 100, basis: 'saved-rounds', games: [game] };
-const blackjackDetails={trackedRounds:'4',hands:'5',wins:'2',losses:'2',pushes:'1',blackjacks:'1',busts:'1',doubles:'1',splits:'1',insuranceTaken:'1',insuranceWon:'0'};
+const blackjackDetails={trackedRounds:'4',hands:'5',wins:'2',losses:'2',pushes:'1',blackjacks:'1',busts:'1',doubles:'1',splits:'1',insuranceTaken:'1',insuranceWon:'0',perfectPairsBets:'2',perfectPairsWins:'1'};
 const detailed={accountId,summary:statistics,blackjack:blackjackDetails};
 async function login(page: Page) {
   await page.goto('./#/games'); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -19,7 +19,7 @@ async function open(page: Page) {
 test('account statistics show per-game saved rounds, precise amounts, refresh and no guest persistence', async ({ page }, testInfo) => {
   await providerFixture(page, 'google', 'success', 'Stats player'); let reads = 0;
   await page.route('**/api/v1/account/statistics/details*', async route => {
-    expect(route.request().method()).toBe('GET'); expect(route.request().postData()).toBeNull(); expect(new URL(route.request().url()).search).toBe('?version=4'); reads++;
+    expect(route.request().method()).toBe('GET'); expect(route.request().postData()).toBeNull(); expect(new URL(route.request().url()).search).toBe('?version=5'); reads++;
     await route.fulfill({ json: detailed });
   });
   await login(page); expect(reads).toBe(0);
@@ -33,6 +33,8 @@ test('account statistics show per-game saved rounds, precise amounts, refresh an
   await expect(blackjack.locator('dl > div').filter({ hasText: 'Chips returned' })).toHaveText('Chips returned55');
   await expect(blackjack.locator('dl > div').filter({hasText:'Hands played'})).toHaveText('Hands played5');
   await expect(blackjack.locator('dl > div').filter({hasText:'Natural blackjacks'})).toHaveText('Natural blackjacks1');
+  await expect(blackjack.locator('dl > div').filter({hasText:'Perfect Pairs bets'})).toHaveText('Perfect Pairs bets2');
+  await expect(blackjack.locator('dl > div').filter({hasText:'Perfect Pairs wins'})).toHaveText('Perfect Pairs wins1');
   await expect(dialog).toContainText('Temporary play isn’t recorded');
   await page.screenshot({ path: testInfo.outputPath('account-statistics.png') });
   await dialog.getByRole('button', { name: 'Refresh statistics' }).click(); await expect.poll(() => reads).toBe(2);

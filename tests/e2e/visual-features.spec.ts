@@ -31,11 +31,11 @@ test('card face and back are independent, remembered and preserve the live cards
 test('chips place, double and pay out from game amounts and honor reduced motion', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' }); await rigShoe(page, ['5', '6', '6', '10', 'K', '3', '10', '10', '6', '7', 'K']);
   await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Chip player'); await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Increase bet' }).click();
+  await page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();
   await expect.poll(() => page.evaluate(() => document.getAnimations().some(animation => animation.id === 'chips-place'))).toBe(true);
   await page.getByRole('button', { name: 'Deal me in' }).click();
   await expect(page.getByRole('button', { name: 'Double', exact: true })).toBeEnabled(); await page.getByRole('button', { name: 'Double', exact: true }).click();
-  const payout = page.getByRole('region', { name: 'Your seat' }).getByRole('group', { name: 'Wager 40 chips, returned 80 chips', exact: true });
+  const payout = page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).getByRole('group', { name: 'Wager 40 chips, returned 80 chips', exact: true });
   await expect(payout).toHaveAttribute('data-settled', 'true');
   await expect.poll(() => page.evaluate(() => document.getAnimations().some(animation => animation.id === 'chips-payout'))).toBe(true);
   await expect(page.getByRole('region', { name: 'Game controls' }).getByText('1,040', { exact: false })).toBeVisible();
@@ -46,7 +46,7 @@ test('chips place, double and pay out from game amounts and honor reduced motion
   await page.getByRole('button', { name: 'Next round' }).click(); await expect(payout).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: 'no-preference' }); await page.getByRole('button', { name: 'Deal me in' }).click();
   await expect(page.getByRole('button', { name: /^Hit/ })).toBeEnabled(); await page.getByRole('button', { name: /^Hit/ }).click();
-  await expect(page.getByRole('region', { name: 'Your seat' }).getByRole('group', { name: 'Wager 20 chips, returned 0 chips', exact: true })).toHaveAttribute('data-settled', 'true');
+  await expect(page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).getByRole('group', { name: 'Wager 20 chips, returned 0 chips', exact: true })).toHaveAttribute('data-settled', 'true');
   await expect.poll(() => page.evaluate(() => document.getAnimations().some(animation => animation.id === 'chips-collect'))).toBe(true);
   await expect(page.getByRole('region', { name: 'Game controls' }).getByText('1,020', { exact: false })).toBeVisible();
 });

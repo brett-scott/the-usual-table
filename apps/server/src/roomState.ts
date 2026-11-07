@@ -38,7 +38,7 @@ function core(room: OnlineRoom, playerId: string, action: Action, random: Random
 }
 function dealLocked(room: OnlineRoom, random: RandomIndex, now: number) {
   room.bettingDeadline = null;
-  for (const p of room.engine.players) if (room.locked[p.id] !== 'ready') p.bet = 0;
+  for (const p of room.engine.players) if (room.locked[p.id] !== 'ready') {p.bet = 0;p.perfectPairsBet=0;}
   const first = room.engine.players.find(p => room.locked[p.id] === 'ready');
   if (first) core(room, first.id, { type: 'Ready' }, random, now);
   room.locked = {};
@@ -59,7 +59,7 @@ function baseRoomActions(room: OnlineRoom, playerId: string): ActionType[] {
     if (room.bettingDeadline === null) { if (playerId === room.managerId) actions.push('StartBetting'); }
     else if (!room.locked[playerId]) {
       actions.push('PlaceBet', 'SitOut');
-      if (p.bet >= 20 && p.balance >= p.bet) actions.push('Ready');
+      if (p.bet >= 20 && p.balance >= p.bet+(p.perfectPairsBet??0)) actions.push('Ready');
     }
     return actions;
   }

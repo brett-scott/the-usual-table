@@ -9,6 +9,11 @@ test('Max Bet, double eligibility, numeric bust totals and automatic results cou
   await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Max player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Max Bet', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Max Bet', exact: true })).toBeDisabled();
+  await expect(page.locator('[data-bet-tile=main]')).toHaveAttribute('data-amount','2000');
+  await page.getByRole('button', { name: 'Clear bets', exact: true }).click();
+  await page.getByRole('button', { name: 'Select 100 chips', exact: true }).click();
+  await page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();
+
   await page.getByRole('button', { name: 'Deal me in' }).click();
   await expect(page.getByRole('button', { name: 'Double', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: /^Hit/ }).click();
@@ -17,11 +22,11 @@ test('Max Bet, double eligibility, numeric bust totals and automatic results cou
   const seat = page.getByRole('region', { name: 'Your seat' });
   await expect(seat.getByText('28 · Bust', { exact: true })).toBeVisible();
   await expect(seat.getByText('✕ Lost · -100 chips', { exact: true })).toBeVisible();
-  await expect(page.getByRole('timer', { name: 'Next round countdown' })).toHaveText('Next round in 10s');
+  await expect(page.getByRole('timer', { name: 'Next round countdown' })).toHaveText('Next round in 5s');
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('bust-and-results.png'), fullPage: true });
-  await page.clock.runFor(1000); // Fixed reveal allowance precedes the ten-second results window.
-  await page.clock.runFor(9000); await expect(page.getByRole('timer', { name: 'Next round countdown' })).toHaveText('Next round in 1s');
+  await page.clock.runFor(1000); // Fixed reveal allowance precedes the five-second results window.
+  await page.clock.runFor(4000); await expect(page.getByRole('timer', { name: 'Next round countdown' })).toHaveText('Next round in 1s');
   await page.clock.runFor(1000); await expect(page.getByRole('button', { name: 'Deal me in' })).toBeEnabled();
   await expect(page.getByRole('timer', { name: 'Next round countdown' })).toHaveCount(0);
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
@@ -61,7 +66,10 @@ test('guests see ready and waiting states, shared results and the host skipping 
     await guest.goto(page.url()); await guest.getByLabel('What should we call you?').fill('Guest'); await guest.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(guest.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
     await page.getByRole('button', { name: 'Open betting' }).click();
-    await page.getByRole('button', { name: 'Max Bet', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear bets', exact: true }).click();
+  await page.getByRole('button', { name: 'Select 100 chips', exact: true }).click();
+  await page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();
+
     await page.getByRole('button', { name: /^Ready/ }).click();
     await expect(page.getByRole('region', { name: 'Your seat' }).getByText('✓ Ready · 100 chips', { exact: true })).toBeVisible();
     const waiting = page.getByRole('region', { name: 'Seat 2: Guest' });

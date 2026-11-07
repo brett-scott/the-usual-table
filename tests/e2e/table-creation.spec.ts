@@ -49,13 +49,15 @@ async function amountError(input: Locator) {
 
 test('guest creation explains access and chips, fits the viewport and restores keyboard focus', async ({ page }, testInfo) => {
   await openTableEntry(page); const dialog = creation(page);
-  await expect(dialog.getByLabel('Table visibility')).toHaveValue('private');
+  await expect(dialog.getByRole('heading',{name:'Private table',exact:true})).toBeVisible();
   await expect(dialog).toContainText(/Only people with.*link can join/i);
   await expect(dialog).toContainText('1,000 temporary chips');
   await dialog.getByLabel('What should we call you?').fill('A friendly guest at play');
   await dialog.getByLabel('Player icon', { exact: false }).selectOption('🦊');
   await dialogFits(page); await page.screenshot({ path: testInfo.outputPath('create-guest-private.png') });
-  await dialog.getByLabel('Table visibility').selectOption('public');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('radio', { name: 'Public', exact: true }).check();
+  await page.getByRole('button', { name: 'Create a table', exact: true }).click();
   await expect(dialog).toContainText(/public table|public browser/i);
   await dialogFits(page); await page.screenshot({ path: testInfo.outputPath('create-guest-public.png') });
   for (let step = 0; step < 10; step++) {
@@ -143,10 +145,9 @@ test('pending creation prevents dismissal and failure preserves choices for a su
       await route.fulfill({ status: 503, json: { code: 'UNAVAILABLE', message: 'Your table could not be created. Please retry.' } });
     } else await route.continue();
   });
-  await openTableEntry(page); const dialog = creation(page);
+  await openTableEntry(page, 'public'); const dialog = creation(page);
   await dialog.getByLabel('What should we call you?').fill('Friendly fox');
   await dialog.getByLabel('Player icon', { exact: false }).selectOption('🦊');
-  await dialog.getByLabel('Table visibility').selectOption('public');
   await dialog.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Creating…', exact: true })).toBeDisabled();
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
@@ -156,7 +157,7 @@ test('pending creation prevents dismissal and failure preserves choices for a su
   release(); await expect(dialog.getByRole('alert')).toContainText('Please retry');
   await expect(dialog.getByLabel('What should we call you?')).toHaveValue('Friendly fox');
   await expect(dialog.getByLabel('Player icon', { exact: false })).toHaveValue('🦊');
-  await expect(dialog.getByLabel('Table visibility')).toHaveValue('public');
+  await expect(dialog.getByRole('heading',{name:'Public table',exact:true})).toBeVisible();
   await dialogFits(page); await page.screenshot({ path: testInfo.outputPath('create-failed.png') });
   await dialog.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled(); expect(attempts).toBe(2);

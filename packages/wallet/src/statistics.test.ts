@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { accountStatisticsSchema, type WalletSession } from '@casual/protocol';
+import { accountStatisticsSchema,detailedStatisticsSchema, type WalletSession } from '@casual/protocol';
 import { PostgresWalletStore } from './index';
 import { supabaseAuthFixture } from './supabaseFixture';
 
@@ -47,6 +47,17 @@ it('reads only verified settled rounds, groups games and counts replayed results
   const returning = (await store.execute({ contract: 1, accountId: id, operationId: crypto.randomUUID(), kind: 'request_return', sessionId: session.sessionId, expectedVersion: session.version, finalSequence: 3, finalStackUnits: session.stackUnits })).session!;
   await store.execute({ contract: 1, accountId: id, operationId: crypto.randomUUID(), kind: 'complete_return', sessionId: returning.sessionId, expectedVersion: returning.version });
   expect(await rpc(id)).toEqual(stats);
+});
+it('reports Perfect Pairs once inside combined Blackjack totals and keeps old clients compatible',async()=>{
+  const id=await account(),session=await playing(id);
+  const command={...result(session,7000),wageredUnits:2000,rulesetVersion:'blackjack-perfect-pairs-v2',blackjack:{hands:1,wins:0,losses:1,pushes:0,blackjacks:0,busts:0,doubles:0,splits:0,insuranceTaken:false,insuranceWon:false,perfectPairs:{wagerUnits:1000,returnedUnits:7000,kind:'mixed' as const}}};
+  await store.execute(command);await store.execute(command);
+  const details=detailedStatisticsSchema.parse(await rpc(id,'usual_table_detailed_statistics_v5'));
+  expect(details.blackjack).toMatchObject({trackedRounds:'1',hands:'1',losses:'1',perfectPairsBets:'1',perfectPairsWins:'1',perfectPairsWageredUnits:'1000',perfectPairsReturnedUnits:'7000'});
+  expect(details.summary.games[0]).toMatchObject({roundsPlayed:'1',roundsWon:'1',wageredUnits:'2000',returnedUnits:'7000',netUnits:'5000'});
+  expect(detailedStatisticsSchema.parse(await rpc(id,'usual_table_detailed_statistics_v4')).summary).toEqual(details.summary);
+  const other=await account();expect(detailedStatisticsSchema.parse(await rpc(other,'usual_table_detailed_statistics_v5')).blackjack).toMatchObject({perfectPairsBets:'0',perfectPairsWins:'0'});
+  await db.exec(setup);expect(await rpc(id,'usual_table_detailed_statistics_v5')).toEqual(details);
 });
 it('includes historical results on installation/rerun without rewriting balances or history', async () => {
   const id = await account(); const session = await playing(id); await store.execute(result(session, 2500));

@@ -186,7 +186,7 @@ describe('transaction boundary, privacy, and recovery', () => {
     expect(() => act(state, { type: 'Ready' })).toThrow(); expect(state.shoe.cursor).toBe(0);
     expect(() => act(state, { type: 'Hit' })).toThrow(); expect(commandSchema.safeParse({ ...command(state, { type: 'PlaceBet', amount: 20 }), protocol: 2 }).success).toBe(false);
   });
-  it.each([0, 19, 21, 220, -20, 20.5])('rejects an invalid base wager %i', amount => {
+  it.each([19, 21, 2020, -20, 20.5])('rejects an invalid base wager %i', amount => {
     expect(() => act(fixture(), { type: 'PlaceBet', amount })).toThrow();
   });
   it('debits only on deal and refills only below the minimum, once per accepted command', () => {

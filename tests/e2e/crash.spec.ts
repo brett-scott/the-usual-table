@@ -39,8 +39,8 @@ test('saved Crash entry, automatic payout, reload and Leave use the shared accou
 test('real public Crash lobbies invite, share chat, resume and disappear after the final player leaves',async({page,browser})=>{
   const context=await browser.newContext({viewport:page.viewportSize()!});const peer=await context.newPage();
   try{
-    await page.goto('./#/games');await page.getByRole('article',{name:'Crash',exact:true}).getByRole('link',{name:'Find a Table',exact:true}).click();await page.getByRole('button',{name:'Create a table',exact:true}).click();
-    await page.getByLabel('What should we call you?').fill('Crash host');await page.getByLabel('Table visibility').selectOption('public');await page.getByRole('button',{name:'Create table',exact:true}).click();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');const invite=page.url();
+    await page.goto('./#/games');await page.getByRole('article',{name:'Crash',exact:true}).getByRole('link',{name:'Find a Table',exact:true}).click();await page.getByRole('radio',{name:'Public',exact:true}).check();await page.getByRole('button',{name:'Create a table',exact:true}).click();
+    await page.getByLabel('What should we call you?').fill('Crash host');await page.getByRole('button',{name:'Create table',exact:true}).click();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');const invite=page.url();
     await peer.goto(invite);await peer.getByLabel('What should we call you?').fill('Crash peer');await peer.getByRole('button',{name:'Join table',exact:true}).click();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');
     await expect(page.getByRole('region',{name:'Crash players'}).getByRole('article')).toHaveCount(2);
     if(await page.getByRole('button',{name:/^Table chat/}).isVisible())await page.getByRole('button',{name:/^Table chat/}).click();

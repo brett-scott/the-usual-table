@@ -14,12 +14,11 @@ type Props = {
   busy: boolean;
   error: string;
   visibility: LobbyVisibility;
-  onVisibilityChange(value: LobbyVisibility): void;
   onSubmit(event: FormEvent): void;
   onClose(): void;
 };
 
-export function CreateTableDialog({ gameName='Blackjack',dialogRef, identity, funding, busy, error, visibility, onVisibilityChange, onSubmit, onClose }: Props) {
+export function CreateTableDialog({ gameName='Blackjack',dialogRef, identity, funding, busy, error, visibility, onSubmit, onClose }: Props) {
   const account = useAccountState(); const id = useId();
   useEffect(() => { if (account.account) void browserAuth().refreshWallet(); }, [account.account?.accountId]);
   const available = account.walletStatus === 'ready' && account.wallet
@@ -40,11 +39,7 @@ export function CreateTableDialog({ gameName='Blackjack',dialogRef, identity, fu
     <form className={s.form} onSubmit={onSubmit} aria-busy={busy}>
       <div className={s.body} data-signed-in={identity.signedIn}>
         <section className={s.tableSection} aria-labelledby={`${id}-table-title`}>
-          <h3 id={`${id}-table-title`}>Your table</h3>
-          <label htmlFor={`${id}-visibility`}>Table visibility</label>
-          <select id={`${id}-visibility`} value={visibility} disabled={busy} onChange={event => onVisibilityChange(event.target.value as LobbyVisibility)} aria-describedby={`${id}-visibility-help`}>
-            <option value="private">Private · Invite only</option><option value="public">Public · Listed</option>
-          </select>
+          <h3 id={`${id}-table-title`}>{visibility === 'private' ? 'Private table' : 'Public table'}</h3>
           <p className={s.hint} id={`${id}-visibility-help`}>{visibility === 'private' ? 'Only people with your invitation link can join.' : 'Listed in public tables. Anyone can join an open seat.'}</p>
         </section>
         <section className={s.seatSection} aria-labelledby={`${id}-seat-title`}>

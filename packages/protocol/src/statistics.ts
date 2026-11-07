@@ -25,6 +25,7 @@ export type AccountStatistics = z.infer<typeof accountStatisticsSchema>;
 export const blackjackStatisticsSchema = z.object({
   trackedRounds: count, hands: count, wins: count, losses: count, pushes: count, blackjacks: count,
   busts: count, doubles: count, splits: count, insuranceTaken: count, insuranceWon: count,
+  perfectPairsBets:count.optional(),perfectPairsWins:count.optional(),perfectPairsWageredUnits:units.optional(),perfectPairsReturnedUnits:units.optional(),
 }).strict();
 export const crashStatisticsSchema=z.object({trackedRounds:count,cashouts:count,crashes:count,highestCashoutCents:count}).strict()
   .refine(v=>BigInt(v.trackedRounds)===BigInt(v.cashouts)+BigInt(v.crashes)&&BigInt(v.highestCashoutCents)<=10000n,'Invalid Crash statistics');

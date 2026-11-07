@@ -142,6 +142,8 @@ export class PostgresWalletStore {
             requireWallet(current.state === 'active', 'SESSION_STATE');
             requireWallet(current.gameId === command.gameId && current.roomId === command.roomId, 'WRONG_GAME');
             requireWallet(!command.blackjack || command.gameId === 'blackjack', 'WRONG_GAME');
+            if(command.blackjack?.perfectPairs){const pair=command.blackjack.perfectPairs;requireWallet(command.rulesetVersion==='blackjack-perfect-pairs-v2'&&command.wageredUnits>=pair.wagerUnits+1000&&command.returnedUnits>=pair.returnedUnits,'INVALID_RESULT');}
+            if(command.rulesetVersion==='blackjack-perfect-pairs-v2')requireWallet(command.gameId==='blackjack'&&!!command.blackjack?.perfectPairs,'INVALID_RESULT');
             requireWallet(!command.crash || command.gameId === 'crash', 'WRONG_GAME');
             requireWallet(!command.baccarat || command.gameId === 'baccarat', 'WRONG_GAME');
             requireWallet(!command.roulette||command.gameId==='roulette','WRONG_GAME');

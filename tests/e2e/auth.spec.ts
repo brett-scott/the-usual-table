@@ -20,11 +20,11 @@ for (const provider of ['google', 'discord'] as const) test(`${provider} PKCE si
   await expect(page).toHaveURL(new RegExp(`#\\/room\\/${invite}$`));
   await expect(page.getByLabel('What should we call you?')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('casual-name'))).toBe('My table name');
-  await page.getByRole('dialog').getByLabel('Player icon').selectOption({ label: '🐱 Cat' });
+  await page.getByRole('dialog',{name:'Choose your nickname'}).getByLabel('Player icon').selectOption({ label: '🐱 Cat' });
   await page.getByRole('textbox', { name: 'Nickname', exact: true }).fill('Alex');
   await page.getByRole('button', { name: 'Save nickname' }).click();
   const accountButton = page.getByRole('button', { name: 'Account menu for Alex', exact: true });
-  await expect(accountButton).toBeVisible(); await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(accountButton).toBeVisible(); await expect(page.getByRole('dialog',{name:/Choose your nickname|Edit nickname|Your profile/})).not.toBeVisible();
   await expect(page.getByLabel('What should we call you?')).toHaveCount(0); await expect(page.getByRole('combobox', { name: /^Player icon/ })).toHaveCount(0);
   await expect(accountButton).toContainText('🐱');
   expect(fixture.counts().exchanges).toBe(1);
@@ -49,7 +49,7 @@ test('returning accounts edit their nickname from a keyboard accessible menu and
   const fixture = await providerFixture(page, 'google', 'success', 'Alex'); await page.goto('./#/games');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('button', { name: 'Continue with Google' }).click();
   const accountButton = page.getByRole('button', { name: 'Account menu for Alex', exact: true });
-  await expect(accountButton).toBeVisible(); await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(accountButton).toBeVisible(); await expect(page.getByRole('dialog',{name:/Choose your nickname|Edit nickname|Your profile/})).not.toBeVisible();
   await accountButton.focus(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Edit nickname' })).toBeFocused(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Edit player icon' })).toBeFocused(); await page.keyboard.press('ArrowDown');
@@ -83,7 +83,7 @@ test('returning accounts edit their nickname from a keyboard accessible menu and
   fixture.renameRemotely('From another device'); await page.reload();
   const remoteName = page.getByRole('button', { name: 'Account menu for From another device' });
   await expect(remoteName).toBeVisible();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByRole('dialog',{name:/Choose your nickname|Edit nickname|Your profile/})).not.toBeVisible();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await expect(remoteName).toBeVisible(); await remoteName.click();
@@ -100,7 +100,7 @@ test('a nickname load failure offers retry instead of overwriting an existing na
   await expect(page.getByRole('dialog', { name: 'Your profile' })).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('could not be loaded'); await expect(page.getByRole('button', { name: 'Save nickname' })).toHaveCount(0);
   fixture.failRead(false); await page.getByRole('button', { name: 'Retry loading profile' }).click();
-  await expect(page.getByRole('button', { name: 'Account menu for Already saved' })).toBeVisible(); await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Account menu for Already saved' })).toBeVisible(); await expect(page.getByRole('dialog',{name:/Choose your nickname|Edit nickname|Your profile/})).not.toBeVisible();
 });
 
 test('profile icons follow the account into private lobbies and shared tables without Blackjack identity fields', async ({ page }, testInfo) => {

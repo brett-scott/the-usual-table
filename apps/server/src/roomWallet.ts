@@ -37,7 +37,7 @@ export function beginWalletFunding(previous: OnlineRoom, playerId: string, accou
   room.wallet.seats[seat.sessionId] = seat;
   const player = room.engine.players.find(p => p.id === playerId)!;
   // Discard the temporary guest bankroll. It never becomes saved account money.
-  player.balance = 0; player.bet = 0; player.hands = [];
+  player.balance = 0; player.bet = 0; player.perfectPairsBet=0;delete player.perfectPairsRound;player.hands = [];
   enqueue(room, seat, { contract: 1, operationId: crypto.randomUUID(), accountId, kind: 'allocate',
     sessionId: seat.sessionId, roomId: room.id, gameId: 'blackjack', funding: 'account', amountUnits: buyInUnits }, 'pending_activation');
   enqueue(room, seat, { ...operation(seat), kind: 'activate' }, 'active');
@@ -53,17 +53,18 @@ export function recordWalletRound(room: OnlineRoom) {
     if (seat.status !== 'active' || seat.lastRound >= room.engine.roundId || !player?.hands.length) continue;
     const insurance = room.engine.insurance[player.id];
     check(player.hands.every(hand => hand.outcome !== undefined && hand.returned !== undefined), 'Cannot publish an unsettled hand.');
-    const wageredUnits = blackjackUnitsToWallet(player.hands.reduce((sum, hand) => sum + hand.wager, insurance?.wager ?? 0));
-    const returnedUnits = blackjackUnitsToWallet(player.hands.reduce((sum, hand) => sum + hand.returned!, insurance?.returned ?? 0));
+    const wageredUnits = blackjackUnitsToWallet(player.hands.reduce((sum, hand) => sum + hand.wager, (insurance?.wager ?? 0)+(player.perfectPairsRound?.wager??0)));
+    const returnedUnits = blackjackUnitsToWallet(player.hands.reduce((sum, hand) => sum + hand.returned!, (insurance?.returned ?? 0)+(player.perfectPairsRound?.returned??0)));
     const finalStack = seat.stackUnits - wageredUnits + returnedUnits;
     check(finalStack === blackjackUnitsToWallet(player.balance), 'Engine and funded stack disagree.');
     seat.stackUnits = finalStack; seat.sequence++; seat.lastRound = room.engine.roundId;
     enqueue(room, seat, { ...operation(seat), kind: 'settle', funding: 'account', roomId: room.id, gameId: 'blackjack',
-      sequence: seat.sequence, roundId: String(room.engine.roundId), rulesetVersion: 'blackjack-six-deck-v1', wageredUnits, returnedUnits,
+      sequence: seat.sequence, roundId: String(room.engine.roundId), rulesetVersion: player.perfectPairsRound?'blackjack-perfect-pairs-v2':'blackjack-six-deck-v1', wageredUnits, returnedUnits,
       blackjack: { hands: player.hands.length, wins: player.hands.filter(h => h.outcome === 'win' || h.outcome === 'blackjack').length,
         losses: player.hands.filter(h => h.outcome === 'loss').length, pushes: player.hands.filter(h => h.outcome === 'push').length,
         blackjacks: player.hands.filter(h => h.naturalEligible && h.cards.length === 2 && score(h.cards).total === 21).length,
         busts: player.hands.filter(h => score(h.cards).total > 21).length, doubles: player.hands.filter(h => h.wager === player.bet * 2).length,
+        ...(player.perfectPairsRound?{perfectPairs:{wagerUnits:blackjackUnitsToWallet(player.perfectPairsRound.wager),returnedUnits:blackjackUnitsToWallet(player.perfectPairsRound.returned!),kind:player.perfectPairsRound.kind}}:{}),
         splits: player.hands.length - 1, insuranceTaken: !!insurance?.wager, insuranceWon: (insurance?.returned ?? 0) > 0 } }, 'active');
   }
 }
@@ -112,7 +113,7 @@ export function validRoomWallet(room: OnlineRoom): boolean {
     if (seat.status === 'active' && player) {
       const insurance = room.engine.insurance[player.id];
       const unresolved = room.engine.phase !== 'BETTING' && room.engine.phase !== 'ROUND_COMPLETE';
-      const locked = unresolved ? player.hands.reduce((sum, hand) => sum + hand.wager - (hand.returned ?? 0), (insurance?.wager ?? 0) - (insurance?.returned ?? 0)) : 0;
+      const locked = unresolved ? player.hands.reduce((sum, hand) => sum + hand.wager - (hand.returned ?? 0), (insurance?.wager ?? 0) - (insurance?.returned ?? 0)+(player.perfectPairsRound?.wager??0)-(player.perfectPairsRound?.returned??0)) : 0;
       if ((player.balance + locked) * 50 !== seat.stackUnits) return false;
     }
     const entries = room.wallet.outbox.filter(entry => entry.after.sessionId === sessionId);

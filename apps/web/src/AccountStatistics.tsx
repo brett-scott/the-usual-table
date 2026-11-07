@@ -30,7 +30,7 @@ export function AccountStatisticsDialog({open,accountId:owner,onClose}:{open:boo
   useEffect(()=>{if(open&&owner){if(!dialog.current?.open){opener.current=document.activeElement as HTMLElement|null;dialog.current?.showModal();}}
     else dialog.current?.close();},[open,owner]);
   useEffect(()=>{if(!open||!owner)return;let active=true;const abort=new AbortController();setState({owner,status:'loading'});
-    void accountRequest('statistics/details?version=4',owner,detailedStatisticsSchema,'GET',abort.signal).then(data=>{if(active)setState({owner,status:'ready',data});})
+    void accountRequest('statistics/details?version=5',owner,detailedStatisticsSchema,'GET',abort.signal).then(data=>{if(active)setState({owner,status:'ready',data});})
       .catch(error=>{if(active)setState({owner,status:error instanceof Error&&error.message==='STATISTICS_NOT_CONNECTED'?'not-connected':'error'});});
     return()=>{active=false;abort.abort();};},[open,owner,revision]);
   const current=state.owner===owner?state:{status:'loading' as const,data:undefined}; const data=current.data;
@@ -50,12 +50,12 @@ export function AccountStatisticsDialog({open,accountId:owner,onClose}:{open:boo
           <Summary game={game}/>
           {tab==='general'&&<p>Games played: {data.summary.games.filter(g=>BigInt(g.roundsPlayed)>0n).length}</p>}
           {tab==='blackjack'&&<><h3>Blackjack details</h3><p className={s.note}>Detailed counters cover {data.blackjack.trackedRounds} rounds recorded since this feature was enabled.</p>
-            <dl>{([['Hands played','hands'],['Hands won','wins'],['Hands lost','losses'],['Hands pushed','pushes'],['Natural blackjacks','blackjacks'],['Busts','busts'],['Doubles','doubles'],['Splits','splits'],['Insurance bets','insuranceTaken'],['Insurance wins','insuranceWon']] as const)
-              .map(([label,key])=><div key={key}><dt>{label}</dt><dd>{new Intl.NumberFormat('en').format(BigInt(data.blackjack[key]))}</dd></div>)}</dl></>}
+            <dl>{([['Hands played','hands'],['Hands won','wins'],['Hands lost','losses'],['Hands pushed','pushes'],['Natural blackjacks','blackjacks'],['Busts','busts'],['Doubles','doubles'],['Splits','splits'],['Insurance bets','insuranceTaken'],['Insurance wins','insuranceWon'],['Perfect Pairs bets','perfectPairsBets'],['Perfect Pairs wins','perfectPairsWins']] as const)
+              .map(([label,key])=><div key={key}><dt>{label}</dt><dd>{new Intl.NumberFormat('en').format(BigInt(data.blackjack[key]??'0'))}</dd></div>)}</dl></>}
           {tab==='baccarat'&&(data.baccarat?<><h3>Baccarat details</h3><p className={s.note}>No-commission rules. Each round counts once across main, Tie and side bets. Chip totals include every bet.</p><dl>{[['Player bets',data.baccarat.playerBets],['Banker bets',data.baccarat.bankerBets],['Tie bets',data.baccarat.tieBets],['Winning Tie bets',data.baccarat.tieWins],['Banker wins on six',data.baccarat.bankerSixWins],['Commission paid',statisticsChips(data.baccarat.commissionUnits)]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></>:<p>Baccarat detail tracking needs the latest database setup.</p>)}
           {tab==='roulette'&&(data.roulette?<><h3>Roulette details</h3><dl><div><dt>Straight-up wins</dt><dd>{data.roulette.straightUpWins}</dd></div></dl><p className={s.note}>Each spin counts once across all your bets.</p></>:<p>Roulette detail tracking needs the latest database setup.</p>)}
           {tab==='crash'&&(data.crash?<><h3>Crash details</h3><dl>{[['Successful cash-outs',data.crash.cashouts],['Wagers lost to crashes',data.crash.crashes],['Highest cash-out',`${(Number(data.crash.highestCashoutCents)/100).toFixed(2)}×`]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></>:<p>Crash detail tracking needs the latest database setup.</p>)}
-          <p className={s.note}>{tab==='blackjack'?'Each round includes all your hands and insurance. ':''}Results update after the round is saved.</p>
+          <p className={s.note}>{tab==='blackjack'?'Each round includes all your hands, insurance and Perfect Pairs. ':''}Results update after the round is saved.</p>
         </>}
       </section>}
       <button className={s.refresh} disabled={current.status==='loading'} onClick={()=>setRevision(value=>value+1)}>{current.status==='error'||current.status==='not-connected'?'Retry statistics':'Refresh statistics'}</button>

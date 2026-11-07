@@ -43,7 +43,7 @@ test('Club Gallery lists only playable games without changing existing invitatio
   await expect(page.getByRole('heading', { name: 'Find a Table', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /practice/i })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await expect(page.getByLabel('What should we call you?')).toBeVisible();
-  await expect(page.getByLabel('Table visibility')).toHaveValue('private');
+  await expect(page.getByRole('heading',{name:'Private table',exact:true})).toBeVisible();
   await page.getByRole('button', { name: 'Close create table' }).click();
   await page.getByRole('link', { name: 'All games' }).click(); await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
 });
@@ -83,8 +83,8 @@ test('public table browser lists a real room and joins through the invitation fl
   const context = await browser.newContext({ viewport: page.viewportSize()!, reducedMotion: 'reduce' }); const peer = await context.newPage();
   try {
     const hostName = `Open ${testInfo.project.name}`;
-    await openTableEntry(page); await page.getByLabel('What should we call you?').fill(hostName);
-    await page.getByLabel('Table visibility').selectOption('public'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
+    await openTableEntry(page, 'public'); await page.getByLabel('What should we call you?').fill(hostName);
+    await page.getByRole('button', { name: 'Create table', exact: true }).click();
     await expect(page.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
     const invite = page.url();
     await peer.goto(invite); await expect(peer.getByLabel('What should we call you?')).toBeVisible();
@@ -147,7 +147,7 @@ test('one-player private lobbies play successive rounds, reload, admit friends a
   }));
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Solo host');
-  await expect(page.getByLabel('Table visibility')).toHaveValue('private'); await page.getByRole('button', { name: 'Create table', exact: true }).click();
+  await expect(page.getByRole('heading',{name:'Private table',exact:true})).toBeVisible(); await page.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled(); const invite = page.url();
   await page.getByRole('button', { name: 'Open betting' }).click();
   for (let round = 0; round < 2; round++) {

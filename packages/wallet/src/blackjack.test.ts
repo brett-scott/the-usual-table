@@ -111,6 +111,22 @@ it('includes insurance exactly once when a dealer natural ends the round', async
   await f.flush(); expect((await wallet.getWallet(f.accountId)).atTablesUnits).toBe(20_000);
 });
 
+it('persists and retries Perfect Pairs with split hands, then returns the combined stack once',async()=>{
+  const f=await fixture();await f.flush();
+  const rest=createDecks();const pick=(rank:Rank,suit?:string)=>rest.splice(rest.findIndex(c=>c.rank===rank&&(!suit||c.suit===suit)),1)[0]!;
+  f.room.engine.shoe.cards=[pick('8','spades'),pick('10'),pick('8','spades'),pick('7'),pick('10'),pick('9'),...rest];
+  f.room=play(f.room,{type:'StartBetting'});f.room=play(f.room,{type:'PlaceBet',amount:20,perfectPairsAmount:20});f.room=play(f.room,{type:'Ready'});
+  expect(validRoomWallet(f.room)).toBe(true);expect(restoreRoom(f.room,now).room.engine.players[0]!.perfectPairsRound?.kind).toBe('perfect');
+  f.room=play(f.room,{type:'Split'});while(f.room.engine.phase==='PLAYER_TURNS')f.room=play(f.room,{type:'Stand'});
+  const player=f.room.engine.players[0]!;const result=f.room.wallet!.outbox[0]!.command;
+  expect(result).toMatchObject({kind:'settle',rulesetVersion:'blackjack-perfect-pairs-v2',wageredUnits:3000,blackjack:{hands:2,perfectPairs:{wagerUnits:1000,returnedUnits:26000,kind:'perfect'}}});
+  const final=player.balance*50;recordWalletRound(f.room);expect(f.room.wallet!.outbox).toHaveLength(1);
+  let lost=true;await f.flush({async execute(input){const receipt=await wallet.execute(input);if(lost){lost=false;throw Error('Lost acknowledgement');}return receipt;}});f.reload();
+  f.room=play(f.room,{type:'Leave'});collectSeats(f.room,now);await f.flush(wallet,100000);
+  expect(await wallet.getWallet(f.accountId)).toMatchObject({availableUnits:80000+final,atTablesUnits:0,pendingReturnUnits:0});
+  const {rows}=await db.query<{facts:{perfectPairs:{kind:string}}}>('SELECT facts FROM wallet_private.results WHERE account_id=$1',[f.accountId]);expect(rows).toHaveLength(1);expect(rows[0]!.facts.perfectPairs.kind).toBe('perfect');
+});
+
 it('queues settlement from an expired hand before membership cleanup or the next round', async () => {
   const f = await fixture(); await f.flush(); rig(f.room, ['10', '10', '7', '8']);
   f.room = play(f.room, { type: 'StartBetting' }); f.room = play(f.room, { type: 'Ready' });

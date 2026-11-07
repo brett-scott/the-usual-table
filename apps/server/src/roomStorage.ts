@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createDecks, GameError } from '@casual/engine';
-import { lobbyVisibilitySchema, playerIconSchema } from '@casual/protocol';
+import { perfectPairKind,PERFECT_PAIR_PROFITS,perfectPairKindSchema,blackjackBetAmountSchema,lobbyVisibilitySchema, playerIconSchema } from '@casual/protocol';
 import { newMember, PRESENCE_MS, type OnlineRoom } from './roomState';
 import { fundedSeat, roomWalletSchema, validRoomWallet } from './roomWallet';
 
@@ -12,7 +12,7 @@ const card = z.object({ id, rank: z.enum(['A', '2', '3', '4', '5', '6', '7', '8'
 const hand = z.object({ id, cards: z.array(card).max(22), wager: integer, naturalEligible: z.boolean(), splitAces: z.boolean(), status: z.enum(['playing', 'stood', 'bust']), timedOut: z.boolean().optional(), outcome: z.enum(['blackjack', 'win', 'push', 'loss']).optional(), returned: integer.optional() });
 const engine = z.object({
   schema: z.literal(1), revision: integer, roundId: integer, phase: z.enum(['BETTING', 'INSURANCE', 'PLAYER_TURNS', 'ROUND_COMPLETE']),
-  players: z.array(z.object({ id, name: z.string().min(1).max(24), icon: playerIconSchema.optional(), seat: integer.max(3), balance: integer, bet: integer.max(200), hands: z.array(hand).max(4) })).max(4),
+  players: z.array(z.object({ id, name: z.string().min(1).max(24), icon: playerIconSchema.optional(), seat: integer.max(3), balance: integer, bet: blackjackBetAmountSchema, perfectPairsBet:blackjackBetAmountSchema.optional(), perfectPairsRound:z.object({wager:blackjackBetAmountSchema.refine(v=>v>0),cards:z.tuple([id,id]),kind:perfectPairKindSchema,returned:integer.optional()}).optional(), hands: z.array(hand).max(4) })).max(4),
   dealer: z.array(card).max(22), revealed: z.boolean(), activePlayer: integer.max(3), activeHand: integer.max(3), decisionDeadline: time,
   insurance: z.record(id, z.object({ wager: integer, decided: z.boolean(), returned: integer })),
   shoe: z.object({ cards: z.array(card).length(312), cursor: integer.max(312), number: integer.min(1) }),
@@ -46,6 +46,15 @@ function validateInvariants(room: OnlineRoom) {
   if (new Set(players.map(p => p.id)).size !== players.length || new Set(players.map(p => p.seat)).size !== players.length) return false;
   if (Object.keys(room.members).length !== players.length || players.some(p => !room.members[p.id])) return false;
   if (room.managerId && !room.members[room.managerId]) return false;
+  for(const player of players){
+    const pair=player.perfectPairsRound;
+    if(pair){
+      const cards=pair.cards.map(id=>player.hands.flatMap(h=>h.cards).find(c=>c.id===id));
+      if(pair.cards[0]===pair.cards[1]||cards.some(c=>!c)||perfectPairKind(cards as import('@casual/protocol').Card[])!==pair.kind||pair.wager!==player.perfectPairsBet)return false;
+      const returned=pair.kind==='none'?0:pair.wager*(PERFECT_PAIR_PROFITS[pair.kind]+1);
+      if(room.engine.phase==='BETTING'||(room.engine.phase==='ROUND_COMPLETE'?pair.returned!==returned:pair.returned!==undefined))return false;
+    }else if(room.engine.phase!=='BETTING'&&player.hands.length&&(player.perfectPairsBet??0)>0)return false;
+  }
   const shoe = room.engine.shoe;
   if (new Set(shoe.cards.map(c => c.id)).size !== 312 || shoe.cards.some(c => { const physical = physicalCards.get(c.id); return !physical || c.rank !== physical.rank || c.suit !== physical.suit; })) return false;
   const visible = [...room.engine.dealer, ...players.flatMap(p => p.hands.flatMap(h => h.cards))];

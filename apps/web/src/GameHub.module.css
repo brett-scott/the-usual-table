@@ -1,4 +1,5 @@
 .hub { height:100dvh;min-height:0;display:flex;flex-direction:column;background:#11251e;color:#f4ecda;padding-inline:max(16px,env(safe-area-inset-left));padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom); }
+.galleryShell { flex:1;min-height:0;display:flex;flex-direction:column; }
 .header { flex-shrink:0;width:min(100%,1404px);margin-inline:auto;height:88px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #4a5d4d; }
 .brand { min-width:0;display:flex;align-items:center;gap:13px;text-decoration:none;font:25px Georgia,serif;white-space:nowrap; }
 .brand > span:first-child { flex-shrink:0;color:#e4c89d;font-size:25px;width:35px;height:41px;display:grid;place-items:center;border:1px solid #e4c89d;border-radius:7px;transform:rotate(-8deg); }
@@ -6,7 +7,7 @@
 .main { flex:1;min-height:0;display:flex;flex-direction:column;width:min(100%,1404px);padding:26px 0 28px;margin-inline:auto;gap:24px; }
 .heading { flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px; }
 .eyebrow { color:#e4c89d;font-size:9px;letter-spacing:1.8px;margin:0 0 9px; }
-.main h1,.browser h1 { font:44px/1 Georgia,serif;letter-spacing:-1.3px;margin:0; }
+.main h1 { font:44px/1 Georgia,serif;letter-spacing:-1.3px;margin:0; }
 .returnTable { color:#e4c89d;font-size:12px;min-height:44px;display:flex;align-items:center;gap:8px;text-align:right; }
 .catalog { flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;padding:3px; }
 .catalog:focus-visible { outline:2px solid #ead594;outline-offset:2px;border-radius:8px; }
@@ -22,27 +23,6 @@
 .description { font-size:11px;color:#526354;margin:10px 0 18px;line-height:1.4; }
 .findLink { display:flex;align-items:center;justify-content:space-between;min-height:44px;flex-shrink:0;padding:0 11px;border:1px solid #8c967d;border-radius:4px;font-size:11px;margin-top:auto;font-weight:600;text-decoration:none;color:#243d2f; }
 .findLink:hover { background:#243e31;color:#fff1d8;border-color:#243e31; }.findLink:focus-visible { outline:3px solid #84552d;outline-offset:2px; }.findLink span { font-size:19px;font-weight:400; }
-.intro { color:#b8c8ba;font-size:14px;line-height:1.6;margin:14px 0 20px; }
-.primary { background:#dac18a;color:#172c21;font-weight:650; }
-.browserActions a,.lobby > a,.back { min-height:44px;display:flex;align-items:center;justify-content:center;padding:9px;border-radius:7px;font-size:12px;text-decoration:none; }
-.browser { display: flex; flex-direction: column; min-height: 0; flex: 1; width: min(100%, 900px); margin-inline: auto; padding: 0 4% 20px; }
-.hub:has(.browser) { height: 100dvh; min-height: 0; }
-.back { align-self: start; color: #dac18a; padding-inline: 0; }
-.browserHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.browser button { border: 1px solid #59664e; background: #22352a; color: #eeeee2; border-radius: 7px; padding: 10px 16px; font-size: 12px; }
-.browser .intro { margin-bottom: 16px; }
-.error { color: #ffb5a8; font-size: 13px; }
-.empty { color: #c6d6c6; line-height: 1.6; font-size: 14px; }
-.lobbyList { flex: 1; min-height: 0; overflow-y: auto; }
-.lobby { display: flex; align-items: center; justify-content: space-between; gap: 15px; border: 1px solid #435746; border-radius: 10px; padding: 14px; margin-bottom: 10px; background: #17271f; }
-.lobby > div { min-width: 0; }
-.lobby h2 { font: 20px Georgia, serif; margin: 0 0 6px; overflow-wrap: anywhere; }
-.lobby p { color: #b8c8ba; font-size: 11px; margin: 0; }
-.lobby > a { flex-shrink: 0; border: 1px solid #a18f62; color: #ead594; }
-.browserActions { flex-shrink: 0; margin-top: 12px; }
-.browserActions > button { width: 100%; min-height: 44px; background: #dac18a; color: #172c21; border-color: #dac18a; font-weight: 650; }
-.browserActions > span { color: #a6b8ab; display: block; font-size: 10px; margin-top: 10px; text-align: center; }
-
 @media(min-width:1101px) { .hub { padding-inline:max(32px,calc((100vw - 1344px)/2)); } }
 @media(max-height:780px) and (min-width:901px) { .header { height:74px; }.main { padding-top:20px;gap:20px; }.main h1 { font-size:37px; }.gameCopy { padding:15px 14px 12px; }.game h2 { font-size:24px; }.description { margin:8px 0 10px; }.category { margin-bottom:7px; } }
 @media(max-width:1000px), (max-height:500px) {
@@ -52,11 +32,9 @@
  .game { flex-direction:row;border-radius:5px; }.art { width:clamp(54px,18vw,76px);height:100%;min-height:0;flex-shrink:0; }.art:before { inset:6px; }.art svg { max-height:94px; }.artNumber,.category,.description { display:none; }
  .gameCopy { flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:6px 12px;gap:8px; }.game h2 { font-size:clamp(19px,4.8vw,22px);margin:0; }
  .findLink { min-height:44px;border:0;border-left:1px solid #b4b79f;padding:0 0 0 12px;margin:0;font-size:11px;gap:10px; }.findLink span { font-size:16px; }
- .browser { padding:0 0 16px; }.browser h1 { font-size:29px; }.browser .intro { font-size:12px;margin-block:12px; }.lobby { padding:10px;gap:8px; }.lobby h2 { font-size:18px; }
 }
 @media(max-width:370px) { .hub { padding-inline:max(12px,env(safe-area-inset-left)); }.brand { font-size:18px; }.brand > span:first-child { width:23px;height:28px; }.main { padding-top:11px;gap:10px; }.heading h1 { font-size:27px; }.game h2 { font-size:19px; }.catalog { gap:7px; }.gameCopy { padding-inline:9px;gap:6px; }.findLink { font-size:10px;padding-left:9px;gap:7px; }.returnTable { max-width:94px;font-size:9px; } }
 @media(max-height:500px) {
  .header { min-height:48px;height:48px;padding-block:2px; }.brand { font-size:19px; }.brand > span:first-child { height:30px;width:25px;font-size:20px; }.main { padding:10px 0 12px;gap:10px; }.heading .eyebrow { display:none; }.heading h1 { font-size:26px; }.catalog { gap:4px; }.gameCopy { padding-block:0; }.returnTable { min-height:32px;max-width:none; }
- .browser .back { min-height:30px;padding-block:0; }.browser h1 { font-size:27px; }.browser .intro { margin-block:8px;font-size:11px; }.browserActions { margin-top:6px; }.browserActions > span { margin-top:5px; }.browser .eyebrow { display:none; }
 }
 @media(prefers-reduced-motion:reduce) { .findLink { transition:none; } }

@@ -32,13 +32,13 @@ it('settles dealer blackjack after the last insurance decision without offering 
     for (const peer of [a, b]) { const state = await peer.last(); expect(state.phase).toBe('BETTING'); expect(state.legalActions).toContain('Ready'); }
   } finally { await close(a, b); }
 });
-it('persists a shared ten-second results window, then opens betting exactly once', async () => {
+it('persists five seconds after the final dealer reveal, then opens betting exactly once', async () => {
   const { guest, peer } = await settled();
   try {
     const state = await peer.last(); expect(state.phase).toBe('ROUND_COMPLETE');
     expect(state.players[0]!.roundResult).toEqual({ net: -20, outcome: 'lost' });
     const room = await inspect(guest.session.inviteId, room => room);
-    expect(state.roundDeadline).toBe(room.engine.updatedAt + 1420 + 10_000);
+    expect(state.roundDeadline).toBe(room.engine.updatedAt + 1420 + 5_000);
     expect(expireRoomDecisions(room, max => max - 1, state.roundDeadline! - 1)).toBe(room);
     const next = expireRoomDecisions(room, max => max - 1, state.roundDeadline!);
     expect(next.engine.phase).toBe('BETTING'); expect(next.bettingDeadline).toBe(state.roundDeadline! + 30_000);

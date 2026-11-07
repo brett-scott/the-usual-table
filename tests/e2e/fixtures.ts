@@ -28,10 +28,13 @@ export async function installEngineFixture(page: Page) {
   });
 }
 
-export async function openTableEntry(page: Page) {
+export async function openTableEntry(page: Page, visibility: 'public' | 'private' = 'private') {
   await page.goto('./#/games/blackjack');
   const create = page.getByRole('button', { name: 'Create a table', exact: true });
-  if (!enginePages.has(page)) await create.click();
+  if (!enginePages.has(page)) {
+    await page.getByRole('radio', { name: visibility === 'public' ? 'Public' : 'Private', exact: true }).check();
+    await create.click();
+  }
 }
 
 export async function openTableOptions(page: Page, section: 'Rules' | 'Cards' | 'Themes') {

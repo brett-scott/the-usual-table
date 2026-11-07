@@ -1,7 +1,7 @@
-import { commandSchema, displayNameSchema, playerIconSchema, type PlayerIcon, type ActionType, type Card, type Command, type Outcome, type Phase, type Rank, type Snapshot, type Suit } from '@casual/protocol';
+import { PERFECT_PAIR_PROFITS,perfectPairKind,commandSchema, displayNameSchema, playerIconSchema, type PerfectPairKind,type PlayerIcon, type ActionType, type Card, type Command, type Outcome, type Phase, type Rank, type Snapshot, type Suit } from '@casual/protocol';
 
 export type { Card, Rank, Suit } from '@casual/protocol';
-export const RULES = { decks: 6, startingBalance: 2000, minBet: 20, maxBet: 200, betStep: 20, maxHands: 4 } as const;
+export const RULES = { decks: 6, startingBalance: 2000, minBet: 20, maxBet: 2000, betStep: 20, maxHands: 4 } as const;
 export const CUT_CARD = 234;
 export const HAND_DURATION_MS = 20_000;
 /** 17 hands: at most 119 preterminal cards + one terminal card each. See docs/RULES.md. */
@@ -12,7 +12,7 @@ export interface Hand {
   id: string; cards: Card[]; wager: number; naturalEligible: boolean; splitAces: boolean;
   status: 'playing' | 'stood' | 'bust'; timedOut?: boolean; outcome?: Outcome; returned?: number;
 }
-export interface Player { id: string; name: string; icon?: PlayerIcon; seat: number; balance: number; bet: number; hands: Hand[] }
+export interface Player { id: string; name: string; icon?: PlayerIcon; seat: number; balance: number; bet: number; perfectPairsBet?:number; perfectPairsRound?:{wager:number;cards:[string,string];kind:PerfectPairKind;returned?:number}; hands: Hand[] }
 export interface RoomState {
   schema: 1; revision: number; roundId: number; phase: Phase; players: Player[];
   dealer: Card[]; revealed: boolean; activePlayer: number; activeHand: number;
@@ -85,7 +85,7 @@ export function expireDecision(previous: RoomState, now: number): RoomState {
 export function legalActions(state: RoomState, playerId: string): ActionType[] {
   const p = state.players.find(p => p.id === playerId);
   if (!p) return [];
-  if (state.phase === 'BETTING') return ['PlaceBet', ...(p.balance >= p.bet && p.bet >= 20 ? ['Ready' as const] : []), ...(p.balance < 20 ? ['Refill' as const] : [])];
+  if (state.phase === 'BETTING') return ['PlaceBet', ...(p.balance >= p.bet+(p.perfectPairsBet??0) && p.bet >= 20 ? ['Ready' as const] : []), ...(p.balance < 20 ? ['Refill' as const] : [])];
   if (state.phase === 'ROUND_COMPLETE') return ['NextRound', ...(p.balance < 20 ? ['Refill' as const] : [])];
   if (state.phase === 'INSURANCE') return state.insurance[p.id] && !state.insurance[p.id]!.decided ? ['InsuranceDecision'] : [];
   const hand = current(state);
@@ -114,6 +114,7 @@ function settle(state: RoomState) {
     requireRule(Number.isInteger(h.returned), 'INVALID_ACCOUNTING', 'Payout must use integer half-chip units.');
     p.balance += h.returned;
   }
+  for(const p of state.players)if(p.perfectPairsRound){const pair=p.perfectPairsRound;pair.returned=pair.kind==='none'?0:pair.wager*(PERFECT_PAIR_PROFITS[pair.kind]+1);p.balance+=pair.returned;}
   state.settledRound = state.roundId; state.phase = 'ROUND_COMPLETE';
 }
 function dealerTurn(state: RoomState) {
@@ -139,15 +140,15 @@ function finishPeek(state: RoomState) {
   if (blackjack) settle(state); else advance(state);
 }
 function deal(state: RoomState, random: RandomIndex) {
-  requireRule(state.players.some(p => p.bet > 0 && p.balance >= p.bet), 'NO_WAGERS', 'Place a valid wager before dealing.');
+  requireRule(state.players.some(p => p.bet > 0 && p.balance >= p.bet+(p.perfectPairsBet??0)), 'NO_WAGERS', 'Place a valid wager before dealing.');
   const needsShuffle = state.shoe.cursor >= CUT_CARD || state.shoe.cards.length - state.shoe.cursor < ROUND_RESERVE;
   state.shuffled = needsShuffle || state.shoe.cursor === 0;
   if (needsShuffle) state.shoe = createShoe(random, state.shoe.number + 1);
   state.roundId++; state.dealer = []; state.revealed = false; state.insurance = {};
   for (const p of state.players) {
-    p.hands = [];
-    if (p.bet > 0 && p.balance >= p.bet) {
-      p.balance -= p.bet;
+    p.hands = [];delete p.perfectPairsRound;
+    if (p.bet > 0 && p.balance >= p.bet+(p.perfectPairsBet??0)) {
+      p.balance -= p.bet+(p.perfectPairsBet??0);
       p.hands = [{ id: `${state.roundId}:${p.id}:0`, cards: [], wager: p.bet, status: 'playing', naturalEligible: true, splitAces: false }];
     }
   }
@@ -155,7 +156,10 @@ function deal(state: RoomState, random: RandomIndex) {
     for (const p of state.players) if (p.hands[0]) p.hands[0].cards.push(draw(state));
     state.dealer.push(draw(state));
   }
-  for (const p of state.players) if (p.hands[0] && isNatural(p.hands[0])) p.hands[0].status = 'stood';
+  for (const p of state.players) if (p.hands[0]) {
+    const cards=p.hands[0].cards;if(p.perfectPairsBet)p.perfectPairsRound={wager:p.perfectPairsBet,cards:[cards[0]!.id,cards[1]!.id],kind:perfectPairKind(cards)};
+    if(isNatural(p.hands[0]))p.hands[0].status='stood';
+  }
   if (state.dealer[0]!.rank === 'A') {
     state.phase = 'INSURANCE';
     for (const p of state.players) if (p.hands.length) state.insurance[p.id] = { wager: 0, decided: false, returned: 0 };
@@ -175,10 +179,12 @@ export function transition(previous: RoomState, input: Command, random: RandomIn
   const state = structuredClone(previous); const p = state.players[pIndex]!; const action = command.action;
   if (['Hit', 'Stand', 'Double', 'Split'].includes(action.type)) requireRule(command.handId === current(state)?.id, 'STALE_HAND', 'That hand is no longer active.');
   switch (action.type) {
-    case 'PlaceBet':
-      requireRule(action.amount >= 20 && action.amount <= 200 && action.amount % 20 === 0, 'INVALID_BET', 'Bet 10–100 chips in steps of 10.');
-      requireRule(action.amount <= p.balance, 'INSUFFICIENT_FUNDS', 'Your balance is too low for that bet.');
-      p.bet = action.amount; break;
+    case 'PlaceBet': {
+      const pair=action.perfectPairsAmount??p.perfectPairsBet??0;
+      requireRule(action.amount>0||pair===0,'INVALID_BET','Perfect Pairs requires a main bet.');
+      requireRule(action.amount+pair <= p.balance, 'INSUFFICIENT_FUNDS', 'Your table stack is too low for those bets.');
+      p.bet = action.amount;p.perfectPairsBet=pair;break;
+    }
     case 'Ready': deal(state, random); break;
     case 'InsuranceDecision': {
       const insurance = state.insurance[p.id]!;
@@ -208,9 +214,9 @@ export function transition(previous: RoomState, input: Command, random: RandomIn
     }
     case 'NextRound':
       state.phase = 'BETTING'; state.dealer = []; state.revealed = false; state.insurance = {};
-      for (const player of state.players) { player.hands = []; player.bet = Math.min(player.bet, Math.floor(player.balance / 20) * 20); }
+      for (const player of state.players) { player.hands = []; player.bet = Math.min(player.bet, Math.floor(player.balance / 20) * 20);player.perfectPairsBet=0;delete player.perfectPairsRound; }
       break;
-    case 'Refill': p.balance = 2000; p.bet = 20; break;
+    case 'Refill': p.balance = 2000; p.bet = 20;if(state.phase==='BETTING')p.perfectPairsBet=0; break;
   }
   updateDeadline(previous, state, now);
   if (action.type === 'Hit' && state.phase === 'PLAYER_TURNS') state.decisionDeadline = now + HAND_DURATION_MS;
@@ -223,11 +229,13 @@ export function transition(previous: RoomState, input: Command, random: RandomIn
 export function project(state: RoomState, playerId: string): Snapshot {
   requireRule(state.players.some(p => p.id === playerId), 'SESSION_INVALID', 'Unknown player.');
   return {
-    protocol: 1, revision: state.revision, roundId: state.roundId, phase: state.phase, you: playerId,
+    protocol: 1, blackjackBettingVersion:2, revision: state.revision, roundId: state.roundId, phase: state.phase, you: playerId,
     players: state.players.map(p => {
       const insurance = state.insurance[p.id];
-      const net = p.hands.reduce((sum, h) => sum + (h.returned ?? 0) - h.wager, 0) + (insurance ? insurance.returned - insurance.wager : 0);
+      const pair=p.perfectPairsRound;
+      const net = p.hands.reduce((sum, h) => sum + (h.returned ?? 0) - h.wager, 0) + (insurance ? insurance.returned - insurance.wager : 0)+(pair?(pair.returned??0)-pair.wager:0);
       return { id: p.id, name: p.name, ...(p.icon ? { icon: p.icon } : {}), seat: p.seat, balance: p.balance, bet: p.bet,
+        perfectPairs:state.phase==='BETTING'?{wager:p.perfectPairsBet??0}:pair?{wager:pair.wager,...(state.phase==='ROUND_COMPLETE'?{kind:pair.kind,returned:pair.returned}:{})}:{wager:0},
         hands: p.hands.map(h => ({ id: h.id, cards: h.cards.map(c => ({ id: c.id, rank: c.rank, suit: c.suit })), total: score(h.cards).total, soft: score(h.cards).soft, wager: h.wager, status: h.status, timedOut: h.timedOut, outcome: h.outcome, returned: h.returned })),
         ...(state.phase === 'ROUND_COMPLETE' ? { roundResult: { net, outcome: !p.hands.length ? 'out' as const : net > 0 ? 'won' as const : net < 0 ? 'lost' as const : 'even' as const } } : {}) };
     }),
