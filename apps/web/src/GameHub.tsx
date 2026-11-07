@@ -6,21 +6,29 @@ import s from './GameHub.module.css';
 import { AccountControls } from './AccountControls';
 import { useTableFunding, useTableIdentity } from './TableIdentity';
 import { CreateTableDialog } from './CreateTableDialog';
+import { GameArtwork } from './GameArtwork';
+
+const galleryDetails:Partial<Record<GameId,{category:string;short:string}>>={
+  blackjack:{category:'The card table',short:'Find your twenty-one.'},
+  baccarat:{category:'The card table',short:'Player. Banker. Tie.'},
+  roulette:{category:'The wheel',short:'One wheel. Your numbers.'},
+  'duck-race':{category:'The race',short:'Pick your duck.'},
+  crash:{category:'The multiplier',short:'Choose your moment.'},
+};
 
 export function GameHub({ browse = false,gameId='blackjack' }: { browse?: boolean;gameId?:GameId }) {
   const recent = lastTable();
   const identity = useTableIdentity();
   return <div className={s.hub}>
-    <header className={s.header}><a className={s.brand} href="#/games"><span aria-hidden="true">♣</span><span>The Usual Table</span></a>{recent ? <a className={s.returnTable} href={`#/room/${recent.inviteId}`}>Return to your last table ↗</a> : <span className={s.tagline}>ALL THE FUN. NONE OF THE STAKES.</span>}<AccountControls beforeSignIn={identity.saveDraft} /></header>
+    <header className={s.header}><a className={s.brand} href="#/games"><span aria-hidden="true">♣</span><span>The Usual Table</span></a><AccountControls showWallet beforeSignIn={identity.saveDraft} /></header>
     {browse ? gameEntries[gameId]&&GAME_CATALOG.find(game=>game.id===gameId)?.status==='available'?<LobbyBrowser identity={identity} gameId={gameId}/>:<main className={s.main}><h1>This game is coming soon.</h1><a href="#/games">All games</a></main> : <main className={s.main}>
-      <p className={s.eyebrow}>GOOD GAMES. EASY COMPANY.</p><h1>A game for every table.</h1><p className={s.intro}>Pick your game. Bring your friends. Nothing on the line.</p>
-      <div className={s.catalog} role="region" aria-label="Game catalog" tabIndex={0}>{GAME_CATALOG.map(game => <article key={game.id} className={s.game} data-game={game.id} aria-label={game.name}>
-        <div className={s.art} aria-hidden="true"><span>{game.symbol}</span><i>{game.badge}</i></div>
-        <div className={s.gameHeading}><h2>{game.name}</h2><span>{game.status === 'available' ? 'PLAY NOW' : 'COMING SOON'}</span></div><p>{game.description}</p>
-        {game.status === 'available' ? <div className={s.gameLinks}><a className={s.primary} href={`#/games/${game.id}`}>Find a Table <span aria-hidden="true">↗</span></a></div> : <span className={s.soon}>More good hands ahead.</span>}
+      <div className={s.heading}><div><p className={s.eyebrow}>THE GAME ROOM</p><h1>Take your pick.</h1></div>{recent&&<a className={s.returnTable} href={`#/room/${recent.inviteId}`}>Return to your last table <span aria-hidden="true">↗</span></a>}</div>
+      <div className={s.catalog} role="region" aria-label="Game catalog" tabIndex={0}>{GAME_CATALOG.filter(game=>game.status==='available'&&gameEntries[game.id]).map(game => <article key={game.id} className={s.game} data-game={game.id} aria-label={game.name}>
+        <div className={s.art} aria-hidden="true"><GameArtwork gameId={game.id}/><span className={s.artNumber}>{game.badge}</span></div>
+        <div className={s.gameCopy}><p className={s.category}>{galleryDetails[game.id]?.category??'The game room'}</p><h2>{game.name}</h2><p className={s.description}>{galleryDetails[game.id]?.short??game.description}</p>
+        <a className={s.findLink} href={`#/games/${game.id}`}>Find a Table <span aria-hidden="true">↗</span></a></div>
       </article>)}</div>
     </main>}
-    <footer className={s.footer}>Play chips only · No purchases. No cash value.</footer>
   </div>;
 }
 

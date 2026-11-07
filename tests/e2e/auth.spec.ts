@@ -136,7 +136,7 @@ test('profile icons follow the account into private lobbies and shared tables wi
     await guest.getByRole('button', { name: 'Leave table', exact: true }).click();
   } finally { await peer.close(); }
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
   await account.click(); await page.getByRole('menuitem', { name: 'Edit player icon' }).click();
   await editor.getByLabel('Player icon').selectOption(''); await editor.getByRole('button', { name: 'Save profile' }).click();
   await page.reload(); await expect(account).not.toContainText('🐱');
@@ -170,17 +170,21 @@ test('the profile menu shows saved wallet units, honest unavailable states and r
 test('a first wallet receives 10,000 chips once, retries safely and survives reload without importing table chips', async ({ page }) => {
   const fixture = await providerFixture(page, 'google', 'success', 'New wallet'); fixture.setWalletMode('new-offline');
   await page.goto('./#/games'); await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('button', { name: 'Continue with Google' }).click();
-  const account = page.getByRole('button', { name: 'Account menu for New wallet' }); await account.click();
-  const wallet = page.getByRole('group', { name: 'Account wallet' }); await expect(wallet).toContainText('Unavailable');
+  // The visible header now loads the wallet before the profile is opened.
+  await expect(page.getByRole('group',{name:'Available wallet balance'})).toContainText('Unavailable');
   expect(fixture.counts().walletCreates).toBe(1);
+  const account = page.getByRole('button', { name: 'Account menu for New wallet' }); await account.click();
+  await expect.poll(()=>fixture.counts().walletCreates).toBe(2);
+  const wallet = page.getByRole('group', { name: 'Account wallet' }); await expect(wallet).toContainText('Unavailable');
+  expect(fixture.counts().walletCreates).toBe(2);
   fixture.setWalletMode('new'); await page.getByRole('menuitem', { name: 'Retry wallet balance' }).click();
-  await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(2);
-  await page.reload(); await account.click(); await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(2);
+  await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(3);
+  await page.reload(); await account.click(); await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(3);
   await page.keyboard.press('Escape'); await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await expect(page.getByRole('region', { name: 'Game controls' })).toContainText('1,000');
-  await account.click(); await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(2);
+  await account.click(); await expect(wallet).toContainText('10,000 chips available'); expect(fixture.counts().walletCreates).toBe(3);
   await page.keyboard.press('Escape'); await page.getByRole('button', { name: 'Leave table', exact: true }).click();
 });
 

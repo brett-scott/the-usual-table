@@ -85,7 +85,7 @@ test('saved-chip buy-in retries once, survives reload, settles a round and retur
   await expect(page.getByRole('button', { name: 'Next round' })).toBeEnabled();
   expect(fixture.wallet()).toMatchObject({ availableUnits: 900000, atTablesUnits: 99000 });
   await page.screenshot({ path: testInfo.outputPath('saved-chip-round.png'), fullPage: true }); await expectOneScreen(page);
-  await page.getByRole('button', { name: 'Leave table', exact: true }).click(); await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Leave table', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
   await page.getByRole('button', { name: 'Account menu for Saved player' }).click();
   const balance = page.getByRole('group', { name: 'Account wallet' }); await expect(balance).toContainText('9,990 chips available');
   expect(fixture.wallet()).toMatchObject({ availableUnits: 999000, atTablesUnits: 0 });

@@ -34,7 +34,7 @@ test('saved Crash entry, automatic payout, reload and Leave use the shared accou
   fixture.fly(300);fixture.advance(7000);await expect(page.getByRole('button',{name:'Cashed out',exact:true})).toBeDisabled();
   await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');expect(fixture.state().players[0]!.returnedUnits).toBe(20000);
   fixture.finish();await expect(page.getByRole('region',{name:'Game controls'})).toContainText('Returned 200 chips at 2.00×');await fits(page);await page.screenshot({path:info.outputPath('crash-saved-result.png')});
-  await page.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('heading',{name:'A game for every table.'})).toBeVisible();expect(fixture.wallet()).toMatchObject({availableUnits:1010000,atTablesUnits:0});expect(fixture.returns()).toBe(1);
+  await page.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('heading',{name:'Take your pick.'})).toBeVisible();expect(fixture.wallet()).toMatchObject({availableUnits:1010000,atTablesUnits:0});expect(fixture.returns()).toBe(1);
 });
 test('real public Crash lobbies invite, share chat, resume and disappear after the final player leaves',async({page,browser})=>{
   const context=await browser.newContext({viewport:page.viewportSize()!});const peer=await context.newPage();

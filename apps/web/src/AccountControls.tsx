@@ -71,7 +71,7 @@ function NicknameForm({ auth, state, required, focusIcon, onSaved }: { auth: Aut
   </form>;
 }
 
-export function AccountControls({ beforeSignIn, signedInOnly = false, compact = false }: { beforeSignIn?: () => void; signedInOnly?: boolean; compact?:boolean }) {
+export function AccountControls({ beforeSignIn, signedInOnly = false, compact = false, showWallet = false }: { beforeSignIn?: () => void; signedInOnly?: boolean; compact?:boolean;showWallet?:boolean }) {
   const [statisticsOpen, setStatisticsOpen] = useState(false);
   const [progressOpen,setProgressOpen] = useState(false);
   const { auth, editNickname, editIcon } = useContext(AuthContext)!;
@@ -81,6 +81,13 @@ export function AccountControls({ beforeSignIn, signedInOnly = false, compact = 
   const focusLast = useRef(false);
   useEffect(() => { if (state.account) dialog.current?.close(); else {setExpanded(false);setProgressOpen(false);setStatisticsOpen(false);} }, [state.account]);
   useEffect(() => { if (expanded) void auth.refreshWallet(); }, [expanded, auth]);
+  useEffect(()=>{
+    if(!showWallet||!state.account)return;
+    void auth.refreshWallet();
+    const refresh=()=>{if(document.visibilityState==='visible')void auth.refreshWallet();};
+    window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
+    return()=>{window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
+  },[showWallet,state.account,auth]);
   useEffect(() => {
     if (!expanded) return;
     const buttons = menu.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
@@ -91,8 +98,13 @@ export function AccountControls({ beforeSignIn, signedInOnly = false, compact = 
   }, [expanded]);
   function closeMenu() { setExpanded(false); trigger.current?.focus(); }
   if (signedInOnly && !state.hasSession) return null;
-  return <div className={`${s.controls} ${state.account&&(signedInOnly||compact) ? s.compact : ''}`} ref={controls}
+  return <div className={`${s.controls} ${state.account&&(signedInOnly||compact) ? s.compact : ''} ${showWallet&&state.account?s.withWallet:''}`} ref={controls}
     onKeyDown={event => { if (event.key === 'Escape' && expanded) { event.preventDefault(); closeMenu(); } }}>
+    {showWallet&&state.account&&<div className={s.headerWallet} role="group" aria-label="Available wallet balance" aria-live="polite" aria-atomic="true">
+      <span className={s.chipMark} aria-hidden="true">◈</span>
+      {state.walletStatus==='ready'&&state.wallet?<><strong title={`${chips(state.wallet.availableUnits)} chips available`}>{chips(state.wallet.availableUnits)}</strong><span>chips{state.wallet.status==='suspended'?' · paused':''}</span></>:<span>{state.walletStatus==='idle'||state.walletStatus==='loading'?'Loading…':state.walletStatus==='not-connected'?'Not connected':'Unavailable'}</span>}
+      {state.walletStatus==='error'&&!expanded&&<button className={s.walletRetry} aria-label="Retry wallet balance" onClick={()=>{void auth.refreshWallet();}}>Retry</button>}
+    </div>}
     <button className={s.trigger} ref={trigger} aria-haspopup={state.account ? 'menu' : 'dialog'} aria-expanded={state.account ? expanded : undefined}
       aria-controls={state.account && expanded ? menuId : undefined} aria-label={state.account ? `Account menu for ${state.nickname ?? 'your account'}` : undefined}
       onClick={() => { focusLast.current = false; if (state.account) setExpanded(value => !value); else dialog.current?.showModal(); }}

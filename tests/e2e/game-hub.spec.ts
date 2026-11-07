@@ -1,11 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@casual/protocol';
 import { expectOneScreen, openTableEntry } from './fixtures';
+import { providerFixture } from './authFixture';
 
 async function expectCatalogFits(page: Page) {
   await expectOneScreen(page);
   const catalog = page.getByRole('region', { name: 'Game catalog' });
-  await expect(catalog.getByRole('article')).toHaveCount(8);
+  await expect(catalog.getByRole('article')).toHaveCount(5);
   const overflow = await catalog.evaluate(element => ({ height: element.clientHeight, scrollHeight: element.scrollHeight,
     width: element.clientWidth, scrollWidth: element.scrollWidth, scrollTop: element.scrollTop }));
   expect(overflow.scrollHeight, 'all game tiles must fit without scrolling the catalog').toBeLessThanOrEqual(overflow.height + 1);
@@ -13,7 +14,7 @@ async function expectCatalogFits(page: Page) {
   for (const tile of await catalog.getByRole('article').all()) {
     await expect(tile).toBeInViewport({ ratio: 1 });
     const bounds = (await tile.boundingBox())!;
-    const content = tile.getByRole('heading').or(tile.getByText('COMING SOON', { exact: true })).or(tile.getByText('PLAY NOW', { exact: true })).or(tile.getByRole('link'));
+    const content = tile.getByRole('heading').or(tile.getByRole('link'));
     for (const item of await content.all()) {
       if (!(await item.isVisible())) continue;
       const rect = (await item.boundingBox())!;
@@ -23,14 +24,20 @@ async function expectCatalogFits(page: Page) {
     }
   }
   for (const link of await catalog.getByRole('link').all()) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  const viewport=page.viewportSize()!;
+  if(viewport.width<=1000||viewport.height<=500){
+    const rows=await catalog.getByRole('article').evaluateAll(items=>items.map(item=>{const r=item.getBoundingClientRect();return{x:r.x,y:r.y,bottom:r.bottom};}));
+    for(let i=1;i<rows.length;i++){expect(rows[i]!.x).toBe(rows[0]!.x);expect(rows[i]!.y).toBeGreaterThanOrEqual(rows[i-1]!.bottom);}
+  }
 }
 
-test('game hub offers Blackjack and clearly marks future games without changing existing invitations', async ({ page }, testInfo) => {
-  await page.goto('./'); await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
-  for (const name of ['Texas Hold’em', 'Keno', 'Penguin Cross']) await expect(page.getByRole('article', { name, exact: true })).toContainText('COMING SOON');
+test('Club Gallery lists only playable games without changing existing invitations', async ({ page }, testInfo) => {
+  await page.goto('./'); await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
+  for (const name of ['Texas Hold’em', 'Keno', 'Penguin Cross']) await expect(page.getByRole('article', { name, exact: true })).toHaveCount(0);
   const catalog = page.getByRole('region', { name: 'Game catalog' });
   await expectCatalogFits(page);
   await expect(catalog.getByRole('link')).toHaveCount(5);
+  for(const copy of ['Five games. Your kind of table.','Choose a game to find or create a table.','Virtual chips. Real company.'])await expect(page.getByText(copy,{exact:true})).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('game-hub.png'), fullPage: true });
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Find a Table', exact: true })).toBeVisible();
@@ -38,10 +45,27 @@ test('game hub offers Blackjack and clearly marks future games without changing 
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await expect(page.getByLabel('What should we call you?')).toBeVisible();
   await expect(page.getByLabel('Table visibility')).toHaveValue('private');
   await page.getByRole('button', { name: 'Close create table' }).click();
-  await page.getByRole('link', { name: 'All games' }).click(); await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+  await page.getByRole('link', { name: 'All games' }).click(); await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
 });
 
-test('all eight home games fit smaller desktop, tablet and phone screens', async ({ page }, testInfo) => {
+test('gallery shows the available account wallet outside the menu, recovers failures and fits a long nickname',async({page},info)=>{
+  const fixture=await providerFixture(page,'google','success','A very long gallery name');
+  await page.goto('./#/games');await expect(page.getByRole('group',{name:'Available wallet balance'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Continue with Google'}).click();
+  const account=page.getByRole('button',{name:'Account menu for A very long gallery name'}),wallet=page.getByRole('group',{name:'Available wallet balance'});
+  await expect(account).toHaveAttribute('aria-expanded','false');await expect(wallet).toContainText('1,234.56');await expect(wallet).not.toContainText('250');
+  for(const size of info.project.name==='desktop'?[{width:1280,height:720},{width:393,height:659},{width:320,height:568},{width:740,height:360}]:[page.viewportSize()!]){
+    await page.setViewportSize(size);await expectCatalogFits(page);
+    for(const element of [account,wallet,page.getByRole('link',{name:'The Usual Table',exact:true})]){const r=(await element.boundingBox())!;expect(r.x).toBeGreaterThanOrEqual(0);expect(r.y).toBeGreaterThanOrEqual(0);expect(r.x+r.width).toBeLessThanOrEqual(size.width+1);expect(r.y+r.height).toBeLessThanOrEqual(size.height+1);}
+  }
+  await page.screenshot({path:info.outputPath('gallery-visible-wallet.png')});
+  fixture.setWalletMode('wrong-account');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(wallet).toContainText('Unavailable');await expect(wallet).not.toContainText('1,234.56');
+  fixture.setWalletMode('zero');await wallet.getByRole('button',{name:'Retry wallet balance'}).click();await expect(wallet).toContainText('0chips');
+  fixture.setWalletMode('ready');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(wallet).toContainText('1,234.56');
+  await account.click();await page.getByRole('menuitem',{name:'Sign out',exact:true}).click();await expect(wallet).toHaveCount(0);await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();
+});
+
+test('all playable home games fit smaller desktop, tablet and phone screens', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'The viewport matrix supplements the four standard device profiles.');
   await page.addInitScript(() => {
     const invite = 'a'.repeat(32);
@@ -50,7 +74,7 @@ test('all eight home games fit smaller desktop, tablet and phone screens', async
   });
   for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768], [768, 1024], [320, 568], [667, 375]]) {
     await page.setViewportSize({ width: width!, height: height! }); await page.goto('./#/games');
-    await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
     await expectCatalogFits(page); await page.screenshot({ path: testInfo.outputPath(`games-${width}x${height}.png`), fullPage: true });
   }
 });
@@ -81,11 +105,11 @@ test('public table browser lists a real room and joins through the invitation fl
     await expect(peer.getByRole('region', { name: 'Seat 1: ' + hostName })).toBeVisible();
     await expect(peer.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
     await peer.getByRole('button', { name: 'Leave table', exact: true }).click();
-    await expect(peer.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+    await expect(peer.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
     await expect(peer.getByRole('link', { name: 'Return to your last table' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Seat 2: Found guest' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Leave table', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
     await peer.goto(invite);
     await expect(peer.getByRole('heading', { name: 'Table expired' })).toBeVisible();
   } finally { await context.close(); }
@@ -112,7 +136,7 @@ test('guest lobby creation remains usable when persistent browser storage is blo
   await expect(page.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
 });
 
 test('one-player private lobbies play successive rounds, reload, admit friends and leave normally', async ({ page, browser }, testInfo) => {
@@ -149,7 +173,7 @@ test('one-player private lobbies play successive rounds, reload, admit friends a
     await guest.getByRole('button', { name: 'Leave table', exact: true }).click();
   } finally { await context.close(); }
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
   await page.goto(invite);
   await expect(page.getByRole('heading', { name: 'Table expired' })).toBeVisible();
 });

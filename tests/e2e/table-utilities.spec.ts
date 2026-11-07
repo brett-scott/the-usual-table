@@ -48,7 +48,7 @@ test('table utilities remove clutter, expose Leave and give invitation copy feed
   await dialog.getByRole('button', { name: 'Close invitation' }).click(); await expect(invite).toBeFocused();
   await expect(page.getByRole('region', { name: 'Game controls' }).getByRole('alert')).toHaveCount(0);
   expect(errors).toEqual([]);
-  await leave.click(); await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+  await leave.click(); await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
 });
 
 test('Options has accessible subviews and local preferences preserve live cards and the running timer', async ({ page }, testInfo) => {

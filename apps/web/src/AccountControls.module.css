@@ -38,10 +38,28 @@
 .nicknameForm .note { margin-top: 0; }
 .nicknameForm button { width: 100%; }
 .callback { min-height: 100dvh; display: grid; align-content: center; justify-items: center; background: #172b22; color: #f1efe3; padding: 20px; }
+.withWallet { gap:24px; }
+.withWallet .trigger { background:transparent;border-color:#7a856a;font-size:12px; }
+.headerWallet { display:flex;align-items:center;gap:7px;white-space:nowrap;color:#f4ecda;font-size:12px; }
+.headerWallet strong { font-size:18px;font-variant-numeric:tabular-nums;font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis; }
+.headerWallet > span:last-child { color:#b9c6ba; }
+.chipMark { display:grid;place-items:center;width:25px;height:25px;border:1px dashed #e4c89d;border-radius:50%;color:#e4c89d;font-size:17px;flex-shrink:0; }
+.walletRetry { min-height:44px;padding:0 4px;color:#ffe0a4;border:0;background:transparent;text-decoration:underline;cursor:pointer;font-size:11px; }
+.withWallet .menu { max-height:calc(100dvh - 120px); }
 @media (max-width: 700px) {
   .notice { position: absolute; top: calc(100% + 3px); right: 0; width: 150px; max-width: 150px; z-index: 2; padding: 5px; background: #243d31; border: 1px solid #768a74; border-radius: 5px; }
   .trigger { padding: 8px; font-size: 11px; }
   .compact .trigger { max-width: 52px; }
   .compact .nickname { display: none; }
   .compact .profileIcon { margin-right: 0; }
+  .withWallet { display:grid;grid-template-columns:minmax(0,1fr);justify-items:end;gap:3px;max-width:116px; }
+  .withWallet .trigger,.headerWallet { max-width:100%;min-width:0; }
+  .headerWallet strong { min-width:0;flex-shrink:1; }
+  .withWallet .trigger { grid-row:1;font-size:11px; }
+  .withWallet .nickname { max-width:15vw; }
+  .headerWallet { grid-row:2;gap:4px;font-size:10px; }
+  .headerWallet strong { font-size:15px;max-width:25vw; }
+  .headerWallet .chipMark { width:18px;height:18px;font-size:13px; }
+  .withWallet .menu { max-height:calc(100dvh - 128px); }
 }
+@media(max-height:500px) { .withWallet { display:flex;align-items:center;gap:16px;max-width:none; }.headerWallet { font-size:11px; }.headerWallet strong { font-size:16px;max-width:25vw; }.withWallet .nickname { max-width:15vw; }.withWallet .menu { max-height:calc(100dvh - 72px); } }

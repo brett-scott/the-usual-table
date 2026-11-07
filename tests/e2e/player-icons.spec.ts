@@ -23,7 +23,7 @@ test('optional guest icons persist for lobby creation and can return to initials
     await expect(page).toHaveURL(tableUrl);
     releaseLeave!();
     await expect(page).toHaveURL(/#\/games$/);
-    await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
     await expect(page.getByRole('link', { name: /Return to your last table/ })).toHaveCount(0);
     await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
     await page.getByRole('button', { name: 'Create a table', exact: true }).click();

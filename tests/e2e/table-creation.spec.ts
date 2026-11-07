@@ -161,5 +161,5 @@ test('pending creation prevents dismissal and failure preserves choices for a su
   await dialog.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled(); expect(attempts).toBe(2);
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'A game for every table.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
 });
