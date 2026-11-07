@@ -35,7 +35,13 @@ async function placed(page:Page,id:string,units:number){await tile(page,id).clic
 async function chip(page:Page,value:number){await page.getByRole('button',{name:`Select ${value.toLocaleString('en')} chips`,exact:true}).click();}
 async function fit(page:Page){const size=page.viewportSize()!;expect(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight+1&&document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  for(const name of ['Roulette game','Roulette betting table','Game controls']){const el=page.getByRole('region',{name,exact:true,includeHidden:true});if(name==='Roulette betting table'&&!await el.isVisible()){await expect(page.locator('[data-phase]')).toHaveAttribute('data-wheel-focus','true');continue;}const box=(await el.boundingBox())!;expect(box.x).toBeGreaterThanOrEqual(0);expect(box.y).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(size.width+1);expect(box.y+box.height).toBeLessThanOrEqual(size.height+1);const dims=await el.evaluate(e=>({h:e.clientHeight,sh:e.scrollHeight,w:e.clientWidth,sw:e.scrollWidth}));expect(dims.sh,`${name}: ${JSON.stringify(dims)}`).toBeLessThanOrEqual(dims.h+1);expect(dims.sw).toBeLessThanOrEqual(dims.w+1);}
- for(const button of await board(page).getByRole('button').all()){if(!await button.isVisible())continue;const box=(await button.boundingBox())!;const small=await button.getAttribute('data-inside-spot')!==null&&await button.evaluate(el=>el.closest('[data-number-layout]')?.getAttribute('data-number-layout')==='wide');expect(box.height,'betting controls retain usable targets').toBeGreaterThanOrEqual(small?18:44);expect(box.y+box.height).toBeLessThanOrEqual(size.height+1);}
+ // Measure every visible target together so the full desktop board needs one browser round trip.
+ const targets=await board(page).getByRole('button').evaluateAll(buttons=>buttons.flatMap(button=>{
+  const box=button.getBoundingClientRect(),visibility=getComputedStyle(button).visibility;if(box.width===0||box.height===0||visibility==='hidden'||visibility==='collapse')return[];
+  const small=button.hasAttribute('data-inside-spot')&&button.closest('[data-number-layout]')?.getAttribute('data-number-layout')==='wide';
+  return[{name:button.getAttribute('aria-label')??button.textContent?.trim(),height:box.height,bottom:box.bottom,minimum:small?18:44}];
+ }));
+ for(const target of targets){expect(target.height,`${target.name}: betting controls retain usable targets`).toBeGreaterThanOrEqual(target.minimum);expect(target.bottom,`${target.name}: betting control fits the screen`).toBeLessThanOrEqual(size.height+1);}
  const wheel=page.getByRole('img',{name:/Roulette wheel|European single-zero/});const bounds=(await wheel.boundingBox())!;expect(bounds.width).toBeGreaterThanOrEqual(45);expect(bounds.height).toBeGreaterThanOrEqual(45);
 }
 test('chip stacking, Undo, Clear, group and outside bets, spin and win fit desktop and compact screens',async({page},info)=>{
