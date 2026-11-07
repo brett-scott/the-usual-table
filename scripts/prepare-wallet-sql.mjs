@@ -6,7 +6,7 @@ function body(name) {
     .replace(/^BEGIN;\s*/, '').replace(/\s*COMMIT;\s*$/, '').trim();
 }
 const schema = body('001_wallet.sql');
-const migrations = ['002_supabase_wallet_api.sql', '003_welcome_grant.sql', '004_backend_role.sql', '005_account_statistics.sql', '006_daily_allowance.sql', '007_detailed_statistics.sql', '008_progression.sql','009_crash.sql','010_baccarat.sql','011_duck_race.sql'].map(body).join('\n\n');
+const migrations = ['002_supabase_wallet_api.sql', '003_welcome_grant.sql', '004_backend_role.sql', '005_account_statistics.sql', '006_daily_allowance.sql', '007_detailed_statistics.sql', '008_progression.sql','009_crash.sql','010_baccarat.sql','011_duck_race.sql','012_roulette.sql'].map(body).join('\n\n');
 // Reinstalling earlier increments must not temporarily reject achievement definitions added by later games.
 const metricConstraint=/ALTER TABLE wallet_private\.achievement_definitions ADD CONSTRAINT achievement_definitions_metric_check CHECK\([^;]+;/g;
 const latestMetricConstraint=[...migrations.matchAll(metricConstraint)].at(-1)?.[0];

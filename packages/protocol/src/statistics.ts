@@ -29,5 +29,6 @@ export const blackjackStatisticsSchema = z.object({
 export const crashStatisticsSchema=z.object({trackedRounds:count,cashouts:count,crashes:count,highestCashoutCents:count}).strict()
   .refine(v=>BigInt(v.trackedRounds)===BigInt(v.cashouts)+BigInt(v.crashes)&&BigInt(v.highestCashoutCents)<=10000n,'Invalid Crash statistics');
 export const baccaratStatisticsSchema=z.object({trackedRounds:count,playerBets:count,bankerBets:count,tieBets:count,tieWins:count,bankerSixWins:count,commissionUnits:units}).strict();
-export const detailedStatisticsSchema = z.object({accountId:z.string().uuid(),summary:accountStatisticsSchema,blackjack:blackjackStatisticsSchema,crash:crashStatisticsSchema.optional(),baccarat:baccaratStatisticsSchema.optional()}).strict()
+export const rouletteStatisticsSchema=z.object({trackedRounds:count,straightUpWins:count}).strict().refine(v=>BigInt(v.straightUpWins)<=BigInt(v.trackedRounds),'Invalid Roulette statistics');
+export const detailedStatisticsSchema = z.object({accountId:z.string().uuid(),summary:accountStatisticsSchema,blackjack:blackjackStatisticsSchema,crash:crashStatisticsSchema.optional(),baccarat:baccaratStatisticsSchema.optional(),roulette:rouletteStatisticsSchema.optional()}).strict()
   .refine(value=>value.accountId===value.summary.accountId,'Statistics owner mismatch');

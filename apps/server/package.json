@@ -18,7 +18,8 @@
     "jose": "6.2.14",
     "zod": "4.6.7",
     "@casual/baccarat": "*",
-    "@casual/duck-race": "*"
+    "@casual/duck-race": "*",
+    "@casual/roulette": "*"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",

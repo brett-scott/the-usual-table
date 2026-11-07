@@ -3,6 +3,7 @@ import { GAME_CATALOG,gameIdSchema,type GameId } from '@casual/protocol';
 import { blackjackRoomAdapter } from './blackjack';
 import { crashRoomAdapter } from './crash';
 import { baccaratRoomAdapter } from './baccarat';
+import { rouletteRoomAdapter } from './roulette';
 import { duckRaceRoomAdapter } from './duckRace';
 import type { GameRoomAdapter,HostedRoom } from './contracts';
 
@@ -51,4 +52,4 @@ export class GameAdapterRegistry {
     return adapter.restore(value,now);
   }
 }
-export const gameAdapters=new GameAdapterRegistry([hostGame(blackjackRoomAdapter),hostGame(crashRoomAdapter),hostGame(baccaratRoomAdapter),hostGame(duckRaceRoomAdapter)]);
+export const gameAdapters=new GameAdapterRegistry([hostGame(blackjackRoomAdapter),hostGame(crashRoomAdapter),hostGame(baccaratRoomAdapter),hostGame(duckRaceRoomAdapter),hostGame(rouletteRoomAdapter)]);

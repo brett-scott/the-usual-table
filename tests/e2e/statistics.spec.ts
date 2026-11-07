@@ -18,8 +18,8 @@ async function open(page: Page) {
 
 test('account statistics show per-game saved rounds, precise amounts, refresh and no guest persistence', async ({ page }, testInfo) => {
   await providerFixture(page, 'google', 'success', 'Stats player'); let reads = 0;
-  await page.route('**/api/v1/account/statistics/details', async route => {
-    expect(route.request().method()).toBe('GET'); expect(route.request().postData()).toBeNull(); expect(new URL(route.request().url()).search).toBe(''); reads++;
+  await page.route('**/api/v1/account/statistics/details*', async route => {
+    expect(route.request().method()).toBe('GET'); expect(route.request().postData()).toBeNull(); expect(new URL(route.request().url()).search).toBe('?version=4'); reads++;
     await route.fulfill({ json: detailed });
   });
   await login(page); expect(reads).toBe(0);
@@ -45,7 +45,7 @@ test('account statistics show per-game saved rounds, precise amounts, refresh an
 test('statistics distinguish empty history, setup and unavailable/wrong-account responses with retry', async ({ page }, testInfo) => {
   await providerFixture(page, 'google', 'success', 'Stats player');
   let mode = 'missing';
-  await page.route('**/api/v1/account/statistics/details', async route => {
+  await page.route('**/api/v1/account/statistics/details*', async route => {
     if (mode === 'missing') await route.fulfill({ status: 503, json: { code: 'STATISTICS_NOT_CONNECTED' } });
     else if (mode === 'offline') await route.abort();
     else if (mode === 'wrong') await route.fulfill({ json: { ...detailed, accountId: 'c213ae22-a459-456d-976c-dc115e74abda' } });

@@ -20,3 +20,7 @@ import { DUCK_RACE_RULES,duckRaceSnapshotSchema,type DuckRaceSnapshot,type DuckR
 export const duckRaceClientAdapter:GameClientAdapter<DuckRaceSnapshot,DuckRaceAction>={gameId:'duck-race',version:1,snapshotSchema:duckRaceSnapshotSchema,entry:DUCK_RACE_RULES,
  identity:s=>({playerId:s.you,roomId:s.roomId,revision:s.revision,claimVersion:s.claimVersion,gameId:s.gameId}),
  command:(s,action,playerId,id)=>({id,playerId,revision:s.revision,roundId:s.roundId,action})};
+
+import { ROULETTE_RULES,rouletteSnapshotSchema,type RouletteSnapshot,type RouletteAction } from '@casual/protocol';
+export const rouletteClientAdapter:GameClientAdapter<RouletteSnapshot,RouletteAction>={gameId:'roulette',version:1,snapshotSchema:rouletteSnapshotSchema,entry:ROULETTE_RULES,
+ identity:s=>({playerId:s.you,roomId:s.roomId,revision:s.revision,claimVersion:s.claimVersion,gameId:s.gameId}),command:(s,action,playerId,id)=>({id,playerId,revision:s.revision,roundId:s.roundId,action})};

@@ -8,7 +8,7 @@ const project = 'https://npqvazffslqmfjtyyhpn.supabase.co';
 globalThis.fetch = async (input, options) => {
   const path = new URL(input).pathname;
   if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,
-    ...(process.env.CHECK_SCENARIO==='missing-duck-race'?{}:{duckRaceProtocol:1}),...(process.env.CHECK_SCENARIO==='missing-baccarat'?{}:{baccaratProtocol:process.env.CHECK_SCENARIO==='old-baccarat'?2:3}),...(process.env.CHECK_SCENARIO==='missing-crash'?{}:{crashProtocol:process.env.CHECK_SCENARIO==='old-crash'?1:2}),
+    ...(process.env.CHECK_SCENARIO==='missing-roulette'?{}:{rouletteProtocol:1}),...(process.env.CHECK_SCENARIO==='missing-duck-race'?{}:{duckRaceProtocol:1}),...(process.env.CHECK_SCENARIO==='missing-baccarat'?{}:{baccaratProtocol:process.env.CHECK_SCENARIO==='old-baccarat'?2:3}),...(process.env.CHECK_SCENARIO==='missing-crash'?{}:{crashProtocol:process.env.CHECK_SCENARIO==='old-crash'?1:2}),
     ...(process.env.CHECK_SCENARIO==='missing-game-adapters'?{}:{gameAdapterProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-rewards-protocol' ? {} : {accountRewardsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-account-play' ? {} : {accountPlayProtocol:1}),
@@ -63,3 +63,5 @@ it('requires the Baccarat Worker before publishing its game entry',()=>{const re
 it('requires the Baccarat side-bet Worker before publishing expanded betting',()=>{const result=check('old-baccarat');expect(result.status).toBe(1);expect(result.stderr).toContain('Baccarat side-bet');});
 
 it('requires the Duck Race Worker before publishing its entry',()=>{const result=check('missing-duck-race');expect(result.status).toBe(1);expect(result.stderr).toContain('Duck Race');});
+
+it('requires the Roulette Worker before Pages',()=>{const result=check('missing-roulette');expect(result.status).toBe(1);expect(result.stderr).toContain('Roulette');});

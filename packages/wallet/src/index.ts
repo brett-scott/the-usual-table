@@ -1,4 +1,4 @@
-import { baccaratReturned,baccaratWagerUnits } from '@casual/protocol';
+import { rouletteWagerUnits,rouletteReturned,baccaratReturned,baccaratWagerUnits } from '@casual/protocol';
 import { z } from 'zod';
 import {
   MAX_WALLET_UNITS, walletCommandSchema, walletReceiptSchema, walletSessionSchema, walletSummarySchema,
@@ -144,6 +144,11 @@ export class PostgresWalletStore {
             requireWallet(!command.blackjack || command.gameId === 'blackjack', 'WRONG_GAME');
             requireWallet(!command.crash || command.gameId === 'crash', 'WRONG_GAME');
             requireWallet(!command.baccarat || command.gameId === 'baccarat', 'WRONG_GAME');
+            requireWallet(!command.roulette||command.gameId==='roulette','WRONG_GAME');
+            if(command.gameId==='roulette'){
+              requireWallet(!!command.roulette&&command.rulesetVersion==='roulette-european-v1','INVALID_RESULT');
+              requireWallet(command.wageredUnits===rouletteWagerUnits(command.roulette.bets)&&command.returnedUnits===rouletteReturned(command.roulette.bets,command.roulette.winner),'INVALID_RESULT');
+            }
             requireWallet(!command.duckRace || command.gameId==='duck-race','WRONG_GAME');
             if(command.gameId==='duck-race'){
               requireWallet(!!command.duckRace&&command.rulesetVersion==='duck-race-four-v1','INVALID_RESULT');
@@ -166,7 +171,7 @@ export class PostgresWalletStore {
             current.resultSequence = command.sequence;
             await tx.query(`INSERT INTO wallet_private.results (account_id, operation_id, session_id, sequence, round_id, ruleset_version, wagered_units, returned_units, facts)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`, [command.accountId, command.operationId, current.sessionId, command.sequence,
-              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):command.baccarat?JSON.stringify(command.baccarat):command.duckRace?JSON.stringify(command.duckRace):null]);
+              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):command.baccarat?JSON.stringify(command.baccarat):command.duckRace?JSON.stringify(command.duckRace):command.roulette?JSON.stringify(command.roulette):null]);
             break;
           }
           case 'request_return':

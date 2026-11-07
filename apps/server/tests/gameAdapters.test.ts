@@ -46,10 +46,10 @@ it('hosts a non-card adapter with its own version, capacity, round key, commands
   expect(()=>adapter.fund(room,'one',crypto.randomUUID(),1000,crypto.randomUUID())).toThrow('No house funding');
 });
 it('keeps future games unavailable and rejects unknown or corrupted stored adapter identities without resetting them',()=>{
-  for(const id of ['roulette','texas-holdem','keno','penguin-cross','unknown'])expect(()=>gameAdapters.available(id)).toThrow('not available');
+  for(const id of ['texas-holdem','keno','penguin-cross','unknown'])expect(()=>gameAdapters.available(id)).toThrow('not available');
   const room=blackjackRoomAdapter.create({roomId:'a'.repeat(32),player:{id:'one',name:'One',seat:0},credentialHash:'b'.repeat(64),now:100,random:max=>max-1});
   expect(gameAdapters.restore(room,100).room.id).toBe(room.id);
-  for(const metadata of [{gameId:'roulette'},{gameId:null},{adapterVersion:9},{adapterVersion:null}]){
+  for(const metadata of [{gameId:'keno'},{gameId:null},{adapterVersion:9},{adapterVersion:null}]){
     const invalid={...room,...metadata};const before=JSON.stringify(invalid);expect(()=>gameAdapters.restore(invalid,100)).toThrow('adapter version');expect(JSON.stringify(invalid)).toBe(before);
   }
   const legacy={...room};delete legacy.gameId;delete legacy.adapterVersion;expect(gameAdapters.restore(legacy,100).room.id).toBe(room.id);
@@ -62,7 +62,7 @@ it('creates a game-scoped table, exposes only entry metadata and ignores a spoof
   expect(created).toMatchObject({gameId:'blackjack',adapterVersion:1});
   const info=await http(`/${created.session.inviteId}/info`,undefined,undefined,'GET');expect(info.status).toBe(200);
   expect(tableInfoSchema.parse(await info.json())).toEqual({roomId:created.session.inviteId,gameId:'blackjack',adapterVersion:1,visibility:'private',...BLACKJACK_TABLE_RULES});
-  const unavailable=await SELF.fetch('https://api.test/api/v1/games/roulette/rooms',{method:'POST',headers:{Origin:origin},body:JSON.stringify({name:'No engine'})});
+  const unavailable=await SELF.fetch('https://api.test/api/v1/games/keno/rooms',{method:'POST',headers:{Origin:origin},body:JSON.stringify({name:'No engine'})});
   expect(unavailable.status).toBe(400);expect(await unavailable.json()).toMatchObject({code:'GAME_UNAVAILABLE'});
 });
 it('negotiates versioned snapshots while legacy Blackjack clients retain their wire format',async()=>{

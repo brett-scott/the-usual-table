@@ -130,3 +130,6 @@ export * from './duckRace';
 export * from './duckRaceStatistics';
 
 export * from './baccaratHistory';
+
+export * from './rouletteBets';
+export * from './roulette';

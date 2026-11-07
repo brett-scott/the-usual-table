@@ -58,7 +58,7 @@ test('Crash statistics and game-specific achievements appear in the shared profi
   const wallet=()=>({contract:1,currency:'virtual-chips',unitsPerChip:100,accountId,status:'active',version:claimed?2:1,availableUnits:claimed?1045000:1000000,atTablesUnits:0,pendingReturnUnits:0});
   await page.route('**/api/v1/account/wallet',route=>route.fulfill({json:wallet()}));
   const game={gameId:'crash',roundsPlayed:'2',roundsWon:'1',roundsLost:'1',roundsEven:'0',wageredUnits:'2000',returnedUnits:'6000',netUnits:'4000',bestRoundNetUnits:'5000'};
-  await page.route('**/api/v1/account/statistics/details',route=>route.fulfill({json:{accountId,summary:{contract:1,accountId,unitsPerChip:100,basis:'saved-rounds',games:[game]},
+  await page.route('**/api/v1/account/statistics/details*',route=>route.fulfill({json:{accountId,summary:{contract:1,accountId,unitsPerChip:100,basis:'saved-rounds',games:[game]},
     blackjack:{trackedRounds:'0',hands:'0',wins:'0',losses:'0',pushes:'0',blackjacks:'0',busts:'0',doubles:'0',splits:'0',insuranceTaken:'0',insuranceWon:'0'},
     crash:{trackedRounds:'2',cashouts:'1',crashes:'1',highestCashoutCents:'600'}}}));
   await page.route('**/api/v1/account/progression',async route=>{

@@ -261,5 +261,9 @@ it('returns caller-owned detailed statistics while retaining the original summar
   const details={accountId,summary:statistics,blackjack:{trackedRounds:'0',hands:'0',wins:'0',losses:'0',pushes:'0',blackjacks:'0',busts:'0',doubles:'0',splits:'0',insuranceTaken:'0',insuranceWon:'0'}};
   rpc.mockImplementationOnce(async()=>Response.json(details));
   const response=await SELF.fetch('https://api.test/api/v1/account/statistics/details',{headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});
-  expect(response.status).toBe(200);expect(await response.json()).toEqual(details);expect(rpc.mock.calls[0]![0]).toContain('usual_table_detailed_statistics');
+  expect(response.status).toBe(200);expect(await response.json()).toEqual(details);expect(rpc.mock.calls[0]![0]).toContain('usual_table_detailed_statistics_v3');
+});
+it('negotiates Roulette details without changing the version-three response used by older clients',async()=>{
+ const details={accountId,summary:statistics,blackjack:{trackedRounds:'0',hands:'0',wins:'0',losses:'0',pushes:'0',blackjacks:'0',busts:'0',doubles:'0',splits:'0',insuranceTaken:'0',insuranceWon:'0'},roulette:{trackedRounds:'1',straightUpWins:'1'}};
+ rpc.mockImplementationOnce(async()=>Response.json(details));const response=await SELF.fetch('https://api.test/api/v1/account/statistics/details?version=4',{headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});expect(response.status).toBe(200);expect(await response.json()).toEqual(details);expect(rpc.mock.calls[0]![0]).toContain('usual_table_detailed_statistics_v4');
 });
