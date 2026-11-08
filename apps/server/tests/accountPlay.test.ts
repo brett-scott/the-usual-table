@@ -19,7 +19,7 @@ beforeAll(async () => {
   const jwk = { ...await exportJWK(pair.publicKey), kid: 'account-play', alg: 'ES256', use: 'sig' };
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     if (String(input).endsWith('/auth/v1/.well-known/jwks.json')) return Response.json({ keys: [jwk] });
-    if(String(input).endsWith('/rest/v1/rpc/usual_table_profile')){
+    if(/\/rest\/v1\/rpc\/usual_table_profile(?:_v2)?$/.test(String(input))){
       const token=new Headers(init?.headers).get('Authorization')?.slice(7)??'';const accountId=claims.get(token);if(!accountId)throw new Error('Unknown fixture token');
       return Response.json({contract:1,accountId,version:profileVersion,nickname:'Same nickname',appearance:{avatar:{kind:'illustration',id:profileVersion?'owl':'fox'},border:'brass'},visibility:{chips:true,statistics:true,achievements:true}});
     }

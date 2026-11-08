@@ -62,7 +62,7 @@ export function CrashFlight({ phase, cents, graphCents, seconds, history, elapse
   const betting = phase === 'betting'; const running = phase === 'running'; const result = phase === 'results';
   const remaining = seconds === null ? null : Math.max(0, Math.min(10, seconds));
   const phaseLabel = phase === 'waiting' ? 'Ready for take-off' : betting ? 'Betting is open' : running ? 'In flight' : capped ? 'Ceiling reached' : 'Crashed';
-  return <div className={s.flight} data-flight-phase={phase} data-capped={capped}>
+  return <div className={s.flight} data-collection-surface data-flight-phase={phase} data-capped={capped}>
     <header className={s.header}><h1>Crash<span className={s.subtitle}>One flight. Your moment.</span></h1><span className={s.phase} data-flight-status={phase} role="status"><i aria-hidden="true" />{phaseLabel}</span></header>
     <div className={s.stage}>
       <div className={s.readout}>

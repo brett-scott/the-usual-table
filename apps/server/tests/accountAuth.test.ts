@@ -1,7 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTVerifyGetKey } from 'jose';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { PUBLIC_SUPABASE_CONFIG, type WalletSummary } from '@casual/protocol';
+import { PUBLIC_SUPABASE_CONFIG,COSMETICS,DEFAULT_COSMETICS,DEFAULT_APPEARANCE,DEFAULT_PROFILE_VISIBILITY, type WalletSummary } from '@casual/protocol';
 import { verifyAccountSession } from '../src/accountAuth';
 import { readAccountWallet } from '../src/accountWallet';
 import worker from '../src/index';
@@ -266,4 +266,21 @@ it('returns caller-owned detailed statistics while retaining the original summar
 it('negotiates Roulette details without changing the version-three response used by older clients',async()=>{
  const details={accountId,summary:statistics,blackjack:{trackedRounds:'0',hands:'0',wins:'0',losses:'0',pushes:'0',blackjacks:'0',busts:'0',doubles:'0',splits:'0',insuranceTaken:'0',insuranceWon:'0'},roulette:{trackedRounds:'1',straightUpWins:'1'}};
  rpc.mockImplementationOnce(async()=>Response.json(details));const response=await SELF.fetch('https://api.test/api/v1/account/statistics/details?version=4',{headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});expect(response.status).toBe(200);expect(await response.json()).toEqual(details);expect(rpc.mock.calls[0]![0]).toContain('usual_table_detailed_statistics_v4');
+});
+
+const collection={contract:1,accountId,profile:{contract:1,accountId,version:0,nickname:'Alex',appearance:DEFAULT_APPEARANCE,visibility:DEFAULT_PROFILE_VISIBILITY},selection:DEFAULT_COSMETICS,owned:COSMETICS.filter(c=>c.free).map(c=>c.category+':'+c.id)};
+it('uses caller-authorized collection RPCs and refuses caller-owned identifiers and unverified responses',async()=>{
+ const jwt=await token();const headers={Origin:origin,Authorization:'Bearer '+jwt};
+ rpc.mockImplementationOnce(async()=>Response.json(collection));const read=await SELF.fetch('https://api.test/api/v1/account/collection',{headers});expect(read.status).toBe(200);expect(await read.json()).toEqual(collection);expect(rpc.mock.calls[0]![0]).toContain('usual_table_collection');expect(rpc.mock.calls[0]![1]!.body).toBe('{}');
+ rpc.mockImplementationOnce(async()=>Response.json(collection));const input={category:'theme',id:'classic',version:0};const equipped=await SELF.fetch('https://api.test/api/v1/account/collection',{headers,method:'POST',body:JSON.stringify(input)});expect(equipped.status).toBe(200);expect(rpc.mock.calls[1]![0]).toContain('usual_table_equip_cosmetic');expect(JSON.parse(String(rpc.mock.calls[1]![1]!.body))).toEqual({input});
+ const count=rpc.mock.calls.length;const forged=await SELF.fetch('https://api.test/api/v1/account/collection',{headers,method:'POST',body:JSON.stringify({...input,accountId:crypto.randomUUID()})});expect(forged.status).toBe(400);expect(rpc.mock.calls.length).toBe(count);
+ rpc.mockImplementationOnce(async()=>Response.json({...collection,accountId:crypto.randomUUID()}));expect((await SELF.fetch('https://api.test/api/v1/account/collection',{headers})).status).toBe(503);
+});
+it('negotiates the extended account profile catalogue explicitly',async()=>{
+ const headers={Origin:origin,Authorization:'Bearer '+await token()};
+ for(const [query,suffix] of [['','usual_table_profile'],['?catalogue=2','usual_table_profile_v2']]){rpc.mockImplementationOnce(async()=>Response.json(collection.profile));const response=await SELF.fetch('https://api.test/api/v1/account/profile'+query,{headers});expect(response.status).toBe(200);expect(rpc.mock.calls.at(-1)![0]).toContain('/'+suffix);}
+});
+it('keeps locked and stale equips recoverable and hides database errors',async()=>{
+ const headers={Origin:origin,Authorization:'Bearer '+await token()};
+ for(const [code,expected] of [['42501','COSMETIC_LOCKED'],['40001','PROFILE_CONFLICT']]){rpc.mockImplementationOnce(async()=>Response.json({code,message:'private database information'},{status:400}));const response=await SELF.fetch('https://api.test/api/v1/account/collection',{headers,method:'POST',body:JSON.stringify({category:'theme',id:'moonlit',version:0})});expect(await response.json()).toMatchObject({code:expected});}
 });

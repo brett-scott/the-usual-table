@@ -1,5 +1,7 @@
 name: Deploy Cloudflare Worker
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,6 +29,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -38,3 +41,13 @@ jobs:
         run: npm run deploy:worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  pages:
+    name: Deploy GitHub Pages after Worker
+    needs: deploy
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml
+    with:
+      checks_passed: true

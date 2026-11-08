@@ -50,7 +50,7 @@ export function PlayerProfilesProvider({auth,children}:{auth:AuthController;chil
     async function read(){
       if(target!.own){
         if(!owner)throw new Error('Sign in to view your profile.');
-        const settings=await accountRequest('profile',owner,accountProfileSchema,'GET',abort.signal);auth.applyProfile(settings);
+        const settings=await accountRequest('profile?catalogue=2',owner,accountProfileSchema,'GET',abort.signal);auth.applyProfile(settings);
         const [wallet,stats,progress]=await Promise.allSettled([
           accountRequest('wallet',owner,walletSummarySchema,'GET',abort.signal),accountRequest('statistics/details?version=5',owner,detailedStatisticsSchema,'GET',abort.signal),
           accountRequest('progression',owner,progressionSchema,'GET',abort.signal)]);
@@ -135,7 +135,7 @@ function ProfileEditor({profile,auth,turn,onCancel,onSaved}:{profile:AccountProf
   const [draft,setDraft]=useState<ProfileDraft>({nickname:profile.nickname??'',appearance:profile.appearance,visibility:profile.visibility});
   const [tab,setTab]=useState<'illustrations'|'emoji'|'borders'|'sharing'>('illustrations');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [version,setVersion]=useState(profile.version);const id=useId();
   async function save(){const result=profileDraftSchema.safeParse(draft);if(!result.success){setError(result.error.issues[0]!.message);setTab('sharing');return;}setBusy(true);setError('');try{const saved=await saveAccountProfile({...result.data,version});if(mounted.current)onSaved(saved);}catch(e){if(mounted.current)setError(e instanceof Error&&e.message==='PROFILE_CONFLICT'?'Your profile changed on another device. Reload the latest settings before saving. Your draft is still here.':'Your profile could not be saved. Your choices are still here; please try again.');}finally{if(mounted.current)setBusy(false);}}
-  async function reload(){const owner=auth.getSnapshot().account?.accountId;if(!owner)return;setBusy(true);try{const p=await accountRequest('profile',owner,accountProfileSchema);setDraft({nickname:p.nickname??'',appearance:p.appearance,visibility:p.visibility});setVersion(p.version);setError('');}catch{setError('Could not reload your profile. Your draft has been kept.');}finally{setBusy(false);}}
+  async function reload(){const owner=auth.getSnapshot().account?.accountId;if(!owner)return;setBusy(true);try{const p=await accountRequest('profile?catalogue=2',owner,accountProfileSchema);setDraft({nickname:p.nickname??'',appearance:p.appearance,visibility:p.visibility});setVersion(p.version);setError('');}catch{setError('Could not reload your profile. Your draft has been kept.');}finally{setBusy(false);}}
   return <><div className={s.preview}><ProfileAvatar name={draft.nickname} appearance={draft.appearance}/><div><small>At the table</small><div className={s.seatPreview}><ProfileAvatar name={draft.nickname} appearance={draft.appearance}/><strong>{draft.nickname||'You'}</strong></div></div></div>
     <nav className={s.tabs} aria-label="Customisation categories">{(['illustrations','emoji','borders','sharing'] as const).map(k=><button type="button" key={k} aria-selected={tab===k} disabled={busy} onClick={()=>setTab(k)}>{k[0]!.toUpperCase()+k.slice(1)}</button>)}</nav>
     <div className={s.body}>{error&&<div role="alert" className={s.error}><p>{error}</p><button type="button" disabled={busy} onClick={()=>void reload()}>Reload latest profile</button></div>}

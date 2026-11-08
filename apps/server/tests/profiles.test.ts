@@ -2,8 +2,9 @@ import { evictDurableObject } from 'cloudflare:test';
 import { SELF } from 'cloudflare:test';
 import { expect,it } from 'vitest';
 import { roomProfileSchema } from '@casual/protocol';
-import { create,join,http,bindings,inspect,origin } from './helpers';
+import { create,join,http,bindings,inspect,origin,edit } from './helpers';
 it('requires current room membership and never accepts arbitrary account identifiers',async()=>{
+  expect((await http('',undefined,{name:'Unowned',appearance:{avatar:{kind:'initials'},border:'club-glint'}})).status).toBe(400);
   const host=await create('Host');const peer=await join(host.session.inviteId,'Host');const outsider=await create('Outside');
   expect((await http(`/${host.session.inviteId}/profile`,undefined,{playerId:peer.session.playerId})).status).toBe(401);
   expect((await http(`/${host.session.inviteId}/profile`,outsider.session,{playerId:peer.session.playerId})).status).toBe(401);
@@ -18,6 +19,11 @@ for(const game of ['blackjack','baccarat','crash','duck-race','roulette'])it(`${
   expect(created.snapshot.players[0]).not.toHaveProperty('appearance');expect(created.snapshot.players[0]).not.toHaveProperty('profileVersion');
   const modern=await http(`/${created.session.inviteId}/snapshot?capabilities=usual-player-profiles-v1`,created.session,undefined,'GET');
   expect((await modern.json<{snapshot:{players:unknown[]}}>()).snapshot.players[0]).toMatchObject({appearance:{avatar:{kind:'illustration',id:'owl'},border:'sage'},profileVersion:0});
+  await edit(created.session.inviteId,room=>{room.members[created.session.playerId]!.appearance={avatar:{kind:'illustration',id:'owl'},border:'club-glint'};});
+  const legacy=await http(`/${created.session.inviteId}/snapshot?capabilities=usual-player-profiles-v1`,created.session,undefined,'GET');
+  expect((await legacy.json<{snapshot:{players:unknown[]}}>()).snapshot.players[0]).toMatchObject({appearance:{border:'brass'}});
+  const collection=await http(`/${created.session.inviteId}/snapshot?capabilities=usual-player-profiles-v1,usual-player-profiles-v2`,created.session,undefined,'GET');
+  expect((await collection.json<{snapshot:{players:unknown[]}}>()).snapshot.players[0]).toMatchObject({appearance:{border:'club-glint'}});
 });
 it('persists catalogue appearance without changing engine identity, balance or timers through eviction',async()=>{
   const response=await http('?capabilities=usual-player-profiles-v1',undefined,{name:'Portrait',appearance:{avatar:{kind:'illustration',id:'panda'},border:'midnight'}});

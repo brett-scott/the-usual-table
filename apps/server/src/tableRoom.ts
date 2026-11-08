@@ -12,13 +12,13 @@ import { walletBackend } from './walletBackend';
 import { verifyPlayingAccount } from './accountPlay';
 import { errorResponse, hashSecret, originAllowed, randomSecret, readJson, secureRandomIndex } from './security';
 import type { Env } from './env';
-import { appearanceSchema, DEFAULT_APPEARANCE,PROFILE_CAPABILITY } from '@casual/protocol';
+import { DEFAULT_APPEARANCE,PROFILE_CAPABILITY,COLLECTION_CAPABILITY,legacyAppearance,legacyAppearanceSchema } from '@casual/protocol';
 import { verifyAccountSession } from './accountAuth';
 import { accountProfile, roomAccountProfile } from './playerProfiles';
 
 interface Attachment { playerId: string; controllerId: string; chat?: boolean; accountId?: string; gameAdapter?:boolean;capabilities?:string[] }
 const publicCapabilities=(values:readonly string[])=>values.filter(value=>/^usual-[a-z-]+-v\d+$/.test(value)&&value.length<=64).slice(0,8);
-const entryFields = { name: displayNameSchema, icon: playerIconSchema.optional(), appearance:appearanceSchema.optional(), funding: z.enum(['guest', 'account']).optional(),
+const entryFields = { name: displayNameSchema, icon: playerIconSchema.optional(), appearance:legacyAppearanceSchema.optional(), funding: z.enum(['guest', 'account']).optional(),
   buyInUnits: z.number().int().min(1).max(9_000_000_000_000).optional(), entryId: z.string().uuid().transform(value => value.toLowerCase()).optional() };
 const validFunding = (body: { funding?: string; buyInUnits?: number; entryId?: string }) => body.funding === 'account'
   ? body.buyInUnits !== undefined && body.entryId !== undefined : body.buyInUnits === undefined && body.entryId === undefined;
@@ -35,15 +35,16 @@ export class TableRoom extends DurableObject<Env> {
   }
   private snapshot(room:HostedRoom,playerId:string,capabilities:readonly string[]=[]){
     const snapshot=this.game(room).snapshot(room,playerId,{now:Date.now(),capabilities}) as {players:{id:string;icon?:import('@casual/protocol').PlayerIcon}[]};
-    if(!capabilities.includes(PROFILE_CAPABILITY))return snapshot;
-    return {...snapshot,players:snapshot.players.map(p=>({...p,appearance:room.members[p.id]?.appearance??(p.icon?{avatar:{kind:'emoji',id:p.icon},border:'none'}:DEFAULT_APPEARANCE),profileVersion:room.members[p.id]?.profileVersion??0}))};
+    if(!capabilities.includes(PROFILE_CAPABILITY)&&!capabilities.includes(COLLECTION_CAPABILITY))return snapshot;
+    return {...snapshot,players:snapshot.players.map(p=>({...p,appearance:this.projectAppearance(room.members[p.id]?.appearance??(p.icon?{avatar:{kind:'emoji',id:p.icon},border:'none'}:DEFAULT_APPEARANCE),capabilities),profileVersion:room.members[p.id]?.profileVersion??0}))};
   }
+  private projectAppearance(value:import('@casual/protocol').Appearance,capabilities:readonly string[]){return capabilities.includes(COLLECTION_CAPABILITY)?value:legacyAppearance(value);}
   private async bindProfile(request:Request,room:HostedRoom,playerId:string){
     if(!request.headers.has('Authorization'))return;
     const account=await verifyAccountSession(request,this.env);
     room.members[playerId]!.profileAccountId=account.accountId;
     // A missing profile migration must not cancel a funded table entry.
-    try{const profile=await accountProfile(request,this.env);if(profile.accountId!==account.accountId)return;
+    try{const profile=await accountProfile(request,this.env,undefined,true);if(profile.accountId!==account.accountId)return;
       room.members[playerId]!.appearance=profile.appearance;room.members[playerId]!.profileVersion=profile.version;
     }catch{/* The editor/inspection exposes its own retry state; gameplay remains available. */}
   }
@@ -262,7 +263,7 @@ export class TableRoom extends DurableObject<Env> {
             try{viewerId=(await verifyAccountSession(new Request(request.url,{headers}),this.env)).accountId;}catch{/* Public inspection still requires valid seat membership. */}
           }
           return Response.json({contract:1,ownAccount:!!accountId&&viewerId===accountId,playerId:target.id,name:target.name,stackUnits:current.balanceUnits??current.balance!*50,
-            funding:fundedSeat(room,target.id)?'saved':'temporary',profile:accountId?await roomAccountProfile(this.env,accountId):{kind:'guest',appearance:member.appearance??(target.icon?{avatar:{kind:'emoji',id:target.icon},border:'none'}:DEFAULT_APPEARANCE)}});
+            funding:fundedSeat(room,target.id)?'saved':'temporary',profile:accountId?await roomAccountProfile(this.env,accountId,capabilities.includes(COLLECTION_CAPABILITY)):{kind:'guest',appearance:this.projectAppearance(member.appearance??(target.icon?{avatar:{kind:'emoji',id:target.icon},border:'none'}:DEFAULT_APPEARANCE),capabilities)}});
         }
         if(operation==='profile-sync'&&request.method==='POST'){
           const token=request.headers.get('X-Profile-Authorization');assertRule(token,'ACCOUNT_REQUIRED','Sign in to update your table picture.');
@@ -270,7 +271,7 @@ export class TableRoom extends DurableObject<Env> {
           const verified=await verifyAccountSession(new Request(request.url,{headers}),this.env);
           const member=room.members[playerId]!;
           assertRule(!member.profileAccountId||member.profileAccountId===verified.accountId,'ACCOUNT_REQUIRED','This profile belongs to another account.');
-          const profile=await accountProfile(new Request(request.url,{headers}),this.env);
+          const profile=await accountProfile(new Request(request.url,{headers}),this.env,undefined,true);
           assertRule(profile.accountId===verified.accountId,'ACCOUNT_REQUIRED','This profile could not be verified.');
           member.profileAccountId=verified.accountId;member.appearance=profile.appearance;member.profileVersion=profile.version;
           // Cosmetic persistence does not advance a game revision or alter game deadlines.

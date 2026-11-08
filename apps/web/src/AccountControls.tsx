@@ -6,6 +6,7 @@ import { DailyAllowance } from './DailyAllowance';
 import { PlayerProfilesProvider,useProfiles } from './PlayerProfiles';
 import { ProfileAvatar } from './ProfileAvatar';
 import { DEFAULT_APPEARANCE } from '@casual/protocol';
+import {CollectionProvider,useCollection} from './Collection';
 
 type ProfileEdit = 'nickname' | 'icon' | null;
 const AuthContext = createContext<{ auth: AuthController; editNickname(): void; editIcon(): void } | null>(null);
@@ -20,9 +21,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void auth.start(); }, [auth]);
   return <AuthContext.Provider value={{ auth,
     editNickname: () => { auth.dismissNicknameError(); setEditing('nickname'); },
-    editIcon: () => { auth.dismissNicknameError(); setEditing('icon'); } }}><PlayerProfilesProvider auth={auth}>{state.callbackPending
+    editIcon: () => { auth.dismissNicknameError(); setEditing('icon'); } }}><CollectionProvider auth={auth}><PlayerProfilesProvider auth={auth}>{state.callbackPending
     ? <main className={s.callback} role="status"><h1>Welcome back.</h1><p>Finishing your sign-in…</p></main> : children}
-    <NicknameDialog auth={auth} state={state} editing={editing} onClose={() => setEditing(null)} /></PlayerProfilesProvider>
+    <NicknameDialog auth={auth} state={state} editing={editing} onClose={() => setEditing(null)} /></PlayerProfilesProvider></CollectionProvider>
   </AuthContext.Provider>;
 }
 
@@ -73,7 +74,7 @@ function NicknameForm({ auth, state, required, focusIcon, onSaved }: { auth: Aut
 }
 
 export function AccountControls({ beforeSignIn, signedInOnly = false, compact = false, showWallet = false }: { beforeSignIn?: () => void; signedInOnly?: boolean; compact?:boolean;showWallet?:boolean }) {
-  const profiles=useProfiles();
+  const profiles=useProfiles();const collection=useCollection();
   const { auth } = useContext(AuthContext)!;
   const state = useSyncExternalStore(auth.subscribe, auth.getSnapshot);
   const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null); const controls = useRef<HTMLDivElement>(null);
@@ -121,6 +122,7 @@ export function AccountControls({ beforeSignIn, signedInOnly = false, compact = 
     }}>
       <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf(); }}>View profile</button>
       <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('edit'); }}>Edit profile</button>
+      <button role="menuitem" onClick={() => { closeMenu(); collection.open(); }}>Your collection</button>
       <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('statistics'); }}>Statistics</button>
       <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('achievements'); }}>Progress & achievements</button>
       <button role="menuitem" disabled={state.working || state.savingNickname} onClick={() => { closeMenu(); void auth.signOut(); }}>Sign out</button>

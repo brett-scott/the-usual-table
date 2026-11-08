@@ -1,0 +1,8 @@
+body[data-collection-theme='midnight'] [data-game-table]{--bg:#111925;--panel:#1c2838;--felt:#263e66;--felt-dark:#192c49;--accent:#b8c9ee;--muted:#b0bed1;--line:#3b4b64}
+body[data-collection-theme='moonlit'] [data-game-table]{--bg:#101d29;--panel:#1a3041;--felt:#253d52;--felt-dark:#172a3b;--accent:#c7d4e4;--muted:#bacbd8;--line:#425a70}
+body[data-collection-theme='rosewood'] [data-game-table]{--bg:#241b20;--panel:#35252d;--felt:#683b41;--felt-dark:#3d252e;--accent:#e0ba7c;--muted:#d2bdba;--line:#664650}
+body[data-collection-theme='jade'] [data-game-table]{--bg:#102322;--panel:#193533;--felt:#1c5654;--felt-dark:#123c3a;--accent:#c4d6b1;--muted:#b6cfc4;--line:#3c6760}
+/* Game state colours stay semantic; these tokens affect the decorative table surface. */
+body:not([data-collection-theme='classic']) [data-collection-surface]{background:radial-gradient(ellipse at 50% 30%,var(--felt),var(--felt-dark));border-color:var(--accent)}
+body[data-collection-theme='rosewood'] [data-collection-surface]{background:repeating-conic-gradient(from 45deg at 50% 125%,transparent 0deg 8deg,#eacb9508 8deg 8.5deg),var(--felt)}
+body[data-collection-theme='jade'] [data-collection-surface]{background:repeating-radial-gradient(ellipse at 50% 130%,transparent 0 75px,#e4ead208 75px 76px),var(--felt)}

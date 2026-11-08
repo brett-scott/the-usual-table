@@ -15,3 +15,17 @@
 
 .achievementFilter{display:flex;align-items:center;gap:9px;min-height:44px;margin:-4px 0 12px;font-size:12px;color:var(--profile-muted);cursor:pointer}.achievementFilter input{width:18px;height:18px;margin:0;accent-color:var(--profile-gold);flex-shrink:0}
 
+
+/* Earned collection borders animate their decoration, never the avatar or seat. */
+.avatar{position:relative;isolation:isolate}.avatar>svg,.avatar>.face{position:relative;z-index:1}
+.avatar[data-border='moonstone'],.avatar[data-border='lunar-orbit']{border-color:#b4c8df}.avatar[data-border='garden-edge']{border-color:#bdd3ab}.avatar[data-border='club-glint']{border-color:#d9bd7b}.avatar[data-border='soft-halo']{border-color:#bcb0cf}
+.avatar:after{content:'';position:absolute;inset:-2px;border-radius:50%;pointer-events:none;box-sizing:border-box}
+@supports (mask-composite:exclude){
+.avatar[data-border='club-glint']:after,.avatar[data-border='lunar-orbit']:after{padding:3px;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
+.avatar[data-border='club-glint']:after{background:conic-gradient(transparent 0deg 205deg,#b87e2d 225deg,#f7d784 255deg,#fff9df 285deg,#fff 296deg,#e8b351 320deg,transparent 345deg);animation:clubSheen 6s linear infinite}
+.avatar[data-border='lunar-orbit']:after{background:conic-gradient(transparent 0deg 215deg,#657aa8 235deg,#bacbfa 267deg,#fff 292deg,#e5e8ff 305deg,transparent 330deg);animation:lunarHighlight 7s linear infinite}}
+.avatar[data-border='soft-halo']:after{inset:-2px;border:2px solid #e2cfff;box-shadow:0 0 5px 2px #c3abd85c;animation:softHalo 5s ease-in-out infinite}
+@keyframes clubSheen{from{transform:rotate(-50deg)}to{transform:rotate(310deg)}}@keyframes lunarHighlight{from{transform:rotate(45deg)}to{transform:rotate(405deg)}}@keyframes softHalo{0%,100%{opacity:.18}50%{opacity:1}}
+.avatar[data-motion='false']:after,:global(body[data-border-motion='off']) .avatar:after{animation:none!important}
+:global(body[data-border-motion='paused']) .avatar:after{animation-play-state:paused!important}
+@media(prefers-reduced-motion:reduce){.avatar:after{animation:none!important}}

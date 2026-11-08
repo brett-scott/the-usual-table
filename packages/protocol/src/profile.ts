@@ -11,7 +11,9 @@ export const avatarSchema = z.discriminatedUnion('kind', [
   z.object({kind:z.literal('emoji'),id:playerIconSchema}).strict(),
   z.object({kind:z.literal('illustration'),id:z.enum(PROFILE_ILLUSTRATIONS)}).strict(),
 ]);
-export const appearanceSchema = z.object({avatar:avatarSchema,border:z.enum(PROFILE_BORDERS)}).strict();
+export const appearanceSchema = z.object({avatar:avatarSchema,border:z.enum([...PROFILE_BORDERS,'moonstone','garden-edge','club-glint','lunar-orbit','soft-halo'])}).strict();
+export const legacyAppearanceSchema=z.object({avatar:avatarSchema,border:z.enum(PROFILE_BORDERS)}).strict();
+export function legacyAppearance(value:z.infer<typeof appearanceSchema>):z.infer<typeof legacyAppearanceSchema>{return {...value,border:PROFILE_BORDERS.includes(value.border as typeof PROFILE_BORDERS[number])?value.border as typeof PROFILE_BORDERS[number]:'brass'};}
 export const profileVisibilitySchema=z.object({chips:z.boolean(),statistics:z.boolean(),achievements:z.boolean()}).strict();
 export const profileDraftSchema=z.object({nickname:displayNameSchema,appearance:appearanceSchema,visibility:profileVisibilitySchema}).strict();
 export const accountProfileSchema=z.object({contract:z.literal(1),accountId:z.string().uuid(),version:z.number().int().nonnegative().safe(),

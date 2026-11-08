@@ -2,9 +2,11 @@ import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { CardBack, CardFace } from './cardAppearance';
 import { CardStyleFields } from './CardStylePicker';
 import s from './TableOptions.module.css';
+import {useCollection} from './Collection';
+import {COSMETICS,type CosmeticSelection} from '@casual/protocol';
 
 type View = 'menu' | 'rules' | 'cards' | 'themes';
-type Theme = 'classic' | 'midnight';
+type Theme = CosmeticSelection['theme'];
 type Props = {
   appearance: { face: CardFace; back: CardBack };
   onAppearanceChange(next: { face: CardFace; back: CardBack }): void;
@@ -16,6 +18,7 @@ type Props = {
 };
 
 export function TableOptions({ appearance, onAppearanceChange, theme, onThemeChange, rules, timerNote = 'Your hand timer keeps running.', rulesSummary = 'Six decks · Dealer stands on 17' }: Props) {
+  const collection=useCollection();
   const id = useId(); const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const menuButtons = useRef<Partial<Record<Exclude<View, 'menu'>, HTMLButtonElement | null>>>({});
@@ -31,7 +34,7 @@ export function TableOptions({ appearance, onAppearanceChange, theme, onThemeCha
   function visit(next: Exclude<View, 'menu'>) { lastView.current = next; setView(next); }
   function close() { dialog.current?.close(); }
   const currentFace = appearance.face === 'classic' ? 'Classic' : 'Large index';
-  const currentBack = appearance.back === 'traditional' ? 'Traditional' : 'Geometric';
+  const currentBack = COSMETICS.find(c=>c.category==='back'&&c.id===appearance.back)?.name??'Traditional';
   return <>
     <button className={s.trigger} ref={trigger} type="button" aria-label="Table options" aria-haspopup="dialog" aria-controls={`${id}-dialog`} onClick={open}>Options</button>
     <dialog ref={dialog} id={`${id}-dialog`} className={s.dialog} aria-label="Table options" onClose={() => {
@@ -53,13 +56,14 @@ export function TableOptions({ appearance, onAppearanceChange, theme, onThemeCha
             <span className={s.menuIcon} aria-hidden="true">♠</span><span><strong>Cards</strong><small id={`${id}-cards-detail`}>{currentFace} faces · {currentBack} backs</small></span><span className={s.chevron} aria-hidden="true">›</span>
           </button>
           <button ref={node => { menuButtons.current.themes = node; }} className={s.menuItem} type="button" aria-label="Themes" aria-describedby={`${id}-themes-detail`} onClick={() => visit('themes')}>
-            <span className={`${s.menuIcon} ${s.themeIcon}`} data-theme={theme} aria-hidden="true">◐</span><span><strong>Themes</strong><small id={`${id}-themes-detail`}>{theme === 'classic' ? 'Classic green' : 'Midnight blue'}</small></span><span className={s.chevron} aria-hidden="true">›</span>
+            <span className={`${s.menuIcon} ${s.themeIcon}`} data-theme={theme} aria-hidden="true">◐</span><span><strong>Themes</strong><small id={`${id}-themes-detail`}>{COSMETICS.find(c=>c.category==='theme'&&c.id===theme)?.name}</small></span><span className={s.chevron} aria-hidden="true">›</span>
           </button>
         </div>}
         {view === 'rules' && <div className={s.rules}>{rules}</div>}
         {view === 'cards' && <div className={s.cards}>
           <p className={s.intro}>Choose your card faces and backs. Only your view changes.</p>
           <CardStyleFields face={appearance.face} back={appearance.back} onChange={onAppearanceChange} />
+          <button onClick={()=>{close();collection.open('artwork');}}>Explore card collection</button>
         </div>}
         {view === 'themes' && <fieldset className={s.themes}>
           <legend>Table theme</legend>
@@ -70,6 +74,7 @@ export function TableOptions({ appearance, onAppearanceChange, theme, onThemeCha
             <span className={s.themeCopy}><strong>{value === 'classic' ? 'Classic' : 'Midnight'}</strong><small id={`${id}-${value}-description`}>{value === 'classic' ? 'Green felt · Warm brass' : 'Blue felt · Cool silver'}</small></span>
             {theme === value && <span className={s.selected}>Selected</span>}
           </label>)}
+          <button onClick={()=>{close();collection.open('theme');}}>Explore theme collection</button>
         </fieldset>}
       </div>
       <footer className={s.footer}><span>Saved in this browser.</span><span>{timerNote}</span></footer>

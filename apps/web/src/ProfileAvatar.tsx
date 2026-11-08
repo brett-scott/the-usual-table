@@ -1,8 +1,8 @@
 import { PLAYER_ICONS, type Appearance } from '@casual/protocol';
 import s from './PlayerProfiles.module.css';
-export function ProfileAvatar({name,appearance,size}:{name:string;appearance:Appearance;size?:number}){
+export function ProfileAvatar({name,appearance,size,motion=true}:{name:string;appearance:Appearance;size?:number;motion?:boolean}){
   const a=appearance.avatar;
-  return <span className={s.avatar} data-emoji={a.kind==='emoji'} data-border={appearance.border} data-avatar={a.kind==='initials'?'initials':a.id} style={size?{width:size,height:size}:undefined}>
+  return <span className={s.avatar} data-motion={motion} data-emoji={a.kind==='emoji'} data-border={appearance.border} data-avatar={a.kind==='initials'?'initials':a.id} style={size?{width:size,height:size}:undefined}>
     {a.kind==='illustration'?<Illustration id={a.id}/>:<span className={s.face} role={a.kind==='emoji'?'img':undefined} aria-label={a.kind==='emoji'?`${PLAYER_ICONS.find(i=>i.emoji===a.id)?.label??''} player icon`:undefined} aria-hidden={a.kind==='initials'?true:undefined}>{a.kind==='emoji'?a.id:name.slice(0,1).toUpperCase()}</span>}
   </span>;
 }

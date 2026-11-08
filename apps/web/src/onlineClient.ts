@@ -1,3 +1,4 @@
+import {legacyAppearance} from '@casual/protocol';
 import { CHAT_CAPABILITY,GAME_ADAPTER_CAPABILITY,gameServerEventSchema,tableInfoSchema,tableSessionResponseSchema, chatTextSchema, lobbyListSchema, sessionResponseSchema, snapshotSchema, type GameId,type GameClientAdapter,type TableClient,type TableSessionResponse,type LobbyVisibility, type PlayerIcon, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
 import { browserAuth } from './authClient';
 import { roomProfileSchema,appearanceSchema } from '@casual/protocol';
@@ -12,8 +13,8 @@ async function request(path: string, options: { gameId?:GameId;capabilities?:rea
   const headers: Record<string, string> = {};
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   const accountEntry=options.body&&(!path||path.endsWith('/join'))?browserAuth().getSnapshot().account:null;
-  if(!accountEntry&&options.body&&typeof options.body==='object'&&(!path||path.endsWith('/join'))){try{const appearance=appearanceSchema.parse(JSON.parse(localStorage.getItem('casual-player-appearance')??'null'));options.body={...options.body,appearance};}catch{/* Guests can enter without browser storage. */}}
-  if(accountEntry&&options.body&&typeof options.body==='object')options.body={...options.body,...(browserAuth().getSnapshot().profile?{appearance:browserAuth().getSnapshot().profile!.appearance}:{})};
+  if(!accountEntry&&options.body&&typeof options.body==='object'&&(!path||path.endsWith('/join'))){try{const appearance=appearanceSchema.parse(JSON.parse(localStorage.getItem('casual-player-appearance')??'null'));options.body={...options.body,appearance:legacyAppearance(appearance)};}catch{/* Guests can enter without browser storage. */}}
+  if(accountEntry&&options.body&&typeof options.body==='object')options.body={...options.body,...(browserAuth().getSnapshot().profile?{appearance:legacyAppearance(browserAuth().getSnapshot().profile!.appearance)}:{})};
   if (options.account || options.session?.funding === 'account'||accountEntry) {
     try { headers.Authorization = `Bearer ${await browserAuth().accessToken()}`; }
     catch { throw new ApiError('ACCOUNT_SESSION_INVALID', 'Sign in again to use your saved chips.'); }
@@ -250,7 +251,7 @@ export function createTableClient<S,A>(initial:TableSessionResponse<S>,adapter:G
   void connect();
   return {
     getSnapshot: () => snapshot, getConnection: () => connection, getChat: () => chat,
-    async readProfile(playerId,signal){const profileToken=browserAuth().getSnapshot().account?await browserAuth().accessToken():undefined;const value=roomProfileSchema.parse(await request(`/${session.inviteId}/profile`,{session,body:{playerId},signal,profileToken}));if(value.playerId!==playerId)throw new Error('Profile mismatch');return value;},
+    async readProfile(playerId,signal){const profileToken=browserAuth().getSnapshot().account?await browserAuth().accessToken():undefined;const value=roomProfileSchema.parse(await request(`/${session.inviteId}/profile`,{session,body:{playerId},signal,profileToken,capabilities:adapter.capabilities}));if(value.playerId!==playerId)throw new Error('Profile mismatch');return value;},
     async syncProfile(){await request(`/${session.inviteId}/profile-sync`,{session,body:{},profileToken:await browserAuth().accessToken()});},
     markChatRead() { if (chat.unread) { chat = { ...chat, unread: 0 }; notify(); } },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },

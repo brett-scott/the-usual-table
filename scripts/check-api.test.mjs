@@ -10,11 +10,13 @@ globalThis.fetch = async (input, options) => {
   if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,
     ...(process.env.CHECK_SCENARIO==='missing-roulette'?{}:{rouletteProtocol:1}),...(process.env.CHECK_SCENARIO==='missing-duck-race'?{}:{duckRaceProtocol:1}),...(process.env.CHECK_SCENARIO==='missing-baccarat'?{}:{baccaratProtocol:process.env.CHECK_SCENARIO==='old-baccarat'?2:3}),...(process.env.CHECK_SCENARIO==='missing-crash'?{}:{crashProtocol:process.env.CHECK_SCENARIO==='old-crash'?1:2}),
     ...(process.env.CHECK_SCENARIO==='missing-game-adapters'?{}:{gameAdapterProtocol:1}),
+    ...(process.env.CHECK_SCENARIO === 'missing-collections-protocol' ? {} : {accountCollectionsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-rewards-protocol' ? {} : {accountRewardsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-account-play' ? {} : {accountPlayProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-statistics-protocol' ? {} : {accountStatisticsProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'old-worker' ? {} : {authProjectUrl:process.env.CHECK_SCENARIO === 'wrong-project' ? 'https://wrong.supabase.co' : project})},
     {headers:{'Access-Control-Allow-Origin':origin}});
+  if(path==='/api/v1/account/collection') return Response.json({code:'ACCOUNT_SESSION_INVALID'},{status:process.env.CHECK_SCENARIO==='collections-missing'?404:401,headers:{'Access-Control-Allow-Origin':origin}});
   if (path === '/api/v1/account/session') return Response.json({code:'ACCOUNT_SESSION_INVALID'},
     {status:process.env.CHECK_SCENARIO === 'account-accepted' ? 200 : process.env.CHECK_SCENARIO === 'account-missing' ? 404 : 401,
     headers:{'Access-Control-Allow-Origin':process.env.CHECK_SCENARIO === 'account-cors' ? 'https://wrong.test' : origin}});
@@ -65,3 +67,5 @@ it('requires the Baccarat side-bet Worker before publishing expanded betting',()
 it('requires the Duck Race Worker before publishing its entry',()=>{const result=check('missing-duck-race');expect(result.status).toBe(1);expect(result.stderr).toContain('Duck Race');});
 
 it('requires the Roulette Worker before Pages',()=>{const result=check('missing-roulette');expect(result.status).toBe(1);expect(result.stderr).toContain('Roulette');});
+
+it.each(['missing-collections-protocol','collections-missing'])('requires private collection support before Pages: %s',scenario=>{const result=check(scenario);expect(result.status).toBe(1);expect(result.stderr).toContain('account collections');});

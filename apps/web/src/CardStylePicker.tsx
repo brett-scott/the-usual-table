@@ -2,6 +2,7 @@ import { useId, useRef } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { CardAppearance, type CardBack, type CardFace } from './cardAppearance';
 import s from './App.module.css';
+import {COSMETICS} from '@casual/protocol';
 type CardStyleProps = { face: CardFace; back: CardBack; onChange: (value: { face: CardFace; back: CardBack }) => void };
 
 export function CardStyleFields({ face, back, onChange }: CardStyleProps) {
@@ -12,7 +13,7 @@ export function CardStyleFields({ face, back, onChange }: CardStyleProps) {
     </div></CardAppearance.Provider>
     <div data-card-selectors>
       <div><label htmlFor={`${id}-face`}>Card face</label><select id={`${id}-face`} value={face} onChange={event => onChange({ face: event.target.value as CardFace, back })}><option value="classic">Classic</option><option value="large-index">Large index</option></select></div>
-      <div><label htmlFor={`${id}-back`}>Card back</label><select id={`${id}-back`} value={back} onChange={event => onChange({ face, back: event.target.value as CardBack })}><option value="traditional">Traditional</option><option value="geometric">Geometric</option></select></div>
+      <div><label htmlFor={`${id}-back`}>Card back</label><select id={`${id}-back`} value={back} onChange={event => onChange({ face, back: event.target.value as CardBack })}><option value="traditional">Traditional</option><option value="geometric">Geometric</option>{back!=='traditional'&&back!=='geometric'&&<option value={back}>{COSMETICS.find(c=>c.category==='back'&&c.id===back)?.name}</option>}</select></div>
     </div>
   </div>;
 }

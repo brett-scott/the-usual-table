@@ -278,7 +278,7 @@ async function boundedFetch(input: RequestInfo | URL, init: RequestInit = {}) {
 let browserController: AuthController | undefined;
 async function profileRequest(token:string,input?:ProfileDraft&{version:number},signal?:AbortSignal){
   const origin=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8787').replace(/\/$/,'');
-  const response=await boundedFetch(`${origin}/api/v1/account/profile`,{method:input?'POST':'GET',headers:{Authorization:`Bearer ${token}`,...(input?{'Content-Type':'application/json'}:{})},body:input?JSON.stringify(input):undefined,signal,cache:'no-store'});
+  const response=await boundedFetch(`${origin}/api/v1/account/profile?catalogue=2`,{method:input?'POST':'GET',headers:{Authorization:`Bearer ${token}`,...(input?{'Content-Type':'application/json'}:{})},body:input?JSON.stringify(input):undefined,signal,cache:'no-store'});
   const data:unknown=await response.json();if(!response.ok)throw new Error(data&&typeof data==='object'&&'code'in data?String(data.code):'PROFILE_UNAVAILABLE');
   return accountProfileSchema.parse(data);
 }

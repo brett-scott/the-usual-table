@@ -6,7 +6,8 @@ import {useTablePresentation} from './useTablePresentation';
 import {displayedDealerTotal} from './dealerScore';
 import {useCompactLayout} from './useCompactLayout';
 import {TableHeader,TableToolbar} from './TableChrome';
-import {CardAppearance,savedAppearance} from './cardAppearance';
+import {CardAppearance} from './cardAppearance';
+import {useTableLook} from './Collection';
 import {TableOptions} from './TableOptions';
 import {ChatBubble} from './ChatBubble';
 import {WagerChips} from './WagerChips';
@@ -16,8 +17,6 @@ import {BlackjackBettingController,type BlackjackChip} from './blackjackBettingC
 import c from './App.module.css';
 import s from './BlackjackTable.module.css';
 const money = (units: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(units / 2);
-function readLocal(key: string) { try { return localStorage.getItem(key) ?? ''; } catch { return ''; } }
-function writeLocal(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* Appearance stays usable when storage is blocked. */ } }
 
 function Cards({ cards, timeline, dealer = false, shoeRef, reducedMotion = false }: {
   cards: VisibleCard[]; timeline?: CardTimeline; dealer?: boolean; shoeRef?: RefObject<HTMLDivElement | null>; reducedMotion?: boolean;
@@ -65,8 +64,7 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
-  const [theme, setTheme] = useState<'classic' | 'midnight'>(() => readLocal('casual-theme') === 'midnight' ? 'midnight' : 'classic');
-  const [appearance, setAppearance] = useState(savedAppearance);
+  const {theme,appearance,setTheme,setAppearance}=useTableLook();
   const viewingOtherHand = compact && ownTurn && selectedHand !== ownActive;
   const can = (type: Action['type']) => state.legalActions.includes(type) && connection.status === 'connected' && !pending && (!presenting || type === 'NextRound') && (!betting.pending || !['Ready','SitOut','StartBetting','Leave'].includes(type)) && (localDeadline === null || localDeadline > now) && (!viewingOtherHand || !['Hit', 'Stand', 'Double', 'Split'].includes(type));
   async function send(action: Action) {
@@ -112,15 +110,15 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
   const editable=can('PlaceBet')&&state.blackjackBettingVersion===2;
   const wager=state.phase==='BETTING'?betting.wager:{amount:player.hands.reduce((sum,h)=>sum+h.wager,0)||player.bet,perfectPairsAmount:player.perfectPairs?.wager??0};
   const settled=complete&&!presenting;
-  return <CardAppearance.Provider value={appearance}><div className={c.app+' '+s.app} data-theme={theme} data-card-face={appearance.face} data-card-back={appearance.back} data-online={!!state.room} data-revision={state.revision} data-connection={connection.status}>
+  return <CardAppearance.Provider value={appearance}><div className={c.app+' '+s.app} data-game-table="blackjack" data-theme={theme} data-card-face={appearance.face} data-card-back={appearance.back} data-online={!!state.room} data-revision={state.revision} data-connection={connection.status}>
     <TableHeader client={client} playerId={player.id} online={!!state.room} ownTurn={ownTurn} seconds={localDeadline===null?null:Math.max(0,Math.ceil((localDeadline-now)/1000))} decisionLabel="hand" showAccountSignIn={!!state.wallet}>
-      <TableOptions appearance={appearance} onAppearanceChange={next=>{setAppearance(next);writeLocal('casual-card-face',next.face);writeLocal('casual-card-back',next.back);}} theme={theme} onThemeChange={value=>{setTheme(value);writeLocal('casual-theme',value);}}
+      <TableOptions appearance={appearance} onAppearanceChange={setAppearance} theme={theme} onThemeChange={setTheme}
         rules={<><p>Beat the dealer without going over 21. Aces count as 1 or 11. Dealer stands on all 17, including soft 17.</p><dl><dt>Blackjack</dt><dd>An unsplit natural pays 3:2. Regular wins pay 1:1; pushes return your stake.</dd><dt>Your turn</dt><dd>20 seconds per hand. Hit resets the countdown to 20 seconds. On timeout your hand stands.</dd><dt>Double</dt><dd>Only on an initial two-card 9, 10 or 11, including after splitting; one card then stand.</dd><dt>Split</dt><dd>Identical ranks, up to four hands. Split aces receive one card. Split 21 pays 1:1.</dd><dt>Insurance</dt><dd>Up to half your original bet when the dealer shows an ace; pays 2:1 on dealer blackjack.</dd><dt>Perfect Pairs</dt><dd>Your original two cards only, regardless of splits. Mixed pair: 6:1 profit; same colour, different suits: 12:1; same rank and suit: 25:1. Winning stakes also return.</dd><dt>Betting</dt><dd>10–1,000 chips per target in steps of 10. Perfect Pairs requires a main bet; combined bets cannot exceed your table stack. Ready locks both bets. Results last five seconds after the dealer reveal.</dd><dt>The shoe</dt><dd>Six physical decks, without replacement across rounds. The cut card triggers a shuffle before the next deal.</dd></dl></>}/>
     </TableHeader>
     <main className={s.main}>
       <TableToolbar connection={connection} leaveDisabled={pending||betting.pending||!!state.room&&connection.status!=='connected'} onLeave={()=>{if(state.room)void send({type:'Leave'});else onLeave(true);}}/>
       <div className={s.layout}>
-      <section className={s.table} aria-label="Blackjack table">
+      <section className={s.table} data-collection-surface aria-label="Blackjack table">
         <div className={s.tableInner}>
           <div className={s.heading}><h1>Blackjack <small>3:2</small></h1><span ref={shoeRef} className={s.shoe} data-card-shoe title={state.shoe.remaining+' cards remaining'}>▱ {state.shoe.shuffleNext?'Shuffle next':state.shoe.remaining}</span></div>
           <div className={s.dealer}><p className={s.seatLabel}>Dealer {dealerScore!==null&&<span className={s.total} data-dealer-total>{dealerScore}</span>}</p>{state.dealer.length?<Cards cards={state.dealer} timeline={timeline} dealer shoeRef={shoeRef} reducedMotion={reducedMotion}/>:<div className={s.cardSpaces} aria-label="Dealer is waiting to deal"><span/><span/></div>}</div>

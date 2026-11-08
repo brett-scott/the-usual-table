@@ -524,3 +524,10 @@
   .otherSeat .opponentSummary > span { padding-block: 0; }
   .emptySeat .emptyAvatar { display: none; }
 }
+
+/* Collection artwork lives inside the original deal/flip surface. */
+.card[data-artwork='porcelain']{--card-paper:#fffefa;color:#213a43;font-family:Arial,sans-serif}.card[data-artwork='letterpress']{--card-paper:#eae1c9;color:#182b27}.card[data-artwork] .red{color:#b63f42}
+.card[data-back='moonphase'] .cardBack{background:radial-gradient(circle,#d7e0ec66 0 .6px,transparent .8px) 0 0/10px 13px,#263f57;color:#d7e0ec}
+.card[data-back='moonphase'] .cardBack span{border-color:#c7d4e4}
+.card[data-back='deco'] .cardBack{background:repeating-conic-gradient(from 0deg at 50% 110%,transparent 0deg 8deg,#e6c58f55 8deg 9deg),#6b3940;color:#e6c58f}
+.card[data-back='botanical'] .cardBack{background:repeating-radial-gradient(ellipse at 0% 100%,transparent 0 10px,#d3dfb844 10px 11px) 0 0/35px 45px,#225454;color:#d3dfb8}

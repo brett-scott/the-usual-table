@@ -31,11 +31,11 @@ export function DuckRaceTable({client,onLeave}:{client:TableClient<DuckRaceSnaps
  }
  const net=p.returnedUnits-p.wager.amountUnits;
  const note=results&&p.wager.amountUnits?`${net>0?'Won':'Lost'} · ${net>0?'+':''}${chips(net)} chips`:state.phase==='racing'?p.wager.amountUnits?'Your wager is racing':'Watching · Bet next round':betting?'Choose a chip, then tap a duck. Tap again to add.':state.managerId===p.id?'Start rounds when you are ready.':'Waiting for the host to start.';
- return <div className={s.app} data-connection={connection.status} data-phase={state.phase} data-revision={state.revision}>
+ return <div data-game-table="duck-race" className={s.app} data-connection={connection.status} data-phase={state.phase} data-revision={state.revision}>
   <TableHeader client={client} playerId={p.id} online ownTurn={betting} seconds={seconds} decisionLabel="betting" showAccountSignIn={!!state.wallet}><button onClick={()=>rules.current?.showModal()}>Rules</button></TableHeader>
   <main className={s.main} style={{'--seat-rows':Math.ceil(state.players.length/4),'--phone-seat-rows':Math.ceil(state.players.length/2)} as CSSProperties}>
    <div className={s.toolbar}><TableToolbar connection={connection} leaveDisabled={!connected||busy} onLeave={()=>void send({type:'Leave'})}/></div>
-   <section className={s.race} aria-label="Duck Race game">
+   <section data-collection-surface className={s.race} aria-label="Duck Race game">
     <div className={s.raceHead}><div><span className={s.eyebrow}>THE USUAL DERBY</span><h1>{results?`${state.ducks[state.winner!]!.name} wins!`:state.phase==='racing'?'And they’re off!':betting?'Back your duck':'Ready, set, quack.'}</h1></div>
      {seconds!==null&&<div className={s.timer} data-urgent={betting&&seconds<=5} role="timer" aria-label={betting?'Betting countdown':results?'Next race countdown':'Race countdown'}><strong>{seconds}s</strong><span>{betting?'BETS CLOSE':results?'NEXT RACE':'RACING'}</span></div>}
     </div>

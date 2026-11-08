@@ -7,8 +7,8 @@ import { readAccountWallet } from './accountWallet';
 import { supabaseWallet } from './supabaseWallet';
 import { supabaseStatistics } from './supabaseStatistics';
 import { supabaseAllowance } from './supabaseRewards';
-import { accountProfile } from './playerProfiles';
-import { saveProfileSchema } from '@casual/protocol';
+import { accountProfile,accountCollection } from './playerProfiles';
+import { saveProfileSchema,equipCosmeticSchema } from '@casual/protocol';
 import { readJson } from './security';
 import { gameAdapters } from './games/registry';
 export { TableRoom } from './tableRoom';
@@ -25,7 +25,7 @@ export default {
       else if (url.pathname === '/api/v1/health' && request.method === 'GET') {
         const auth = supabaseUrlSchema.safeParse(env.SUPABASE_URL ?? PUBLIC_SUPABASE_CONFIG.url);
         response = Response.json({ status: 'ok', protocol: 1, authProjectUrl: auth.success ? auth.data : null,
-          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountProfilesProtocol:1,accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:3,duckRaceProtocol:1,rouletteProtocol:1 });
+          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountProfilesProtocol:1,accountCollectionsProtocol:1,accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:3,duckRaceProtocol:1,rouletteProtocol:1 });
       }
       else if (url.pathname === '/api/v1/games' && request.method === 'GET') response = Response.json({ games: GAME_CATALOG });
       else if(url.pathname==='/api/v1/account/profile'&&['GET','POST'].includes(request.method)){
@@ -34,9 +34,18 @@ export default {
         const parsed=request.method==='POST'?saveProfileSchema.safeParse(await readJson(request)):undefined;
         if(parsed&&!parsed.success)throw new GameError('INVALID_REQUEST','Choose a valid nickname, picture, border and sharing settings.');
         const input=parsed?.data;
-        const profile=await accountProfile(request,env,input);
+        const profile=await accountProfile(request,env,input,url.searchParams.get('catalogue')==='2');
         if(profile.accountId!==account.accountId)throw new GameError('PROFILE_UNAVAILABLE','This profile could not be verified.');
         response=Response.json(profile);
+      }
+      else if(url.pathname==='/api/v1/account/collection'&&['GET','POST'].includes(request.method)){
+        if(!(await env.ENTRY_LIMITER.limit({key:`collection:${request.headers.get('CF-Connecting-IP')??'local'}`})).success)throw new GameError('RATE_LIMITED','Wait a moment before updating your collection.');
+        const account=await verifyAccountSession(request,env);
+        const parsed=request.method==='POST'?equipCosmeticSchema.safeParse(await readJson(request)):undefined;
+        if(parsed&&!parsed.success)throw new GameError('INVALID_REQUEST','Choose an item from your collection.');
+        const collection=await accountCollection(request,env,parsed?.data);
+        if(collection.accountId!==account.accountId)throw new GameError('PROFILE_UNAVAILABLE','This collection could not be verified.');
+        response=Response.json(collection);
       }
       else if (url.pathname === '/api/v1/account/session' && request.method === 'GET') {
         if (!(await env.ENTRY_LIMITER.limit({ key: `account:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before reconnecting your account.');

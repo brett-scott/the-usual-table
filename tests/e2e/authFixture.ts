@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, type Page } from '@playwright/test';
 import { BLACKJACK_TABLE_RULES,PUBLIC_SUPABASE_CONFIG, type PlayerIcon, type SocialProvider } from '@casual/protocol';
-import { DEFAULT_PROFILE_VISIBILITY,saveProfileSchema,type Appearance } from '@casual/protocol';
+import { DEFAULT_PROFILE_VISIBILITY,saveProfileSchema,COSMETICS,DEFAULT_COSMETICS,equipCosmeticSchema,type Appearance,type CosmeticSelection } from '@casual/protocol';
 
 export const accountId = 'a213ae22-a459-456d-976c-dc115e74abda';
 export async function providerFixture(page: Page, provider: SocialProvider, mode: 'success' | 'cancel' | 'offline' = 'success', savedNickname: string | null = null, savedIcon: PlayerIcon | null = null) {
@@ -11,6 +11,8 @@ export async function providerFixture(page: Page, provider: SocialProvider, mode
   let icon = savedIcon; let walletMode: 'ready' | 'offline' | 'not-connected' | 'wrong-account' | 'zero' | 'new' | 'new-offline' = 'ready';
   let provisioned = false; let walletCreates = 0;
   let profileVersion=0;let appearance:Appearance={avatar:savedIcon?{kind:'emoji',id:savedIcon}:{kind:'initials'},border:'none'};let visibility:{chips:boolean;statistics:boolean;achievements:boolean}={...DEFAULT_PROFILE_VISIBILITY};
+  let cosmetics:CosmeticSelection={...DEFAULT_COSMETICS};const owned=new Set(COSMETICS.filter(c=>c.free).map(c=>`${c.category}:${c.id}`));
+  const profile=()=>({contract:1,accountId,version:profileVersion,nickname,appearance,visibility});
   const tokens: string[] = [];
   function authUser() {
     return { id: accountId, aud: 'authenticated', role: 'authenticated', created_at: new Date().toISOString(),
@@ -60,14 +62,25 @@ export async function providerFixture(page: Page, provider: SocialProvider, mode
     await route.fulfill(mode === 'offline' ? { status: 503, json: { code: 'AUTH_UNAVAILABLE' } }
       : { json: { accountId, provider, expiresAt: Date.now() + 3_600_000 } });
   });
-  await page.route('**/api/v1/account/profile',async route=>{
+  await page.route('**/api/v1/account/profile*',async route=>{
     expect(tokens).toContain(route.request().headers().authorization?.slice(7));
     if(failRead||failSave&&route.request().method()==='POST'){await route.fulfill({status:503,json:{code:'PROFILE_UNAVAILABLE'}});return;}
     if(route.request().method()==='POST'){
       const input=saveProfileSchema.parse(route.request().postDataJSON());if(input.version!==profileVersion){await route.fulfill({status:409,json:{code:'PROFILE_CONFLICT'}});return;}
       profileVersion++;nickname=input.nickname;appearance=input.appearance;visibility=input.visibility;icon=appearance.avatar.kind==='emoji'?appearance.avatar.id:null;
     }
-    await route.fulfill({json:{contract:1,accountId,version:profileVersion,nickname,appearance,visibility}});
+    await route.fulfill({json:profile()});
+  });
+  await page.route('**/api/v1/account/collection',async route=>{
+    expect(tokens).toContain(route.request().headers().authorization?.slice(7));
+    if(failRead||failSave&&route.request().method()==='POST'){await route.fulfill({status:503,json:{code:'PROFILE_UNAVAILABLE'}});return;}
+    if(route.request().method()==='POST'){
+      const input=equipCosmeticSchema.parse(route.request().postDataJSON());
+      if(input.version!==profileVersion){await route.fulfill({status:409,json:{code:'PROFILE_CONFLICT'}});return;}
+      if(!owned.has(`${input.category}:${input.id}`)){await route.fulfill({status:403,json:{code:'COSMETIC_LOCKED'}});return;}
+      cosmetics={...cosmetics,[input.category]:input.id};if(input.category==='border')appearance={...appearance,border:input.id as Appearance['border']};profileVersion++;
+    }
+    await route.fulfill({json:{contract:1,accountId,profile:profile(),selection:{...cosmetics,border:appearance.border},owned:[...owned]}});
   });
   await page.route('**/api/v1/account/statistics/details*',route=>route.fulfill({status:503,json:{code:'STATISTICS_UNAVAILABLE'}}));
   await page.route('**/api/v1/account/progression',route=>route.fulfill({status:503,json:{code:'REWARDS_UNAVAILABLE'}}));
@@ -94,7 +107,7 @@ export async function providerFixture(page: Page, provider: SocialProvider, mode
       status: 'active', version: 1, availableUnits: walletMode === 'new' ? 1000000 : walletMode === 'zero' ? 0 : 123456, atTablesUnits: walletMode === 'new' ? 0 : 25000, pendingReturnUnits: walletMode === 'new' ? 0 : 5050 } });
   });
   await page.route('**/api/v1/account/allowance',route=>route.fulfill({status:503,json:{code:'REWARDS_NOT_CONNECTED'}}));
-  return { counts: () => ({ exchanges, refreshes, verifications, walletCreates }), failSave: (value: boolean) => { failSave = value; },
+  return { counts: () => ({ exchanges, refreshes, verifications, walletCreates }),unlockCosmetics:(ids:string[])=>ids.forEach(id=>owned.add(id)),failSave: (value: boolean) => { failSave = value; },
     failRead: (value: boolean) => { failRead = value; }, renameRemotely: (value: string) => { nickname = value; },
     setWalletMode: (value: typeof walletMode) => { walletMode = value; } };
 }

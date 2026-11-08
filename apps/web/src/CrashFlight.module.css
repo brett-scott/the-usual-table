@@ -1,6 +1,6 @@
-.flight { --flight-accent: #dac18a; height: 100%; min-height: 0; color: #f2ead9; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; container-type: size; border: 1px solid #7a714e; border-radius: 18px; background: radial-gradient(ellipse at 70% 90%, #21463888, transparent 80%), #14271f; overflow: hidden; }
+.flight { --flight-accent: var(--accent, #dac18a); height: 100%; min-height: 0; color: #f2ead9; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; container-type: size; border: 1px solid #7a714e; border-radius: 18px; background: radial-gradient(ellipse at 70% 90%, #21463888, transparent 80%), #14271f; overflow: hidden; }
 .header { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 0; }
-.header h1 { display: flex; align-items: baseline; gap: 14px; margin: 0; color: #dac18a; font: italic 28px/1.1 Georgia, serif; }
+.header h1 { display: flex; align-items: baseline; gap: 14px; margin: 0; color: var(--accent, #dac18a); font: italic 28px/1.1 Georgia, serif; }
 .subtitle { color: #b8c8ba; font: italic 12px/1.3 Georgia, serif; }
 .phase { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #b8c8ba; white-space: nowrap; }
 .phase i { width: 6px; height: 6px; background: #b8c8ba; border-radius: 50%; }

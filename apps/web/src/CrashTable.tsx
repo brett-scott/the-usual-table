@@ -37,13 +37,13 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
   const note=committed?(p.cashedOutCents!==null?`Cashed out at ${crashMultiplier(p.cashedOutCents)} · ${crashChips(p.returnedUnits)} chips returned`:betting?'Your wager is locked':'Cash out before the crash')
     :state.phase==='results'&&p.betUnits>0?(p.cashedOutCents===null?`Lost ${crashChips(p.betUnits)} chips`:`Returned ${crashChips(p.returnedUnits)} chips at ${crashMultiplier(p.cashedOutCents)}`)
     :live?'Watching this flight · Bet next round':state.phase==='waiting'?'The host can start the next betting window':'Choose your wager for the next flight';
-  return <div className={s.app} data-connection={connection.status} data-phase={state.phase} data-revision={state.revision}>
+  return <div data-game-table="crash" className={s.app} data-connection={connection.status} data-phase={state.phase} data-revision={state.revision}>
     <TableHeader client={client} playerId={p.id} online ownTurn={live&&p.betUnits>0&&p.cashedOutCents===null} seconds={null} showAccountSignIn={!!state.wallet}>
       <button onClick={()=>rules.current?.showModal()}>Rules</button>
     </TableHeader>
     <main className={s.main} style={{'--seat-rows':Math.ceil(state.players.length/4),'--phone-seat-rows':Math.ceil(state.players.length/2)} as CSSProperties}>
       <div className={s.toolbar}><TableToolbar connection={connection} leaveDisabled={!connected||busy} onLeave={()=>void send({type:'Leave'})}/></div>
-      <section className={s.flight} aria-label="Crash game" data-result={state.phase==='results'}>
+      <section data-collection-surface className={s.flight} aria-label="Crash game" data-result={state.phase==='results'}>
         <CrashFlight phase={state.phase} cents={cents} graphCents={graphCents} seconds={seconds} history={state.history} elapsedMs={elapsedMs} capped={state.outcome?.capped}/>
       </section>
       <section className={s.players} aria-label="Crash players">{state.players.map(other=><article key={other.id} className={s.player} data-own={other.id===p.id} data-cashed={other.cashedOutCents!==null} aria-label={`Seat ${other.seat+1}: ${other.name}`}>

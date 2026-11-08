@@ -1,4 +1,4 @@
-.app { --bg:#101b18; --panel:#18251f; --accent:#dac18a; --text:#eeeee2; --muted:#a6b8ab; --line:#34453b; --table-header-height:76px; height:100dvh; min-height:0; overflow:hidden; background:var(--bg); color:var(--text); display:grid; grid-template-rows:76px minmax(0,1fr); }
+.app { --bg:#101b18; --panel:#18251f; --accent:#dac18a; --text:#eeeee2; --muted:#a6b8ab; --line:#34453b; --table-header-height:76px; height:100dvh; min-height:0; overflow:hidden; background:var(--bg); color:var(--text); display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:76px minmax(0,1fr); }
 .app > header { width:100%; min-height:0; height:76px; padding:12px 3%; }
 .main { width:100%; max-width:1500px; margin:auto; height:100%; min-height:0; padding:10px 3% 16px; display:grid; gap:10px; grid-template-rows:44px minmax(100px,1fr) calc(var(--seat-rows,2) * 55px + 6px) auto; }
 .toolbar > div { height:100%; }
