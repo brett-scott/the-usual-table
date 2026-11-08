@@ -53,7 +53,7 @@ test('guest creation explains access and chips, fits the viewport and restores k
   await expect(dialog).toContainText(/Only people with.*link can join/i);
   await expect(dialog).toContainText('1,000 temporary chips');
   await dialog.getByLabel('What should we call you?').fill('A friendly guest at play');
-  await dialog.getByLabel('Player icon', { exact: false }).selectOption('🦊');
+  await dialog.getByRole('combobox',{name:/^Player icon/}).selectOption('🦊');
   await dialogFits(page); await page.screenshot({ path: testInfo.outputPath('create-guest-private.png') });
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('radio', { name: 'Public', exact: true }).check();
@@ -70,9 +70,10 @@ test('guest creation explains access and chips, fits the viewport and restores k
   await expect(page.getByRole('button', { name: 'Create a table', exact: true })).toBeFocused();
   await page.keyboard.press('Enter'); await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('What should we call you?')).toHaveValue('A friendly guest at play');
-  await expect(dialog.getByLabel('Player icon', { exact: false })).toHaveValue('🦊');
+  await expect(dialog.getByRole('combobox',{name:/^Player icon/})).toHaveValue('🦊');
   await page.setViewportSize({ width: 320, height: 480 });
   for (const control of await dialog.locator('input, select, button').all()) {
+    if(!await control.isVisible())continue;
     await control.scrollIntoViewIfNeeded();
     const box = (await control.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0); expect(box.y).toBeGreaterThanOrEqual(0);
@@ -136,7 +137,7 @@ test('wallet zero, unavailable, loading and unconfigured states stay distinct wi
 
 test('pending creation prevents dismissal and failure preserves choices for a successful retry', async ({ page }, testInfo) => {
   let release!: () => void; const response = new Promise<void>(resolve => { release = resolve; }); let attempts = 0;
-  await page.route('**/api/v1/games/blackjack/rooms', async route => {
+  await page.route('**/api/v1/games/blackjack/rooms*', async route => {
     const body = route.request().postDataJSON() as { name: string; icon: string; visibility: string; funding?: string };
     expect(body).toMatchObject({ name: 'Friendly fox', icon: '🦊', visibility: 'public' });
     expect(body.funding).toBeUndefined();
@@ -147,7 +148,7 @@ test('pending creation prevents dismissal and failure preserves choices for a su
   });
   await openTableEntry(page, 'public'); const dialog = creation(page);
   await dialog.getByLabel('What should we call you?').fill('Friendly fox');
-  await dialog.getByLabel('Player icon', { exact: false }).selectOption('🦊');
+  await dialog.getByRole('combobox',{name:/^Player icon/}).selectOption('🦊');
   await dialog.getByRole('button', { name: 'Create table', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Creating…', exact: true })).toBeDisabled();
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
@@ -156,7 +157,7 @@ test('pending creation prevents dismissal and failure preserves choices for a su
   await dialogFits(page); await page.screenshot({ path: testInfo.outputPath('create-pending.png') });
   release(); await expect(dialog.getByRole('alert')).toContainText('Please retry');
   await expect(dialog.getByLabel('What should we call you?')).toHaveValue('Friendly fox');
-  await expect(dialog.getByLabel('Player icon', { exact: false })).toHaveValue('🦊');
+  await expect(dialog.getByRole('combobox',{name:/^Player icon/})).toHaveValue('🦊');
   await expect(dialog.getByRole('heading',{name:'Public table',exact:true})).toBeVisible();
   await dialogFits(page); await page.screenshot({ path: testInfo.outputPath('create-failed.png') });
   await dialog.getByRole('button', { name: 'Create table', exact: true }).click();

@@ -1,3 +1,4 @@
+import { profileMemberFields } from './profileMembership';
 import { z } from 'zod';
 import { createDecks, GameError } from '@casual/engine';
 import { perfectPairKind,PERFECT_PAIR_PROFITS,perfectPairKindSchema,blackjackBetAmountSchema,lobbyVisibilitySchema, playerIconSchema } from '@casual/protocol';
@@ -20,7 +21,7 @@ const engine = z.object({
   acceptedCommands: z.array(z.object({ id, playerId: id })).max(128),
 });
 const oldMember = z.object({ hash, connected: z.boolean(), controllerId: id.nullable(), leaveAfterRound: z.boolean() });
-const member = oldMember.extend({ reservationDeadline: time, presenceDeadline: time, claimId: id.nullable(), claimVersion: integer, retiredClaims: z.array(id).max(8), account: z.object({ id: z.string().uuid(), expiresAt: integer }).strict().optional() });
+const member = oldMember.extend({ ...profileMemberFields, reservationDeadline: time, presenceDeadline: time, claimId: id.nullable(), claimVersion: integer, retiredClaims: z.array(id).max(8), account: z.object({ id: z.string().uuid(), expiresAt: integer }).strict().optional() });
 const common = {
   adapterVersion:z.literal(1).optional(),
   gameId: z.literal('blackjack').optional(), visibility: lobbyVisibilitySchema.optional(),

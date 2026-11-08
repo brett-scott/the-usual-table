@@ -3,7 +3,7 @@ import type { DuckRaceAction,DuckRaceSnapshot,TableClient,TableInfo } from '@cas
 import { duckRaceClientAdapter } from './gameClientAdapters';
 import { GameRoomEntry } from './GameRoomEntry';
 import { TableHeader,TableToolbar } from './TableChrome';
-import { PlayerAvatar } from './PlayerAvatar';
+import { PlayerIdentityButton } from './PlayerProfiles';
 import { ChatBubble } from './ChatBubble';
 import { DuckArtwork } from './DuckArtwork';
 import s from './DuckRace.module.css';
@@ -45,7 +45,7 @@ export function DuckRaceTable({client,onLeave}:{client:TableClient<DuckRaceSnaps
     <div className={s.history} aria-label="Last 10 Duck Race results"><span>LAST RACES</span><ol>{state.history.map(h=><li key={h.roundId} style={duckStyle(h.winner)} aria-label={`${state.ducks[h.winner]!.name} won race ${h.roundId}`}>{h.winner+1}</li>)}</ol>{!state.history.length&&<small>The first winner starts the story.</small>}</div>
    </section>
    <section className={s.players} aria-label="Duck Race players">{state.players.map(other=>{const outcome=results&&other.wager.amountUnits?(other.returnedUnits>other.wager.amountUnits?'won':'lost'):undefined;
-    return <article key={other.id} className={s.player} data-own={other.id===p.id} data-outcome={outcome} aria-label={`Seat ${other.seat+1}: ${other.name}`}><ChatBubble client={client} playerId={other.id} name={other.name}/><PlayerAvatar player={other}/><div><strong>{other.name}{other.id===p.id?' · You':''}</strong><span>{outcome?`${outcome==='won'?'+':'−'}${chips(Math.abs(other.returnedUnits-other.wager.amountUnits))}`:other.wager.duckIndex!==null?`${state.ducks[other.wager.duckIndex]!.name} · ${chips(other.wager.amountUnits)}`:other.leaving?'Leaving':other.connected?'Watching':'Reconnecting'}</span></div></article>;
+    return <article key={other.id} className={s.player} data-own={other.id===p.id} data-outcome={outcome} aria-label={`Seat ${other.seat+1}: ${other.name}`}><ChatBubble client={client} playerId={other.id} name={other.name}/><div><PlayerIdentityButton compact player={other}>{other.name}{other.id===p.id?' · You':''}</PlayerIdentityButton><span>{outcome?`${outcome==='won'?'+':'−'}${chips(Math.abs(other.returnedUnits-other.wager.amountUnits))}`:other.wager.duckIndex!==null?`${state.ducks[other.wager.duckIndex]!.name} · ${chips(other.wager.amountUnits)}`:other.leaving?'Leaving':other.connected?'Watching':'Reconnecting'}</span></div></article>;
    })}</section>
    <section className={s.controls} aria-label="Game controls" aria-busy={busy}>
     <div className={s.balance}><span>Your table chips</span><strong>{chips(p.balanceUnits)}</strong><small>chips</small></div>

@@ -1,3 +1,4 @@
+import { appearanceSchema, type Appearance } from './profile';
 import { blackjackBetAmountSchema,perfectPairsSchema } from './blackjackBets';
 export * from './blackjackBets';
 import { playerIconSchema,type PlayerIcon } from './identity';
@@ -14,6 +15,7 @@ export * from './progression';
 export * from './tablePlatform';
 export * from './gameRoutes';
 export * from './identity';
+export * from './profile';
 export * from './crash';
 export * from './crashStatistics';
 
@@ -64,7 +66,7 @@ export interface PublicHand {
   id: string; cards: Card[]; total: number; soft: boolean; wager: number;
   status: 'playing' | 'stood' | 'bust'; timedOut?: boolean; outcome?: Outcome; returned?: number;
 }
-export interface PublicPlayer { id: string; name: string; icon?: PlayerIcon; seat: number; balance: number; bet: number; perfectPairs?: {wager:number;kind?:import('./blackjackBets').PerfectPairKind;returned?:number}; hands: PublicHand[]; connected?: boolean; ready?: boolean; sittingOut?: boolean; reservationDeadline?: number | null; leavingAfterRound?: boolean; roundResult?: { net: number; outcome: 'won' | 'lost' | 'even' | 'out' } }
+export interface PublicPlayer { appearance?:Appearance;profileVersion?:number;id: string; name: string; icon?: PlayerIcon; seat: number; balance: number; bet: number; perfectPairs?: {wager:number;kind?:import('./blackjackBets').PerfectPairKind;returned?:number}; hands: PublicHand[]; connected?: boolean; ready?: boolean; sittingOut?: boolean; reservationDeadline?: number | null; leavingAfterRound?: boolean; roundResult?: { net: number; outcome: 'won' | 'lost' | 'even' | 'out' } }
 export interface RoomInfo { inviteId: string; managerPlayerId: string; bettingOpen: boolean; bettingDeadline: number | null; insuranceDeadline: number | null; claimVersion?: number; gameId?: GameId; visibility?: LobbyVisibility }
 /** All monetary fields use integer half-chip units: 20 = 10 displayed chips. */
 export interface Snapshot {
@@ -104,7 +106,7 @@ export const snapshotSchema = z.object({
   wallet: z.object({ status: z.enum(['funding', 'active', 'returning', 'closed', 'cancelled', 'rejected']), stackUnits: z.number().int().nonnegative().safe(), error: z.string().nullable() }).optional(),
   protocol: z.literal(1), blackjackBettingVersion:z.literal(2).optional(), revision: amount, roundId: amount, phase: z.enum(['BETTING', 'INSURANCE', 'PLAYER_TURNS', 'ROUND_COMPLETE']), you: z.string(),
   room: z.object({ inviteId: z.string(), managerPlayerId: z.string(), bettingOpen: z.boolean(), bettingDeadline: z.number().nullable(), insuranceDeadline: z.number().nullable(), claimVersion: amount.optional(), gameId: gameIdSchema.optional(), visibility: lobbyVisibilitySchema.optional() }).optional(),
-  players: z.array(z.object({ id: z.string(), name: z.string(), icon: playerIconSchema.optional(), seat: z.number().int(), balance: amount, bet: amount, perfectPairs:perfectPairsSchema.optional(), hands: z.array(handSchema), connected: z.boolean().optional(), ready: z.boolean().optional(), sittingOut: z.boolean().optional(), reservationDeadline: z.number().nullable().optional(), leavingAfterRound: z.boolean().optional(), roundResult: z.object({ net: z.number().int(), outcome: z.enum(['won', 'lost', 'even', 'out']) }).optional() })).max(4),
+  players: z.array(z.object({ appearance:appearanceSchema.optional(),profileVersion:z.number().int().nonnegative().safe().optional(),id: z.string(), name: z.string(), icon: playerIconSchema.optional(), seat: z.number().int(), balance: amount, bet: amount, perfectPairs:perfectPairsSchema.optional(), hands: z.array(handSchema), connected: z.boolean().optional(), ready: z.boolean().optional(), sittingOut: z.boolean().optional(), reservationDeadline: z.number().nullable().optional(), leavingAfterRound: z.boolean().optional(), roundResult: z.object({ net: z.number().int(), outcome: z.enum(['won', 'lost', 'even', 'out']) }).optional() })).max(4),
   dealer: z.array(z.union([cardSchema, z.object({ hidden: z.literal(true) })])), dealerTotal: z.number().nullable(),
   activePlayerId: z.string().nullable(), activeHandId: z.string().nullable(), decisionDeadline: z.number().nullable(), legalActions: z.array(z.enum(['PlaceBet', 'Ready', 'Hit', 'Stand', 'Double', 'Split', 'InsuranceDecision', 'NextRound', 'Refill', 'StartBetting', 'SitOut', 'Leave'])),
   roundDeadline: z.number().nullable().optional(),

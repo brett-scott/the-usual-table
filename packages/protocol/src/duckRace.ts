@@ -1,3 +1,4 @@
+import { appearanceSchema } from './profile';
 import { z } from 'zod';
 import { displayNameSchema,playerIconSchema } from './identity';
 import { walletUnitsSchema } from './wallet';
@@ -23,7 +24,7 @@ export const duckRaceCommandSchema=z.object({id:z.string().uuid(),playerId:z.str
 export const duckRaceSnapshotSchema=z.object({gameId:z.literal('duck-race'),roomId:z.string().regex(/^[a-f0-9]{32}$/),you:z.string(),revision:integer,claimVersion:integer,managerId:z.string(),roundId:integer,
  phase:z.enum(['waiting','betting','racing','results']),bettingDeadline:integer.nullable(),startedAt:integer.nullable(),resultsDeadline:integer.nullable(),
  ducks:duckRaceDucksSchema,positions:duckRacePositionsSchema,sampledAt:integer,winner:duckIndexSchema.nullable(),history:z.array(duckRaceResultSchema).max(10),
- players:z.array(duckRacePlayerSchema.extend({connected:z.boolean(),leaving:z.boolean()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','NextRound','Leave','Refill'])),
+ players:z.array(duckRacePlayerSchema.extend({connected:z.boolean(),leaving:z.boolean(),appearance:appearanceSchema.optional(),profileVersion:z.number().int().nonnegative().safe().optional()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','NextRound','Leave','Refill'])),
  wallet:z.object({status:z.string(),error:z.string().nullable()}).optional(),
 }).strict();
 export type DuckRaceSnapshot=z.infer<typeof duckRaceSnapshotSchema>;

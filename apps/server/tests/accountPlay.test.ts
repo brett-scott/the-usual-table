@@ -6,18 +6,23 @@ import type { OnlineRoom } from '../src/roomState';
 import type { TableRoom } from '../src/tableRoom';
 import type { Env } from '../src/env';
 import type { WalletGateway } from '../src/roomWallet';
-import { bindings, close, connect, create, edit, origin, rigShoe } from './helpers';
+import { bindings, close, connect, create, edit, inspect, origin, rigShoe } from './helpers';
 import { hashSecret } from '../src/security';
 import { restoreRoom } from '../src/roomStorage';
 
 let pair: Awaited<ReturnType<typeof generateKeyPair>>;
 const claims = new Map<string, string>();
 let walletStatus = 'active';
+let profileVersion=0;
 beforeAll(async () => {
   pair = await generateKeyPair('ES256', { extractable: true });
   const jwk = { ...await exportJWK(pair.publicKey), kid: 'account-play', alg: 'ES256', use: 'sig' };
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     if (String(input).endsWith('/auth/v1/.well-known/jwks.json')) return Response.json({ keys: [jwk] });
+    if(String(input).endsWith('/rest/v1/rpc/usual_table_profile')){
+      const token=new Headers(init?.headers).get('Authorization')?.slice(7)??'';const accountId=claims.get(token);if(!accountId)throw new Error('Unknown fixture token');
+      return Response.json({contract:1,accountId,version:profileVersion,nickname:'Same nickname',appearance:{avatar:{kind:'illustration',id:profileVersion?'owl':'fox'},border:'brass'},visibility:{chips:true,statistics:true,achievements:true}});
+    }
     if (String(input).endsWith('/rest/v1/rpc/usual_table_wallet_summary')) {
       const token = new Headers(init?.headers).get('Authorization')?.slice(7) ?? '';
       const accountId = claims.get(token); if (!accountId) throw new Error('Unknown fixture token');
@@ -138,4 +143,20 @@ it('renews only the current controller and rejects expired authorization, suspen
   const forged = await call(`/${guest.session.inviteId}/join`, f.token, { ...f.body, accountId: crypto.randomUUID() }); expect(forged.status).toBe(400);
   expect((await call('', f.token, null)).status).toBe(400);
   await close(peer);
+});
+
+it('binds a verified account to a temporary seat independently of wallet authorization and syncs cosmetics only',async()=>{
+  const id=crypto.randomUUID(),token=await jwt(id);profileVersion=0;
+  const response=await call('?capabilities=usual-player-profiles-v1',token,{name:'Same nickname'});expect(response.status).toBe(201);
+  const entry=await response.json<SessionResponse>();expect(entry.session.funding).toBeUndefined();
+  expect(entry.snapshot.players[0]!.appearance).toEqual({avatar:{kind:'illustration',id:'fox'},border:'brass'});
+  const stored=await inspect(entry.session.inviteId,r=>r.members[entry.session.playerId]);expect(stored?.profileAccountId).toBe(id);expect(stored?.account).toBeUndefined();
+  expect(JSON.stringify(entry)).not.toContain(id);expect((await call('/'+entry.session.inviteId+'/resume',token)).status).toBe(401);
+  const peer=await connect(entry.session);const before=await inspect(entry.session.inviteId,r=>({engine:r.engine,revision:r.revision}));profileVersion=1;
+  const sync=await SELF.fetch('https://example.test/api/v1/rooms/'+entry.session.inviteId+'/profile-sync',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+entry.session.credential,'X-Profile-Authorization':'Bearer '+token},body:'{}'});
+  expect(sync.status).toBe(200);expect(await inspect(entry.session.inviteId,r=>({engine:r.engine,revision:r.revision}))).toEqual(before);
+  const picture=await call('/'+entry.session.inviteId+'/snapshot?capabilities=usual-player-profiles-v1',entry.session.credential,undefined,'GET');
+  expect((await picture.json<{snapshot:SessionResponse['snapshot']}>()).snapshot.players[0]!.appearance?.avatar).toEqual({kind:'illustration',id:'owl'});
+  const wrong=await SELF.fetch('https://example.test/api/v1/rooms/'+entry.session.inviteId+'/profile-sync',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+entry.session.credential,'X-Profile-Authorization':'Bearer '+await jwt(crypto.randomUUID())},body:'{}'});
+  expect(wrong.status).toBe(401);await close(peer);profileVersion=0;
 });

@@ -2,9 +2,10 @@ import { createContext, useContext, useEffect, useId, useRef, useState, useSyncE
 import { PLAYER_ICONS, WALLET_UNITS_PER_CHIP, type PlayerIcon } from '@casual/protocol';
 import { browserAuth, type AuthController, type AuthState } from './authClient';
 import s from './AccountControls.module.css';
-import { AccountStatisticsDialog } from './AccountStatistics';
 import { DailyAllowance } from './DailyAllowance';
-import { AccountProgression } from './AccountProgression';
+import { PlayerProfilesProvider,useProfiles } from './PlayerProfiles';
+import { ProfileAvatar } from './ProfileAvatar';
+import { DEFAULT_APPEARANCE } from '@casual/protocol';
 
 type ProfileEdit = 'nickname' | 'icon' | null;
 const AuthContext = createContext<{ auth: AuthController; editNickname(): void; editIcon(): void } | null>(null);
@@ -19,9 +20,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void auth.start(); }, [auth]);
   return <AuthContext.Provider value={{ auth,
     editNickname: () => { auth.dismissNicknameError(); setEditing('nickname'); },
-    editIcon: () => { auth.dismissNicknameError(); setEditing('icon'); } }}>{state.callbackPending
+    editIcon: () => { auth.dismissNicknameError(); setEditing('icon'); } }}><PlayerProfilesProvider auth={auth}>{state.callbackPending
     ? <main className={s.callback} role="status"><h1>Welcome back.</h1><p>Finishing your sign-in…</p></main> : children}
-    <NicknameDialog auth={auth} state={state} editing={editing} onClose={() => setEditing(null)} />
+    <NicknameDialog auth={auth} state={state} editing={editing} onClose={() => setEditing(null)} /></PlayerProfilesProvider>
   </AuthContext.Provider>;
 }
 
@@ -72,14 +73,13 @@ function NicknameForm({ auth, state, required, focusIcon, onSaved }: { auth: Aut
 }
 
 export function AccountControls({ beforeSignIn, signedInOnly = false, compact = false, showWallet = false }: { beforeSignIn?: () => void; signedInOnly?: boolean; compact?:boolean;showWallet?:boolean }) {
-  const [statisticsOpen, setStatisticsOpen] = useState(false);
-  const [progressOpen,setProgressOpen] = useState(false);
-  const { auth, editNickname, editIcon } = useContext(AuthContext)!;
+  const profiles=useProfiles();
+  const { auth } = useContext(AuthContext)!;
   const state = useSyncExternalStore(auth.subscribe, auth.getSnapshot);
   const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null); const controls = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null); const titleId = useId(); const menuId = useId(); const [expanded, setExpanded] = useState(false);
   const focusLast = useRef(false);
-  useEffect(() => { if (state.account) dialog.current?.close(); else {setExpanded(false);setProgressOpen(false);setStatisticsOpen(false);} }, [state.account]);
+  useEffect(() => { if (state.account) dialog.current?.close(); else setExpanded(false); }, [state.account]);
   useEffect(() => { if (expanded) void auth.refreshWallet(); }, [expanded, auth]);
   useEffect(()=>{
     if(!showWallet||!state.account)return;
@@ -109,7 +109,7 @@ export function AccountControls({ beforeSignIn, signedInOnly = false, compact = 
       aria-controls={state.account && expanded ? menuId : undefined} aria-label={state.account ? `Account menu for ${state.nickname ?? 'your account'}` : undefined}
       onClick={() => { focusLast.current = false; if (state.account) setExpanded(value => !value); else dialog.current?.showModal(); }}
       onKeyDown={event => { if (state.account && ['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); focusLast.current = event.key === 'ArrowUp'; setExpanded(true); } }}>
-      {state.account && <span className={s.profileIcon}>{state.playerIcon ?? state.nickname?.slice(0, 1).toUpperCase() ?? '♣'}</span>}
+      {state.account && <span className={s.profileIcon}><ProfileAvatar name={state.nickname??''} appearance={state.profile?.appearance??(state.playerIcon?{avatar:{kind:'emoji',id:state.playerIcon},border:'none'}:DEFAULT_APPEARANCE)}/></span>}
       <span className={s.nickname}>{state.account ? state.nickname ?? 'Your account' : 'Sign in'}</span>{state.account && <span aria-hidden="true"> ▾</span>}
     </button>
     {state.account && expanded && <div className={s.menu} ref={menu} id={menuId} role="menu" aria-label="Account" onKeyDown={event => {
@@ -119,10 +119,10 @@ export function AccountControls({ beforeSignIn, signedInOnly = false, compact = 
         buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length]?.focus();
       }
     }}>
-      <button role="menuitem" onClick={() => { closeMenu(); editNickname(); }}>Edit nickname</button>
-      <button role="menuitem" onClick={() => { closeMenu(); editIcon(); }}>Edit player icon</button>
-      <button role="menuitem" onClick={() => { closeMenu(); setStatisticsOpen(true); }}>Statistics</button>
-      <button role="menuitem" onClick={() => { closeMenu(); setProgressOpen(true); }}>Progress & achievements</button>
+      <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf(); }}>View profile</button>
+      <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('edit'); }}>Edit profile</button>
+      <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('statistics'); }}>Statistics</button>
+      <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('achievements'); }}>Progress & achievements</button>
       <button role="menuitem" disabled={state.working || state.savingNickname} onClick={() => { closeMenu(); void auth.signOut(); }}>Sign out</button>
       <div className={s.wallet} role="group" aria-label="Account wallet" aria-live="polite">
         <span>Wallet balance</span>
@@ -137,10 +137,7 @@ export function AccountControls({ beforeSignIn, signedInOnly = false, compact = 
           }}>Retry wallet balance</button>}</>}
       </div>
       <DailyAllowance key={state.account.accountId} owner={state.account.accountId} onClaimed={()=>{void auth.refreshWallet();}} />
-      <p className={s.note}>Choose saved or temporary chips when entering a table.</p>
     </div>}
-    <AccountStatisticsDialog open={statisticsOpen} accountId={state.account?.accountId ?? null} onClose={() => setStatisticsOpen(false)} />
-    {progressOpen&&state.account&&<AccountProgression key={state.account.accountId} owner={state.account.accountId} onClose={()=>setProgressOpen(false)} onClaimed={()=>{void auth.refreshWallet();}}/>}
     {state.error && <span className={s.notice} role="status">Account unavailable · Guest play is available</span>}
     <dialog ref={dialog} className={s.dialog} aria-labelledby={titleId} onClose={() => { auth.cancelSignIn(); trigger.current?.focus(); }}>
       <div className={s.heading}><h2 id={titleId}>A seat with your name on it.</h2><button autoFocus aria-label="Close account" onClick={() => dialog.current?.close()}>×</button></div>

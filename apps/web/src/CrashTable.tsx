@@ -3,7 +3,7 @@ import type { CrashAction,CrashSnapshot,TableClient,TableInfo } from '@casual/pr
 import { crashClientAdapter } from './gameClientAdapters';
 import { GameRoomEntry } from './GameRoomEntry';
 import { TableHeader,TableToolbar } from './TableChrome';
-import { PlayerAvatar } from './PlayerAvatar';
+import { PlayerIdentityButton } from './PlayerProfiles';
 import { ChatBubble } from './ChatBubble';
 import { CrashFlight } from './CrashFlight';
 import { useCrashProgress } from './useCrashProgress';
@@ -47,7 +47,7 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
         <CrashFlight phase={state.phase} cents={cents} graphCents={graphCents} seconds={seconds} history={state.history} elapsedMs={elapsedMs} capped={state.outcome?.capped}/>
       </section>
       <section className={s.players} aria-label="Crash players">{state.players.map(other=><article key={other.id} className={s.player} data-own={other.id===p.id} data-cashed={other.cashedOutCents!==null} aria-label={`Seat ${other.seat+1}: ${other.name}`}>
-        <ChatBubble client={client} playerId={other.id} name={other.name}/><PlayerAvatar player={other}/><div><strong>{other.name}{other.id===p.id?' · You':''}</strong><span>{other.betUnits>0?other.cashedOutCents!==null?`${crashMultiplier(other.cashedOutCents)} · +${crashChips(other.returnedUnits-other.betUnits)}`:state.phase==='results'?`Lost ${crashChips(other.betUnits)}`:`${crashChips(other.betUnits)} chips locked`:other.leaving?'Leaving':other.connected?'Watching':'Reconnecting'}</span></div>
+        <ChatBubble client={client} playerId={other.id} name={other.name}/><div><PlayerIdentityButton compact player={other}>{other.name}{other.id===p.id?' · You':''}</PlayerIdentityButton><span>{other.betUnits>0?other.cashedOutCents!==null?`${crashMultiplier(other.cashedOutCents)} · +${crashChips(other.returnedUnits-other.betUnits)}`:state.phase==='results'?`Lost ${crashChips(other.betUnits)}`:`${crashChips(other.betUnits)} chips locked`:other.leaving?'Leaving':other.connected?'Watching':'Reconnecting'}</span></div>
       </article>)}</section>
       <section className={s.controls} aria-label="Game controls">
         <div className={s.balance}><span>Your table chips</span><strong>{crashChips(p.balanceUnits)} <small>chips</small></strong><p role="status">{note}</p></div>

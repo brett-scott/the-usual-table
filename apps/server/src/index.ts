@@ -7,6 +7,9 @@ import { readAccountWallet } from './accountWallet';
 import { supabaseWallet } from './supabaseWallet';
 import { supabaseStatistics } from './supabaseStatistics';
 import { supabaseAllowance } from './supabaseRewards';
+import { accountProfile } from './playerProfiles';
+import { saveProfileSchema } from '@casual/protocol';
+import { readJson } from './security';
 import { gameAdapters } from './games/registry';
 export { TableRoom } from './tableRoom';
 export { LobbyDirectory } from './lobbyDirectory';
@@ -22,9 +25,19 @@ export default {
       else if (url.pathname === '/api/v1/health' && request.method === 'GET') {
         const auth = supabaseUrlSchema.safeParse(env.SUPABASE_URL ?? PUBLIC_SUPABASE_CONFIG.url);
         response = Response.json({ status: 'ok', protocol: 1, authProjectUrl: auth.success ? auth.data : null,
-          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:3,duckRaceProtocol:1,rouletteProtocol:1 });
+          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountProfilesProtocol:1,accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:3,duckRaceProtocol:1,rouletteProtocol:1 });
       }
       else if (url.pathname === '/api/v1/games' && request.method === 'GET') response = Response.json({ games: GAME_CATALOG });
+      else if(url.pathname==='/api/v1/account/profile'&&['GET','POST'].includes(request.method)){
+        if(!(await env.ENTRY_LIMITER.limit({key:`profiles:${request.headers.get('CF-Connecting-IP')??'local'}`})).success)throw new GameError('RATE_LIMITED','Wait a moment before refreshing your profile.');
+        const account=await verifyAccountSession(request,env);
+        const parsed=request.method==='POST'?saveProfileSchema.safeParse(await readJson(request)):undefined;
+        if(parsed&&!parsed.success)throw new GameError('INVALID_REQUEST','Choose a valid nickname, picture, border and sharing settings.');
+        const input=parsed?.data;
+        const profile=await accountProfile(request,env,input);
+        if(profile.accountId!==account.accountId)throw new GameError('PROFILE_UNAVAILABLE','This profile could not be verified.');
+        response=Response.json(profile);
+      }
       else if (url.pathname === '/api/v1/account/session' && request.method === 'GET') {
         if (!(await env.ENTRY_LIMITER.limit({ key: `account:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before reconnecting your account.');
         response = Response.json(await verifyAccountSession(request, env));
@@ -61,7 +74,7 @@ export default {
         const gameCreate=/^\/api\/v1\/games\/([^/]+)\/rooms$/.exec(url.pathname);
         const create = (url.pathname === '/api/v1/rooms'||!!gameCreate) && request.method === 'POST';
         const game=create?gameAdapters.available(gameCreate?.[1]??'blackjack'):undefined;
-        const match = url.pathname.match(/^\/api\/v1\/rooms\/([a-f0-9]{32})(?:\/(join|resume|ticket|snapshot|socket|authorize|info))?$/);
+        const match = url.pathname.match(/^\/api\/v1\/rooms\/([a-f0-9]{32})(?:\/(join|resume|ticket|snapshot|socket|authorize|info|profile|profile-sync))?$/);
         if (!create && !match) return Response.json({ code: 'NOT_FOUND', message: 'This table route does not exist.' }, { status: 404 });
         if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
           const key = `${create ? 'create' : match?.[2] ?? 'room'}:${request.headers.get('CF-Connecting-IP') ?? 'local'}`;
@@ -75,8 +88,10 @@ export default {
         if (create && request.headers.has('Authorization')) {
           const account = await verifyAccountSession(request, env);
           let entry: { funding?: unknown; entryId?: unknown }; try { entry = JSON.parse(new TextDecoder().decode(body)); } catch { throw new GameError('INVALID_REQUEST', 'Send a valid table entry.'); }
-          if (!entry || entry.funding !== 'account' || typeof entry.entryId !== 'string' || !/^[a-f0-9-]{36}$/i.test(entry.entryId)) throw new GameError('INVALID_REQUEST', 'Saved-chip entries require a unique entry ID.');
-          inviteId = (await hashSecret(`${game!.gameId}:${account.accountId}:${entry.entryId.toLowerCase()}`)).slice(0, 32);
+          if(entry?.funding==='account'){
+            if(typeof entry.entryId!=='string'||!/^[a-f0-9-]{36}$/i.test(entry.entryId))throw new GameError('INVALID_REQUEST','Saved-chip entries require a unique entry ID.');
+            inviteId = (await hashSecret(`${game!.gameId}:${account.accountId}:${entry.entryId.toLowerCase()}`)).slice(0, 32);
+          }
         }
         const headers = new Headers(request.headers); headers.set('X-Room-Id', inviteId);
         headers.delete('X-Game-Id');if(game)headers.set('X-Game-Id',game.gameId);
@@ -90,7 +105,7 @@ export default {
       headers.set('Cache-Control', 'no-store'); headers.set('Vary', 'Origin');
       if (origin && originAllowed(request, env.ALLOWED_ORIGINS)) headers.set('Access-Control-Allow-Origin', origin);
       headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Profile-Authorization');
       response = new Response(response.body, { status: response.status, headers });
     }
     return response;

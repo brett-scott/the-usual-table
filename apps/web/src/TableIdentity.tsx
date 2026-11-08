@@ -3,14 +3,20 @@ import { BLACKJACK_TABLE_RULES,displayNameSchema, PLAYER_ICONS, playerIconSchema
 import { useAccountState } from './AccountControls';
 import s from './App.module.css';
 import { browserAuth } from './authClient';
+import { appearanceSchema,DEFAULT_APPEARANCE,type Appearance } from '@casual/protocol';
+import { ProfileAvatar } from './ProfileAvatar';
+import { AppearancePicker } from './AppearancePicker';
+import profileStyles from './PlayerProfiles.module.css';
 
 function saved(key: string) { try { return localStorage.getItem(key) ?? ''; } catch { return ''; } }
 export function useTableIdentity() {
   const account = useAccountState();
   const [name, setName] = useState(() => saved('casual-name'));
-  const [icon, setIcon] = useState<PlayerIcon | ''>(() => playerIconSchema.safeParse(saved('casual-player-icon')).data ?? '');
+  const [icon, updateIcon] = useState<PlayerIcon | ''>(() => playerIconSchema.safeParse(saved('casual-player-icon')).data ?? '');
+  const [appearance,setAppearance]=useState<Appearance>(()=>{try{return appearanceSchema.parse(JSON.parse(saved('casual-player-appearance')));}catch{return icon?{avatar:{kind:'emoji',id:icon},border:'none'}:DEFAULT_APPEARANCE;}});
   return {
-    name, setName, icon, setIcon, signedIn: !!account.account, accountId: account.account?.accountId,
+    name, setName, icon, setIcon(value:PlayerIcon|''){updateIcon(value);setAppearance(a=>({...a,avatar:value?{kind:'emoji',id:value}:{kind:'initials'}}));},appearance,
+    setAppearance(value:Appearance){setAppearance(value);updateIcon(value.avatar.kind==='emoji'?value.avatar.id:'');}, signedIn: !!account.account, accountId: account.account?.accountId,
     ready: !account.account || account.nicknameStatus === 'ready' && !!account.nickname,
     validate() {
       const parsed = displayNameSchema.safeParse(account.account ? account.nickname : name);
@@ -18,7 +24,7 @@ export function useTableIdentity() {
     },
     saveDraft() {
       if (account.account) return;
-      try { localStorage.setItem('casual-name', name); localStorage.setItem('casual-player-icon', icon); } catch { /* Guests can play without saved preferences. */ }
+      try { localStorage.setItem('casual-name', name); localStorage.setItem('casual-player-icon', icon);localStorage.setItem('casual-player-appearance',JSON.stringify(appearance)); } catch { /* Guests can play without saved preferences. */ }
     },
   };
 }
@@ -60,5 +66,10 @@ export function GuestIdentityFields({ identity, disabled }: { identity: ReturnTy
         <option value="">Use my initial</option>{PLAYER_ICONS.map(choice => <option key={choice.emoji} value={choice.emoji}>{choice.emoji} {choice.label}</option>)}
       </select>
     </div>
+    <GuestAppearance identity={identity} disabled={disabled}/>
   </>;
+}
+export function GuestAppearance({identity,disabled}:{identity:ReturnType<typeof useTableIdentity>;disabled:boolean}){
+  const [category,setCategory]=useState<'illustrations'|'emoji'|'borders'>('illustrations');
+  return <details className={profileStyles.guestOptions}><summary><ProfileAvatar name={identity.name} appearance={identity.appearance}/>Pictures & borders</summary><div className={profileStyles.tabs}>{(['illustrations','emoji','borders'] as const).map(c=><button type="button" key={c} disabled={disabled} aria-selected={c===category} onClick={()=>setCategory(c)}>{c[0]!.toUpperCase()+c.slice(1)}</button>)}</div><AppearancePicker name={identity.name} value={identity.appearance} category={category} disabled={disabled} onChange={identity.setAppearance}/></details>;
 }

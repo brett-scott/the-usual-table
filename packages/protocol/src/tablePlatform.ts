@@ -13,6 +13,8 @@ export const gameCommandEnvelopeSchema = z.object({type:z.literal('game-command'
   adapterVersion:z.number().int().min(1).max(1000),command:z.unknown()}).strict();
 export interface TableSessionResponse<S> {session:GuestSession;snapshot:S;gameId?:GameId;adapterVersion?:number}
 export interface TableClient<S,A> {
+  readProfile?(playerId:string,signal?:AbortSignal):Promise<import('./profile').RoomProfile>;
+  syncProfile?():Promise<void>;
   getSnapshot():S;send(action:A):Promise<void>;subscribe(listener:()=>void):()=>void;getConnection():ConnectionInfo;
   reconnect?():void;getChat?():ChatFeed;markChatRead?():void;sendChat?(text:string):Promise<void>;dispose():void;
 }

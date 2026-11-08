@@ -1,3 +1,4 @@
+import { profileMemberFields } from '../profileMembership';
 import { z } from 'zod';
 import { GameError } from '@casual/engine';
 import { newCrash,beginBetting,placeBet,cashOut,advanceCrash,nextCrashAlarm,validCrashState,crashStateSchema,CrashError,multiplierAt,targetTime,type CrashState } from '@casual/crash';
@@ -52,7 +53,7 @@ export function collectCrashSeats(room:CrashRoom,now:number){
   room.tickets=room.tickets.filter(t=>t.expires>now&&room.members[t.playerId]&&!room.members[t.playerId]!.leaveAfterRound);return changed;
 }
 const integer=z.number().int().nonnegative().safe();const time=integer.nullable();const id=z.string().min(1).max(100);const hash=z.string().regex(/^[a-f0-9]{64}$/);
-const memberSchema=z.object({hash,connected:z.boolean(),controllerId:id.nullable(),leaveAfterRound:z.boolean(),reservationDeadline:time,presenceDeadline:time,
+const memberSchema=z.object({...profileMemberFields,hash,connected:z.boolean(),controllerId:id.nullable(),leaveAfterRound:z.boolean(),reservationDeadline:time,presenceDeadline:time,
   claimId:id.nullable(),claimVersion:integer,retiredClaims:z.array(id).max(8),account:z.object({id:z.string().uuid(),expiresAt:integer}).strict().optional()}).strict();
 const roomSchema=z.object({schema:z.literal(1),gameId:z.literal('crash'),adapterVersion:z.literal(1),visibility:z.enum(['public','private']).optional(),id:z.string().regex(/^[a-f0-9]{32}$/),
   revision:integer,managerId:z.string().max(100),engine:crashStateSchema,members:z.record(id,memberSchema),lastActivity:integer,wallet:roomWalletSchema.optional(),

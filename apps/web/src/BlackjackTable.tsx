@@ -10,7 +10,7 @@ import {CardAppearance,savedAppearance} from './cardAppearance';
 import {TableOptions} from './TableOptions';
 import {ChatBubble} from './ChatBubble';
 import {WagerChips} from './WagerChips';
-import {PlayerAvatar} from './PlayerAvatar';
+import { PlayerIdentityButton } from './PlayerProfiles';
 import {BaccaratChipTray} from './BaccaratBetting';
 import {BlackjackBettingController,type BlackjackChip} from './blackjackBettingController';
 import c from './App.module.css';
@@ -126,13 +126,13 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
           <div className={s.dealer}><p className={s.seatLabel}>Dealer {dealerScore!==null&&<span className={s.total} data-dealer-total>{dealerScore}</span>}</p>{state.dealer.length?<Cards cards={state.dealer} timeline={timeline} dealer shoeRef={shoeRef} reducedMotion={reducedMotion}/>:<div className={s.cardSpaces} aria-label="Dealer is waiting to deal"><span/><span/></div>}</div>
           <div className={s.peers}>
           {[0,1,2,3].filter(seat=>seat!==player.seat).map(seat=>{const other=state.players.find(p=>p.seat===seat);return other?<section key={seat} className={s.peer} data-state={seatState(other)} aria-label={`Seat ${seat+1}: ${other.name}`}>
-            <ChatBubble client={client} playerId={other.id} name={other.name}/><div className={s.peerName}><PlayerAvatar player={other}/><strong>{other.name}</strong></div><span className={s.seatStatus} data-state={seatState(other)}>{seatLabel(other)}</span>
+            <ChatBubble client={client} playerId={other.id} name={other.name}/><div className={s.peerName}><PlayerIdentityButton player={other}/></div><span className={s.seatStatus} data-state={seatState(other)}>{seatLabel(other)}</span>
             {other.hands.length?<div className={s.peerHands}>{other.hands.map(h=><div key={h.id}><Cards cards={h.cards} timeline={timeline} shoeRef={shoeRef} reducedMotion={reducedMotion}/><span data-hand-total>{h.total}{h.total>21?' Bust':''}</span></div>)}</div>:<div className={s.peerWager}><WagerChips amount={other.bet+(other.perfectPairs?.wager??0)} reducedMotion={reducedMotion} compact/><span>{money(other.bet+(other.perfectPairs?.wager??0))}</span></div>}
           </section>:<section key={seat} className={s.emptySeat} aria-label={`Seat ${seat+1} empty`}>＋ <span>Open seat</span></section>;})}
           </div>
           <section className={s.ownSeat} data-state={seatState(player)} aria-label="Your seat">
             {state.room&&<ChatBubble client={client} playerId={player.id} name={player.name}/>}
-            <div className={s.playerHead}><PlayerAvatar player={player}/><strong>{player.name}<small>YOU</small></strong><span className={s.seatStatus} data-state={seatState(player)}>{seatLabel(player)}</span></div>
+            <div className={s.playerHead}><PlayerIdentityButton player={player}>{player.name}<small>YOU</small></PlayerIdentityButton><span className={s.seatStatus} data-state={seatState(player)}>{seatLabel(player)}</span></div>
             {player.hands.length?<div className={s.ownHands}>
               {compact&&player.hands.length>1&&<div className={s.handTabs} role="tablist" aria-label="Your hands">{player.hands.map((h,index)=><button key={h.id} role="tab" aria-selected={h.id===selectedHand} aria-controls={`hand-${h.id}`} aria-label={`Hand ${index+1}, total ${h.total}${h.id===ownActive?', playing':''}`} onClick={()=>setHandView({active:ownActive,selected:h.id})} onKeyDown={event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?player.hands.length-1:(index+(event.key==='ArrowRight'?1:-1)+player.hands.length)%player.hands.length;setHandView({active:ownActive,selected:player.hands[next]!.id});(event.currentTarget.parentElement?.children[next] as HTMLElement)?.focus();}}>{h.id===ownActive?'▶ ':''}{index+1} · {h.total>21?h.total+' Bust':h.total}</button>)}</div>}
               <div className={s.hands}>{player.hands.map(h=><Hand key={h.id} hand={h} selected={h.id===selectedHand} active={h.id===state.activeHandId} deadline={localDeadline} presentation={presentation} shoeRef={shoeRef}/>)}</div>

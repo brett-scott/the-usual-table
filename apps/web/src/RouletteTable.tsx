@@ -7,7 +7,7 @@ import { WagerChips } from './WagerChips';
 import { GameRoomEntry } from './GameRoomEntry';
 import { TableHeader,TableToolbar } from './TableChrome';
 import { ChatBubble } from './ChatBubble';
-import { PlayerAvatar } from './PlayerAvatar';
+import { PlayerIdentityButton } from './PlayerProfiles';
 import { RouletteNumberBoard } from './RouletteNumberBoard';
 import { RouletteWheel } from './RouletteWheel';
 import s from './RouletteTable.module.css';
@@ -68,5 +68,5 @@ export function RouletteTable({client,onLeave}:{client:TableClient<RouletteSnaps
   </dialog>
  </div>;
 }
-function RouletteSeat({player:p,own,result,client}:{player:RouletteSnapshot['players'][number];own:string;result:boolean;client:TableClient<RouletteSnapshot,RouletteAction>}){const stake=rouletteWagerUnits(p.wager),net=p.returnedUnits-stake;return <article className={s.player} data-own={p.id===own} data-outcome={result&&stake?net>0?'won':net<0?'lost':'even':undefined} aria-label={`Seat ${p.seat+1}: ${p.name}`}><ChatBubble client={client} playerId={p.id} name={p.name}/><PlayerAvatar player={p}/><div><strong>{p.name}{p.id===own?' · You':''}</strong><span>{result&&stake?`${net>0?'+':''}${chips(net)} chips`:stake?`${chips(stake)} chips · ${p.wager.length} bets`:p.leaving?'Leaving':p.connected?'Watching':'Reconnecting'}</span></div></article>;}
+function RouletteSeat({player:p,own,result,client}:{player:RouletteSnapshot['players'][number];own:string;result:boolean;client:TableClient<RouletteSnapshot,RouletteAction>}){const stake=rouletteWagerUnits(p.wager),net=p.returnedUnits-stake;return <article className={s.player} data-own={p.id===own} data-outcome={result&&stake?net>0?'won':net<0?'lost':'even':undefined} aria-label={`Seat ${p.seat+1}: ${p.name}`}><ChatBubble client={client} playerId={p.id} name={p.name}/><div><PlayerIdentityButton compact player={p}>{p.name}{p.id===own?' · You':''}</PlayerIdentityButton><span>{result&&stake?`${net>0?'+':''}${chips(net)} chips`:stake?`${chips(stake)} chips · ${p.wager.length} bets`:p.leaving?'Leaving':p.connected?'Watching':'Reconnecting'}</span></div></article>;}
 export type { RouletteWager };

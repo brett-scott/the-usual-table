@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, type Page } from '@playwright/test';
 import { BLACKJACK_TABLE_RULES,PUBLIC_SUPABASE_CONFIG, type PlayerIcon, type SocialProvider } from '@casual/protocol';
+import { DEFAULT_PROFILE_VISIBILITY,saveProfileSchema,type Appearance } from '@casual/protocol';
 
 export const accountId = 'a213ae22-a459-456d-976c-dc115e74abda';
 export async function providerFixture(page: Page, provider: SocialProvider, mode: 'success' | 'cancel' | 'offline' = 'success', savedNickname: string | null = null, savedIcon: PlayerIcon | null = null) {
@@ -9,6 +10,7 @@ export async function providerFixture(page: Page, provider: SocialProvider, mode
   let nickname = savedNickname; let failSave = false; let failRead = false;
   let icon = savedIcon; let walletMode: 'ready' | 'offline' | 'not-connected' | 'wrong-account' | 'zero' | 'new' | 'new-offline' = 'ready';
   let provisioned = false; let walletCreates = 0;
+  let profileVersion=0;let appearance:Appearance={avatar:savedIcon?{kind:'emoji',id:savedIcon}:{kind:'initials'},border:'none'};let visibility:{chips:boolean;statistics:boolean;achievements:boolean}={...DEFAULT_PROFILE_VISIBILITY};
   const tokens: string[] = [];
   function authUser() {
     return { id: accountId, aud: 'authenticated', role: 'authenticated', created_at: new Date().toISOString(),
@@ -58,6 +60,24 @@ export async function providerFixture(page: Page, provider: SocialProvider, mode
     await route.fulfill(mode === 'offline' ? { status: 503, json: { code: 'AUTH_UNAVAILABLE' } }
       : { json: { accountId, provider, expiresAt: Date.now() + 3_600_000 } });
   });
+  await page.route('**/api/v1/account/profile',async route=>{
+    expect(tokens).toContain(route.request().headers().authorization?.slice(7));
+    if(failRead||failSave&&route.request().method()==='POST'){await route.fulfill({status:503,json:{code:'PROFILE_UNAVAILABLE'}});return;}
+    if(route.request().method()==='POST'){
+      const input=saveProfileSchema.parse(route.request().postDataJSON());if(input.version!==profileVersion){await route.fulfill({status:409,json:{code:'PROFILE_CONFLICT'}});return;}
+      profileVersion++;nickname=input.nickname;appearance=input.appearance;visibility=input.visibility;icon=appearance.avatar.kind==='emoji'?appearance.avatar.id:null;
+    }
+    await route.fulfill({json:{contract:1,accountId,version:profileVersion,nickname,appearance,visibility}});
+  });
+  await page.route('**/api/v1/account/statistics/details*',route=>route.fulfill({status:503,json:{code:'STATISTICS_UNAVAILABLE'}}));
+  await page.route('**/api/v1/account/progression',route=>route.fulfill({status:503,json:{code:'REWARDS_UNAVAILABLE'}}));
+  // These are browser OAuth fixtures, not real signed Worker tokens. Worker tests cover
+  // verified temporary-seat profile binding; keep real guest gameplay here.
+  for(const pattern of ['**/api/v1/games/*/rooms*','**/api/v1/rooms/*/join*'])await page.route(pattern,async route=>{
+    if(route.request().method()!=='POST'||route.request().postDataJSON()?.funding==='account'){await route.fallback();return;}
+    const headers={...route.request().headers()};delete headers.authorization;await route.fallback({headers});
+  });
+  await page.route('**/api/v1/rooms/*/profile-sync',route=>route.fulfill({json:{ok:true}}));
   await page.route('**/api/v1/account/wallet', async route => {
     expect(tokens).toContain(route.request().headers().authorization?.slice(7));
     if (route.request().method() === 'POST') {

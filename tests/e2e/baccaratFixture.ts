@@ -33,6 +33,7 @@ export async function baccaratFixture(page:Page,{saved=false,players=1}:{saved?:
   await page.route('**/api/v1/games/baccarat/lobbies',route=>route.fulfill({json:{gameId:'baccarat',lobbies:[]}}));
   await page.route(url=>url.pathname.startsWith('/api/v1/rooms/')||url.pathname==='/api/v1/games/baccarat/rooms',async route=>{
     const req=route.request();const path=new URL(req.url()).pathname;
+    if(path.endsWith('/profile-sync')){await route.fulfill({json:{ok:true}});return;}
     if(path.endsWith('/info')){await route.fulfill({json:{...BACCARAT_RULES,roomId,gameId:'baccarat',adapterVersion:2,visibility:'private'}});return;}
     if(saved)expect(req.headers().authorization).toMatch(/^Bearer [^.]+\.[^.]+\./);
     if(path.endsWith('/rooms')){const body=req.postDataJSON();expect(body).not.toHaveProperty('accountId');

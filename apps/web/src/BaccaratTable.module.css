@@ -46,7 +46,7 @@
  .cards > div,.cards > i { height:min(calc(100cqh - 2px),calc((100cqw - 14px) * 106 / 228)); }
  .history { padding:3px 10px 4px; }.history > span { line-height:1; font-size:9px; }.historyHead > span > small { font-size:9px; }.history ol { margin-top:3px; }.history li { font-size:9px; line-height:1; padding:1px 0; }
 }
-@media(max-height:500px) and (min-width:641px) { .app > main { grid-template-rows:38px minmax(0,1fr) 60px; } }
+@media(max-height:500px) and (min-width:641px) { .app > main { grid-template-rows:38px minmax(0,1fr) 92px; } }
 
 .historyHead { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; }.historyHead > span { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; font-size:11px; color:#d1d7c6; }
 @container (max-height:360px) { .historyHead { min-height:28px; }.historyHead > span { font-size:9px; }.historyHead > span > small { display:none; } }
@@ -71,7 +71,7 @@
 .dock > button { grid-column:1; grid-row:4; }
 .dock > div:last-child:not([data-pending]) { grid-column:1/-1; }
 @media(max-width:640px) {
- .app > main { grid-template-rows:40px minmax(100px,1fr) auto calc(var(--short-seat-rows,2) * 34px + 4px); }
+ .app > main { grid-template-rows:40px minmax(100px,1fr) auto calc(var(--short-seat-rows,2) * 44px + 4px); }
  .dock { grid-row:3; grid-template-columns:minmax(0,1fr); gap:5px; padding:8px 9px; }
  .dockSummary { grid-row:1; }.dockSummary > div { display:flex; align-items:baseline; gap:5px; }.dockSummary strong { font-size:20px; margin:0; }.dockSummary span { font-size:9px; }.dockSummary small { font-size:8px; }
  .dock > [aria-label='Your table wagers'][data-pending] { grid-column:1; grid-row:2; }

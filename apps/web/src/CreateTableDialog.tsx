@@ -3,6 +3,7 @@ import { PLAYER_ICONS, type LobbyVisibility, type PlayerIcon } from '@casual/pro
 import { useAccountState } from './AccountControls';
 import { browserAuth } from './authClient';
 import { PlayerAvatar } from './PlayerAvatar';
+import { GuestAppearance } from './TableIdentity';
 import type { useTableFunding, useTableIdentity } from './TableIdentity';
 import s from './CreateTableDialog.module.css';
 
@@ -45,7 +46,7 @@ export function CreateTableDialog({ gameName='Blackjack',dialogRef, identity, fu
         <section className={s.seatSection} aria-labelledby={`${id}-seat-title`}>
           <h3 id={`${id}-seat-title`}>Your seat</h3>
           {identity.signedIn ? <div className={s.profile}>
-            <PlayerAvatar player={{ name: account.nickname ?? '', icon: account.playerIcon ?? undefined }} />
+            <PlayerAvatar player={{ name: account.nickname ?? '', icon: account.playerIcon ?? undefined,appearance:account.profile?.appearance }} />
             <div><strong>{account.nickname ?? (profileLoading ? 'Loading your profile…' : 'Finish your profile')}</strong>
               <span role={identity.ready ? undefined : 'status'}>{identity.ready ? 'Using your saved profile' : profileLoading ? 'Your saved nickname is loading. Please wait.' : account.nicknameStatus === 'error' ? 'Your profile couldn’t be loaded. Return to your profile to retry.' : 'Set your nickname before creating a table.'}</span>
               {!identity.ready && !profileLoading && <button className={s.profileAction} type="button" disabled={busy} onClick={close}>Return to your profile</button>}
@@ -56,6 +57,7 @@ export function CreateTableDialog({ gameName='Blackjack',dialogRef, identity, fu
             <div><label htmlFor={`${id}-icon`}>Player icon <small>(optional)</small></label>
               <select id={`${id}-icon`} value={identity.icon} onChange={event => identity.setIcon(event.target.value as PlayerIcon | '')} disabled={busy}>
                 <option value="">Use my initial</option>{PLAYER_ICONS.map(choice => <option key={choice.emoji} value={choice.emoji}>{choice.emoji} {choice.label}</option>)}</select></div>
+            <GuestAppearance identity={identity} disabled={busy}/>
           </div>}
         </section>
         <section className={s.chipsSection} role="group" aria-label="Table chips">

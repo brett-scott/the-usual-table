@@ -29,6 +29,8 @@
 .body input:disabled, .body select:disabled { opacity: .6; }
 .hint { color: var(--muted); margin: 9px 0 0; font-size: 12px; line-height: 1.5; }
 .guestFields { display: grid; gap: 12px; }
+.guestFields>details{grid-column:1/-1;min-width:0}
+@media(max-width:520px){.guestFields>div:nth-child(2){grid-column:1/-1}}
 .profile { display: flex; align-items: center; gap: 10px; min-height: 56px; }
 .profile > span { width: 40px; height: 40px; border-color: #dac18a; font-size: 19px; }
 .profile > div { min-width: 0; }
@@ -107,3 +109,5 @@
   .footer { padding: 7px 20px; }
   .error { font-size: 12px; padding: 8px 10px; line-height: 1.4; }
 }
+
+@media(min-width:641px) and (max-height:500px){.guestFields{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.guestFields>div:first-child{grid-column:1/-1}.guestFields>div:nth-child(2){grid-column:1}.guestFields>details{grid-column:2;align-self:end;margin-top:0}.guestFields>details>summary{font-size:10px;line-height:1.2}.guestFields>details>summary>span:first-child{display:none}.guestFields>details[open]{grid-column:1/-1}.guestFields>details[open]>summary>span:first-child{display:inline-grid}}

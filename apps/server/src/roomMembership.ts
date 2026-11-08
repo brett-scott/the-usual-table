@@ -7,6 +7,7 @@ export interface Member {
   hash:string;connected:boolean;controllerId:string|null;leaveAfterRound:boolean;
   reservationDeadline:number|null;presenceDeadline:number|null;claimId:string|null;claimVersion:number;retiredClaims:string[];
   account?:{id:string;expiresAt:number};
+  profileAccountId?:string; appearance?:import('@casual/protocol').Appearance; profileVersion?:number;
 }
 export function newMember(hash:string,now:number):Member {
   return {hash,connected:false,controllerId:null,leaveAfterRound:false,reservationDeadline:now+RESERVATION_MS,presenceDeadline:null,claimId:null,claimVersion:0,retiredClaims:[]};

@@ -1,3 +1,4 @@
+import { appearanceSchema } from './profile';
 import { z } from 'zod';
 import { displayNameSchema,playerIconSchema } from './identity';
 import { walletUnitsSchema } from './wallet';
@@ -18,7 +19,7 @@ export const rouletteCommandSchema=z.object({id:z.string().uuid(),playerId:z.str
 export const rouletteSnapshotSchema=z.object({gameId:z.literal('roulette'),roomId:z.string().regex(/^[a-f0-9]{32}$/),you:z.string(),revision:integer,claimVersion:integer,managerId:z.string(),roundId:integer,
  phase:z.enum(['waiting','betting','spinning','results']),bettingDeadline:integer.nullable(),startedAt:integer.nullable(),resultsDeadline:integer.nullable(),
  winner:roulettePocketSchema.nullable(),history:z.array(rouletteResultSchema).max(20),counts:rouletteCountsSchema,
- players:z.array(roulettePlayerSchema.extend({connected:z.boolean(),leaving:z.boolean()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','NextRound','Leave','Refill'])),
+ players:z.array(roulettePlayerSchema.extend({connected:z.boolean(),leaving:z.boolean(),appearance:appearanceSchema.optional(),profileVersion:z.number().int().nonnegative().safe().optional()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','NextRound','Leave','Refill'])),
  wallet:z.object({status:z.string(),error:z.string().nullable()}).optional(),
 }).strict();
 export type RouletteSnapshot=z.infer<typeof rouletteSnapshotSchema>;

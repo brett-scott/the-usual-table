@@ -34,13 +34,13 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
   }
   try {
     await page.goto(`${baseURL}#/games/blackjack`); await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await page.getByLabel('What should we call you?').fill('Alex');
-    await page.getByLabel('Player icon', { exact: false }).selectOption('🦊');
+    await page.getByRole('combobox',{name:/^Player icon/}).selectOption('🦊');
     await page.getByRole('button', { name: 'Create table', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     const invite = page.url(); expect(invite).toMatch(/#\/room\/[a-f0-9]{32}$/);
     for (let i = 1; i < 4; i++) {
       const peer = pages[i]!; await peer.goto(invite); await peer.getByLabel('What should we call you?').fill(i === 1 ? 'Alex' : `Guest ${i + 1}`);
-      if (i < 3) await peer.getByLabel('Player icon', { exact: false }).selectOption(i === 1 ? '🤖' : '🍀');
+      if (i < 3) await peer.getByRole('combobox',{name:/^Player icon/}).selectOption(i === 1 ? '🤖' : '🍀');
       await peer.getByRole('button', { name: 'Join table', exact: true }).click(); await expect(peer.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     }
     await synced();

@@ -25,6 +25,7 @@ async function savedTable(page: Page, failFirst = false) {
   await page.route('**/api/v1/account/wallet', route => route.fulfill({ json: wallet() }));
   await page.route(url=>/^\/api\/v1\/(?:rooms|games\/blackjack\/rooms)/.test(url.pathname), async route => {
     const request = route.request(); const path = new URL(request.url()).pathname;
+    if(path.endsWith('/profile-sync')){await route.fulfill({json:{ok:true}});return;}
     if(path.endsWith('/info')){await route.fulfill({json:{...BLACKJACK_TABLE_RULES,roomId:inviteId,gameId:'blackjack',adapterVersion:1,visibility:'private'}});return;}
     expect(request.headers().authorization).toMatch(/^Bearer [^.]+\.[^.]+\./);
     if (path.endsWith('/rooms')) {

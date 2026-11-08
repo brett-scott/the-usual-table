@@ -10,6 +10,7 @@ import type { GameRoomAdapter,HostedRoom } from './contracts';
 /** Erase an adapter's private engine type only at the validated registry boundary. */
 export function hostGame<R extends HostedRoom>(adapter:GameRoomAdapter<R>):GameRoomAdapter<HostedRoom> {
   function room(value:HostedRoom):R {
+    if(Object.values(value.members).some(m=>m.account&&m.profileAccountId&&m.account.id!==m.profileAccountId))throw new GameError('ROOM_STATE_INVALID','This table has inconsistent profile ownership.');
     if((value.gameId===undefined?'blackjack':value.gameId)!==adapter.gameId || (value.adapterVersion===undefined&&adapter.gameId==='blackjack'?1:value.adapterVersion)!==adapter.version)
       throw new GameError('ROOM_VERSION_UNSUPPORTED','This table needs its original game adapter version.');
     return value as R;

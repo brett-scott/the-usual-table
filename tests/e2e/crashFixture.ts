@@ -22,6 +22,7 @@ export async function crashFixture(page:Page,{saved=false,players=1}:{saved?:boo
   await page.route('**/api/v1/games/crash/lobbies',route=>route.fulfill({json:{gameId:'crash',lobbies:[]}}));
   await page.route(url=>url.pathname.startsWith('/api/v1/rooms/')||url.pathname==='/api/v1/games/crash/rooms',async route=>{
     const req=route.request();const path=new URL(req.url()).pathname;
+    if(path.endsWith('/profile-sync')){await route.fulfill({json:{ok:true}});return;}
     if(path.endsWith('/info')){await route.fulfill({json:{...CRASH_RULES,roomId,gameId:'crash',adapterVersion:1,visibility:'private'}});return;}
     if(saved)expect(req.headers().authorization).toMatch(/^Bearer [^.]+\.[^.]+\./);
     if(path.endsWith('/rooms')){const body=req.postDataJSON();expect(body).not.toHaveProperty('accountId');

@@ -1,3 +1,4 @@
+import { appearanceSchema } from './profile';
 import { z } from 'zod';
 import { displayNameSchema,playerIconSchema } from './identity';
 import { walletUnitsSchema } from './wallet';
@@ -25,7 +26,7 @@ export const baccaratSnapshotSchema=z.object({gameId:z.literal('baccarat'),roomI
   phase:z.enum(['waiting','betting','dealing','results']),bettingDeadline:integer.nullable(),startedAt:integer.nullable(),resultsDeadline:integer.nullable(),
   cards:z.array(baccaratDealSchema).max(6),outcome:baccaratResultSchema.nullable(),history:z.array(baccaratResultSchema).max(20),roadmap:baccaratRoadmapSchema.optional(),
   shoe:z.object({decks:z.literal(8),remaining:z.number().int().min(0).max(416),shuffled:z.boolean()}).strict(),
-  players:z.array(baccaratPlayerSchema.extend({connected:z.boolean(),leaving:z.boolean()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','NextRound','Leave','Refill'])),
+  players:z.array(baccaratPlayerSchema.extend({connected:z.boolean(),leaving:z.boolean(),appearance:appearanceSchema.optional(),profileVersion:z.number().int().nonnegative().safe().optional()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','NextRound','Leave','Refill'])),
   wallet:z.object({status:z.string(),error:z.string().nullable()}).optional(),
 }).strict();
 export type BaccaratSnapshot=z.infer<typeof baccaratSnapshotSchema>;

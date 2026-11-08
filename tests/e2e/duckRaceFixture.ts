@@ -33,6 +33,7 @@ export async function duckRaceFixture(page:Page,{saved=false,players=1}:{saved?:
   await page.route('**/api/v1/games/duck-race/lobbies',route=>route.fulfill({json:{gameId:'duck-race',lobbies:[]}}));
   await page.route(url=>url.pathname.startsWith('/api/v1/rooms/')||url.pathname==='/api/v1/games/duck-race/rooms',async route=>{
     const req=route.request();const path=new URL(req.url()).pathname;
+    if(path.endsWith('/profile-sync')){await route.fulfill({json:{ok:true}});return;}
     if(path.endsWith('/info')){await route.fulfill({json:{...DUCK_RACE_RULES,roomId,gameId:'duck-race',adapterVersion:1,visibility:'private'}});return;}
     if(saved)expect(req.headers().authorization).toMatch(/^Bearer [^.]+\.[^.]+\./);
     if(path.endsWith('/rooms')){const body=req.postDataJSON();expect(body).not.toHaveProperty('accountId');

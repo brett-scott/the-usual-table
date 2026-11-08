@@ -1,10 +1,12 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { gameIdFromHash,roomIdFromHash } from '@casual/protocol';
+import { accountProfileSchema, DEFAULT_APPEARANCE,DEFAULT_PROFILE_VISIBILITY, type AccountProfile, type ProfileDraft } from '@casual/protocol';
 import { accountSessionSchema, displayNameSchema, playerIconSchema, PUBLIC_SUPABASE_CONFIG, publicAuthConfigSchema, socialProviderSchema, walletSummarySchema,
   type AccountSession, type PlayerIcon, type SocialProvider, type WalletSummary } from '@casual/protocol';
 
 export interface AuthState {
+  profile?:AccountProfile|null;
   callbackPending: boolean; working: boolean; hasSession: boolean; account: AccountSession | null; error: string;
   nickname: string | null; nicknameStatus: 'idle' | 'loading' | 'ready' | 'error'; savingNickname: boolean; nicknameError: string;
   playerIcon: PlayerIcon | null;
@@ -26,6 +28,8 @@ export interface AuthSdk {
   onAuthStateChange(callback: (event: string, session: Session | null) => void): { data: { subscription: { unsubscribe(): void } } };
 }
 export interface AuthEnvironment {
+  readProfile?(token:string,signal:AbortSignal):Promise<AccountProfile>;
+  saveProfile?(token:string,input:ProfileDraft&{version:number}):Promise<AccountProfile>;
   url(): URL; baseUrl: string; now(): number;
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
   replace(url: string): void; navigate(url: string): void;
@@ -91,7 +95,7 @@ export class AuthController {
       queueMicrotask(() => {
         if (event === 'USER_UPDATED' && session && this.state.account?.accountId === session.user.id && this.state.account.expiresAt > this.env.now()) {
           // updateUser emits while holding the SDK lock. Its caller handles its own save result.
-          if (!this.state.savingNickname) this.publish({ nickname: nicknameOf(session.user), playerIcon: iconOf(session.user), nicknameStatus: 'ready', nicknameError: '' });
+          if (!this.state.savingNickname&&!this.state.profile) this.publish({ nickname: nicknameOf(session.user), playerIcon: iconOf(session.user), nicknameStatus: 'ready', nicknameError: '' });
           return;
         }
         void this.acceptSession(session);
@@ -133,7 +137,7 @@ export class AuthController {
       this.generation++; this.verification?.abort(); this.pendingToken = ''; this.pendingVerification = undefined;
       this.walletGeneration++; this.walletRequest?.abort();
       this.publish({ account: null, hasSession: false, working: this.startingSignIn,
-        nickname: null, nicknameStatus: 'idle', savingNickname: false, nicknameError: '', playerIcon: null, wallet: null, walletStatus: 'idle' }); return Promise.resolve();
+        nickname: null, nicknameStatus: 'idle', savingNickname: false, nicknameError: '', playerIcon: null, profile:null, wallet: null, walletStatus: 'idle' }); return Promise.resolve();
     }
     if (this.pendingToken === session.access_token && this.pendingVerification) return this.pendingVerification;
     const generation = ++this.generation; this.verification?.abort();
@@ -141,7 +145,7 @@ export class AuthController {
     const request = new AbortController(); this.verification = request; this.pendingToken = session.access_token;
     const continuing = this.state.account?.accountId === session.user.id && this.state.account.expiresAt > this.env.now();
     this.publish({ working: true, hasSession: true, error: '', wallet: null, walletStatus: 'idle',
-      ...(!continuing ? { account: null, nickname: null, nicknameStatus: 'loading' as const, savingNickname: false, nicknameError: '', playerIcon: null } : {}) });
+      ...(!continuing ? { account: null, profile:null, nickname: null, nicknameStatus: 'loading' as const, savingNickname: false, nicknameError: '', playerIcon: null } : {}) });
     this.pendingVerification = (async () => {
       try {
         const account = accountSessionSchema.parse(await this.env.verify(session.access_token, request.signal));
@@ -152,7 +156,9 @@ export class AuthController {
           // Read from Auth rather than a stale browser session so edits on another device survive reload.
           const { data, error } = await this.sdk.getUser();
           if (error || data.user?.id !== account.accountId) throw new Error('Nickname unavailable');
-          if (generation === this.generation) this.publish({ nickname: nicknameOf(data.user), playerIcon: iconOf(data.user), nicknameStatus: 'ready' });
+          let loaded=false;
+          if(this.env.readProfile){try{const profile=await this.env.readProfile(session.access_token,request.signal);if(generation===this.generation){this.applyProfile(profile);loaded=true;}}catch{/* Guest/table entry stays available when the profile service is offline. */}}
+          if (!loaded&&generation === this.generation) this.publish({ nickname: nicknameOf(data.user), playerIcon: iconOf(data.user), nicknameStatus: 'ready' });
         } catch {
           if (generation === this.generation) this.publish({ nicknameStatus: 'error', nicknameError: 'Your nickname could not be loaded. Check your connection and retry.' });
         }
@@ -205,6 +211,13 @@ export class AuthController {
     const generation = this.generation;
     this.publish({ savingNickname: true, nicknameError: '' });
     try {
+      if(this.env.saveProfile){
+        const current=this.state.profile;
+        const profile=await this.env.saveProfile(await this.accessToken(),{nickname:parsed.data,version:current?.version??0,
+          appearance:icon===this.state.playerIcon&&current?current.appearance:{avatar:icon?{kind:'emoji',id:icon}:{kind:'initials'},border:current?.appearance.border??DEFAULT_APPEARANCE.border},visibility:current?.visibility??DEFAULT_PROFILE_VISIBILITY});
+        if(generation!==this.generation)return false;
+        this.applyProfile(profile);this.publish({savingNickname:false});return true;
+      }
       const { data, error } = await this.sdk.updateUser({ data: { [ACCOUNT_NICKNAME_KEY]: parsed.data, [ACCOUNT_ICON_KEY]: parsedIcon.data } });
       if (error || data.user?.id !== account.accountId || nicknameOf(data.user) !== parsed.data || iconOf(data.user) !== parsedIcon.data) throw new Error('Profile update failed');
       if (generation !== this.generation) return false;
@@ -213,6 +226,12 @@ export class AuthController {
       if (generation === this.generation) this.publish({ savingNickname: false, nicknameError: 'Your profile could not be saved. Check your connection and try again.' });
       return false;
     }
+  }
+  applyProfile(profile:AccountProfile){
+    if(profile.accountId!==this.state.account?.accountId)return;
+    if(this.state.profile&&this.state.profile.version>profile.version)return;
+    const appearance=profile.appearance;
+    this.publish({profile,nickname:profile.nickname,playerIcon:appearance.avatar.kind==='emoji'?appearance.avatar.id:null,nicknameStatus:'ready',nicknameError:''});
   }
   async refreshWallet() {
     const account = this.state.account;
@@ -242,7 +261,7 @@ export class AuthController {
   async signOut() {
     this.walletGeneration++; this.walletRequest?.abort();
     this.generation++; this.verification?.abort(); this.publish({ working: true, account: null,
-      nickname: null, nicknameStatus: 'idle', savingNickname: false, nicknameError: '', playerIcon: null, wallet: null, walletStatus: 'idle' });
+      nickname: null, nicknameStatus: 'idle', savingNickname: false, nicknameError: '', playerIcon: null, profile:null, wallet: null, walletStatus: 'idle' });
     try {
       const { error } = await this.sdk.signOut({ scope: 'local' }); if (error) throw error;
       await this.acceptSession(null); this.publish({ error: '' });
@@ -257,6 +276,18 @@ async function boundedFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   return fetch(input, { ...init, signal });
 }
 let browserController: AuthController | undefined;
+async function profileRequest(token:string,input?:ProfileDraft&{version:number},signal?:AbortSignal){
+  const origin=(import.meta.env.VITE_API_BASE_URL||'http://127.0.0.1:8787').replace(/\/$/,'');
+  const response=await boundedFetch(`${origin}/api/v1/account/profile`,{method:input?'POST':'GET',headers:{Authorization:`Bearer ${token}`,...(input?{'Content-Type':'application/json'}:{})},body:input?JSON.stringify(input):undefined,signal,cache:'no-store'});
+  const data:unknown=await response.json();if(!response.ok)throw new Error(data&&typeof data==='object'&&'code'in data?String(data.code):'PROFILE_UNAVAILABLE');
+  return accountProfileSchema.parse(data);
+}
+export async function saveAccountProfile(input:ProfileDraft&{version:number}){
+  const auth=browserAuth();const owner=auth.getSnapshot().account?.accountId;
+  const result=await profileRequest(await auth.accessToken(),input);
+  if(result.accountId!==owner||auth.getSnapshot().account?.accountId!==owner)throw new Error('Account changed');
+  auth.applyProfile(result);return result;
+}
 export function browserAuth(): AuthController {
   if (browserController) return browserController;
   const overrideUrl = import.meta.env.VITE_SUPABASE_URL?.trim(); const overrideKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -283,6 +314,8 @@ export function browserAuth(): AuthController {
     url: () => new URL(window.location.href), baseUrl, now: Date.now,
     storage: { getItem: key => window.sessionStorage.getItem(key), setItem: (key, value) => window.sessionStorage.setItem(key, value), removeItem: key => window.sessionStorage.removeItem(key) },
     replace: url => window.history.replaceState(null, '', url), navigate: url => window.location.assign(url),
+    async readProfile(token,signal){return profileRequest(token,undefined,signal);},
+    async saveProfile(token,input){return profileRequest(token,input);},
     async verify(token, signal) {
       const origin = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8787').replace(/\/$/, '');
       const response = await boundedFetch(`${origin}/api/v1/account/session`, { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' });

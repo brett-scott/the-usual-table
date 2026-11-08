@@ -12,10 +12,13 @@ import { walletBackend } from './walletBackend';
 import { verifyPlayingAccount } from './accountPlay';
 import { errorResponse, hashSecret, originAllowed, randomSecret, readJson, secureRandomIndex } from './security';
 import type { Env } from './env';
+import { appearanceSchema, DEFAULT_APPEARANCE,PROFILE_CAPABILITY } from '@casual/protocol';
+import { verifyAccountSession } from './accountAuth';
+import { accountProfile, roomAccountProfile } from './playerProfiles';
 
 interface Attachment { playerId: string; controllerId: string; chat?: boolean; accountId?: string; gameAdapter?:boolean;capabilities?:string[] }
 const publicCapabilities=(values:readonly string[])=>values.filter(value=>/^usual-[a-z-]+-v\d+$/.test(value)&&value.length<=64).slice(0,8);
-const entryFields = { name: displayNameSchema, icon: playerIconSchema.optional(), funding: z.enum(['guest', 'account']).optional(),
+const entryFields = { name: displayNameSchema, icon: playerIconSchema.optional(), appearance:appearanceSchema.optional(), funding: z.enum(['guest', 'account']).optional(),
   buyInUnits: z.number().int().min(1).max(9_000_000_000_000).optional(), entryId: z.string().uuid().transform(value => value.toLowerCase()).optional() };
 const validFunding = (body: { funding?: string; buyInUnits?: number; entryId?: string }) => body.funding === 'account'
   ? body.buyInUnits !== undefined && body.entryId !== undefined : body.buyInUnits === undefined && body.entryId === undefined;
@@ -30,7 +33,20 @@ export class TableRoom extends DurableObject<Env> {
     assertRule(game.accountFunding==='house','GAME_UNAVAILABLE','Saved chips are not available for this game yet.');
     assertRule(body.buyInUnits!==undefined&&body.buyInUnits>=game.minBuyInUnits&&body.buyInUnits%game.buyInStepUnits===0,'INVALID_NAME','Choose a valid buy-in for this game.');
   }
-  private snapshot(room:HostedRoom,playerId:string,capabilities:readonly string[]=[]){return this.game(room).snapshot(room,playerId,{now:Date.now(),capabilities});}
+  private snapshot(room:HostedRoom,playerId:string,capabilities:readonly string[]=[]){
+    const snapshot=this.game(room).snapshot(room,playerId,{now:Date.now(),capabilities}) as {players:{id:string;icon?:import('@casual/protocol').PlayerIcon}[]};
+    if(!capabilities.includes(PROFILE_CAPABILITY))return snapshot;
+    return {...snapshot,players:snapshot.players.map(p=>({...p,appearance:room.members[p.id]?.appearance??(p.icon?{avatar:{kind:'emoji',id:p.icon},border:'none'}:DEFAULT_APPEARANCE),profileVersion:room.members[p.id]?.profileVersion??0}))};
+  }
+  private async bindProfile(request:Request,room:HostedRoom,playerId:string){
+    if(!request.headers.has('Authorization'))return;
+    const account=await verifyAccountSession(request,this.env);
+    room.members[playerId]!.profileAccountId=account.accountId;
+    // A missing profile migration must not cancel a funded table entry.
+    try{const profile=await accountProfile(request,this.env);if(profile.accountId!==account.accountId)return;
+      room.members[playerId]!.appearance=profile.appearance;room.members[playerId]!.profileVersion=profile.version;
+    }catch{/* The editor/inspection exposes its own retry state; gameplay remains available. */}
+  }
   private metadata(room:HostedRoom){const adapter=this.game(room);return {gameId:adapter.gameId,adapterVersion:adapter.version};}
   private sendSnapshot(ws:WebSocket,room:HostedRoom) {
     const adapter=this.game(room);const attachment=ws.deserializeAttachment() as Attachment;
@@ -166,6 +182,8 @@ export class TableRoom extends DurableObject<Env> {
           const credential = randomSecret(); const playerId = crypto.randomUUID(); const inviteId = request.headers.get('X-Room-Id')!;
           let room = game.create({roomId:inviteId,player:{id:playerId,name:body.data.name,seat:0,icon:body.data.icon},credentialHash:await hashSecret(credential),random:secureRandomIndex,now:Date.now()});
           room.visibility = body.data.visibility ?? 'private';
+          room.members[playerId]!.appearance=body.data.appearance??(body.data.icon?{avatar:{kind:'emoji',id:body.data.icon},border:'none'}:DEFAULT_APPEARANCE);
+          await this.bindProfile(request,room,playerId);
           if (account) {
             room.members[playerId]!.account = account; room = this.game(room).fund(room, playerId, account.id, body.data.buyInUnits!, body.data.entryId!);
             room.creation = { entryId: body.data.entryId!, buyInUnits: body.data.buyInUnits!, visibility: room.visibility! };
@@ -198,6 +216,8 @@ export class TableRoom extends DurableObject<Env> {
           const seat=Array.from({length:game.capacity},(_,i)=>i).find(index=>!players.some(p=>p.seat===index))!;
           game.join(room,{id:playerId,name:body.data.name,icon:body.data.icon,seat});
           room.members[playerId] = newMember(await hashSecret(credential), Date.now());
+          room.members[playerId]!.appearance=body.data.appearance??(body.data.icon?{avatar:{kind:'emoji',id:body.data.icon},border:'none'}:DEFAULT_APPEARANCE);
+          await this.bindProfile(request,room,playerId);
           let next = room;
           if (account) { room.members[playerId]!.account = account; next = this.game(room).fund(room, playerId, account.id, body.data.buyInUnits!, body.data.entryId!); }
           next.revision++; next.lastActivity = Date.now(); await this.save(next); this.broadcast(next);
@@ -228,6 +248,34 @@ export class TableRoom extends DurableObject<Env> {
           return new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': 'casual-v1' } });
         }
         const playerId = await this.authenticate(request, room);
+        if(operation==='profile'&&request.method==='POST'){
+          const parsed=z.object({playerId:z.string().min(1).max(100)}).strict().safeParse(await readJson(request));
+          assertRule(parsed.success,'INVALID_REQUEST','Choose a player at this table.');const body=parsed.data;
+          const target=this.game(room).players(room).find(p=>p.id===body.playerId);const member=room.members[body.playerId];
+          assertRule(target&&member&&!member.leaveAfterRound,'PROFILE_UNAVAILABLE','This player has left the table.');
+          const snapshot=this.game(room).snapshot(room,playerId,{now:Date.now(),capabilities}) as {players:{id:string;balance?:number;balanceUnits?:number}[]};
+          const current=snapshot.players.find(p=>p.id===target.id)!;
+          const accountId=member.profileAccountId??member.account?.id;
+          let viewerId=room.members[playerId]?.account?.id;
+          if(request.headers.has('X-Profile-Authorization')){
+            const headers=new Headers(request.headers);headers.set('Authorization',request.headers.get('X-Profile-Authorization')!);
+            try{viewerId=(await verifyAccountSession(new Request(request.url,{headers}),this.env)).accountId;}catch{/* Public inspection still requires valid seat membership. */}
+          }
+          return Response.json({contract:1,ownAccount:!!accountId&&viewerId===accountId,playerId:target.id,name:target.name,stackUnits:current.balanceUnits??current.balance!*50,
+            funding:fundedSeat(room,target.id)?'saved':'temporary',profile:accountId?await roomAccountProfile(this.env,accountId):{kind:'guest',appearance:member.appearance??(target.icon?{avatar:{kind:'emoji',id:target.icon},border:'none'}:DEFAULT_APPEARANCE)}});
+        }
+        if(operation==='profile-sync'&&request.method==='POST'){
+          const token=request.headers.get('X-Profile-Authorization');assertRule(token,'ACCOUNT_REQUIRED','Sign in to update your table picture.');
+          const headers=new Headers(request.headers);headers.set('Authorization',token);
+          const verified=await verifyAccountSession(new Request(request.url,{headers}),this.env);
+          const member=room.members[playerId]!;
+          assertRule(!member.profileAccountId||member.profileAccountId===verified.accountId,'ACCOUNT_REQUIRED','This profile belongs to another account.');
+          const profile=await accountProfile(new Request(request.url,{headers}),this.env);
+          assertRule(profile.accountId===verified.accountId,'ACCOUNT_REQUIRED','This profile could not be verified.');
+          member.profileAccountId=verified.accountId;member.appearance=profile.appearance;member.profileVersion=profile.version;
+          // Cosmetic persistence does not advance a game revision or alter game deadlines.
+          await this.ctx.storage.put('room',room);this.broadcast(room);return Response.json({ok:true});
+        }
         if (operation === 'authorize' && request.method === 'POST') {
           const body = z.object({ controllerId: z.string().uuid() }).strict().safeParse(await readJson(request));
           assertRule(body.success, 'INVALID_REQUEST', 'Send the current connection ID.');

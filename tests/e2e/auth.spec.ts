@@ -12,7 +12,7 @@ for (const provider of ['google', 'discord'] as const) test(`${provider} PKCE si
   const fixture = await providerFixture(page, provider);
   await page.goto(`./#/room/${invite}`);
   await page.getByLabel('What should we call you?').fill('My table name');
-  await page.getByLabel('Player icon').selectOption({ label: '🦊 Fox' });
+  await page.getByRole('combobox',{name:/^Player icon/}).selectOption({ label: '🦊 Fox' });
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('button', { name: provider === 'google' ? 'Continue with Google' : 'Continue with Discord' }).click();
   await expect(page.getByRole('dialog', { name: 'Choose your nickname' })).toBeVisible();
@@ -20,7 +20,7 @@ for (const provider of ['google', 'discord'] as const) test(`${provider} PKCE si
   await expect(page).toHaveURL(new RegExp(`#\\/room\\/${invite}$`));
   await expect(page.getByLabel('What should we call you?')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('casual-name'))).toBe('My table name');
-  await page.getByRole('dialog',{name:'Choose your nickname'}).getByLabel('Player icon').selectOption({ label: '🐱 Cat' });
+  await page.getByRole('dialog',{name:'Choose your nickname'}).getByRole('combobox',{name:/^Player icon/}).selectOption({ label: '🐱 Cat' });
   await page.getByRole('textbox', { name: 'Nickname', exact: true }).fill('Alex');
   await page.getByRole('button', { name: 'Save nickname' }).click();
   const accountButton = page.getByRole('button', { name: 'Account menu for Alex', exact: true });
@@ -35,12 +35,12 @@ for (const provider of ['google', 'discord'] as const) test(`${provider} PKCE si
     saved.expires_at = 1; localStorage.setItem(key, JSON.stringify(saved));
   });
   await page.reload(); await expect(accountButton).toBeVisible(); expect(fixture.counts().refreshes).toBeGreaterThan(0);
-  await accountButton.click(); await expect(page.getByRole('menu')).toContainText('Choose saved or temporary chips');
+  await accountButton.click(); await expect(page.getByRole('menu')).not.toContainText('Choose saved or temporary chips');
   await page.screenshot({ path: testInfo.outputPath(`account-${provider}.png`), fullPage: true });
   await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByLabel('What should we call you?')).toHaveValue('My table name');
-  await expect(page.getByLabel('Player icon')).toHaveValue('🦊');
+  await expect(page.getByRole('combobox',{name:/^Player icon/})).toHaveValue('🦊');
   await expect(page.getByRole('button', { name: 'Join table', exact: true })).toBeEnabled();
   expect(page.url()).not.toMatch(/[?&]code=|access_token=|refresh_token=/);
 });
@@ -51,22 +51,28 @@ test('returning accounts edit their nickname from a keyboard accessible menu and
   const accountButton = page.getByRole('button', { name: 'Account menu for Alex', exact: true });
   await expect(accountButton).toBeVisible(); await expect(page.getByRole('dialog',{name:/Choose your nickname|Edit nickname|Your profile/})).not.toBeVisible();
   await accountButton.focus(); await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('menuitem', { name: 'Edit nickname' })).toBeFocused(); await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('menuitem', { name: 'Edit player icon' })).toBeFocused(); await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Edit nickname' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'View profile' })).toBeFocused(); await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Edit profile' })).toBeFocused(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Statistics', exact: true })).toBeFocused(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Progress & achievements', exact: true })).toBeFocused(); await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused(); await page.keyboard.press('Escape');
   await expect(accountButton).toBeFocused(); await expect(page.getByRole('menu')).toHaveCount(0);
-  await accountButton.click(); await page.getByRole('menuitem', { name: 'Edit nickname' }).click();
+  async function editNickname(button=accountButton){
+    await button.click();await page.getByRole('menuitem',{name:'Edit profile',exact:true}).click();
+    await page.getByRole('dialog',{name:'Customise profile',exact:true}).getByRole('button',{name:'Sharing',exact:true}).click();
+  }
+  async function closeProfile(){await page.getByRole('dialog',{name:'Player profile',exact:true}).getByRole('button',{name:'Close profile',exact:true}).click();}
+  await editNickname();
   const field = page.getByRole('textbox', { name: 'Nickname', exact: true });
-  await expect(field).toHaveValue('Alex'); await field.fill('Discard this'); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await accountButton.click(); await page.getByRole('menuitem', { name: 'Edit nickname' }).click(); await expect(field).toHaveValue('Alex');
-  await field.fill('   '); await page.getByRole('button', { name: 'Save nickname' }).click();
+  await expect(field).toHaveValue('Alex'); await field.fill('Discard this'); await page.getByRole('button', { name: 'Cancel', exact: true }).click();await closeProfile();
+  await editNickname();await expect(field).toHaveValue('Alex');
+  await field.fill('   '); await page.getByRole('button', { name: 'Save changes',exact:true }).click();
   await expect(page.getByRole('alert')).toContainText('Enter your name');
-  fixture.failSave(true); await field.fill('A nickname of 24 letters'); await page.getByRole('button', { name: 'Save nickname' }).click();
+  fixture.failSave(true); await field.fill('A nickname of 24 letters'); await page.getByRole('button', { name: 'Save changes',exact:true }).click();
   await expect(page.getByRole('alert')).toContainText('could not be saved'); await expect(field).toHaveValue('A nickname of 24 letters');
-  await expect(accountButton).toHaveCount(1);
-  fixture.failSave(false); await page.getByRole('button', { name: 'Save nickname' }).click();
+  await expect(page.locator('button[aria-label="Account menu for Alex"]')).toHaveCount(1);
+  fixture.failSave(false); await page.getByRole('button', { name: 'Save changes',exact:true }).click();await closeProfile();
   const renamed = page.getByRole('button', { name: 'Account menu for A nickname of 24 letters', exact: true });
   await expect(renamed).toBeVisible(); await renamed.click(); await expect(page.getByRole('menu')).toBeVisible();
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
@@ -75,8 +81,8 @@ test('returning accounts edit their nickname from a keyboard accessible menu and
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await expect(page.getByLabel('What should we call you?')).toHaveCount(0); await expect(page.getByRole('combobox', { name: /^Player icon/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page); await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
-  await renamed.click(); await page.getByRole('menuitem', { name: 'Edit nickname' }).click(); await field.fill('River');
-  await page.getByRole('button', { name: 'Save nickname' }).click(); await expect(page.getByRole('button', { name: 'Account menu for River' })).toBeVisible();
+  await editNickname(renamed);await field.fill('River');
+  await page.getByRole('button', { name: 'Save changes',exact:true }).click();await closeProfile();await expect(page.getByRole('button', { name: 'Account menu for River' })).toBeVisible();
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click(); await expect(page.getByLabel('What should we call you?')).toHaveCount(0);
@@ -87,7 +93,7 @@ test('returning accounts edit their nickname from a keyboard accessible menu and
   await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();
   await expect(remoteName).toBeVisible(); await remoteName.click();
-  await expect(page.getByRole('menuitem', { name: 'Edit nickname' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Edit profile',exact:true })).toBeVisible();
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('nickname-at-table.png'), fullPage: true });
   await page.keyboard.press('Escape'); await page.getByRole('button', { name: 'Leave table', exact: true }).click();
@@ -107,13 +113,13 @@ test('profile icons follow the account into private lobbies and shared tables wi
   await providerFixture(page, 'discord', 'success', 'Alex', '🦊'); await page.goto('./#/games');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await page.getByRole('button', { name: 'Continue with Discord' }).click();
   const account = page.getByRole('button', { name: 'Account menu for Alex' }); await expect(account).toContainText('🦊');
-  await account.click(); await page.getByRole('menuitem', { name: 'Edit player icon' }).click();
-  const editor = page.getByRole('dialog', { name: 'Edit profile' });
-  await expect(editor.getByLabel('Player icon')).toHaveValue('🦊'); await expect(editor.getByLabel('Player icon')).toBeFocused();
-  await editor.getByLabel('Player icon').selectOption('🐱'); await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(account).toContainText('🦊'); await account.click(); await page.getByRole('menuitem', { name: 'Edit player icon' }).click();
-  await expect(editor.getByLabel('Player icon')).toHaveValue('🦊'); await editor.getByLabel('Player icon').selectOption('🐱');
-  await editor.getByRole('button', { name: 'Save profile' }).click(); await expect(account).toContainText('🐱');
+  await account.click(); await page.getByRole('menuitem', { name: 'Edit profile',exact:true }).click();
+  const editor = page.getByRole('dialog', { name: 'Customise profile' });
+  await editor.getByRole('button',{name:'Emoji',exact:true}).click(); await expect(editor.getByRole('button',{name:'Fox avatar',exact:true})).toHaveAttribute('aria-pressed','true');
+  await editor.getByRole('button',{name:'Cat avatar',exact:true}).click(); await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await page.getByRole('button',{name:'Close profile',exact:true}).click();
+  await expect(account).toContainText('🦊'); await account.click(); await page.getByRole('menuitem', { name: 'Edit profile',exact:true }).click();
+  await editor.getByRole('button',{name:'Emoji',exact:true}).click(); await expect(editor.getByRole('button',{name:'Fox avatar',exact:true})).toHaveAttribute('aria-pressed','true'); await editor.getByRole('button',{name:'Cat avatar',exact:true}).click();
+  await editor.getByRole('button', { name: 'Save changes' }).click(); await page.getByRole('dialog',{name:'Player profile',exact:true}).getByRole('button',{name:'Close profile',exact:true}).click(); await expect(account).toContainText('🐱');
   await page.reload(); await expect(account).toContainText('🐱');
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'What should we call you?' })).toHaveCount(0); await expect(page.getByRole('combobox', { name: /^Player icon/ })).toHaveCount(0);
@@ -137,8 +143,8 @@ test('profile icons follow the account into private lobbies and shared tables wi
   } finally { await peer.close(); }
   await page.getByRole('button', { name: 'Leave table', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
-  await account.click(); await page.getByRole('menuitem', { name: 'Edit player icon' }).click();
-  await editor.getByLabel('Player icon').selectOption(''); await editor.getByRole('button', { name: 'Save profile' }).click();
+  await account.click(); await page.getByRole('menuitem', { name: 'Edit profile',exact:true }).click();
+  await editor.getByRole('button',{name:'Illustrations',exact:true}).click(); await editor.getByRole('button',{name:'Initials avatar',exact:true}).click(); await editor.getByRole('button', { name: 'Save changes' }).click(); await page.getByRole('dialog',{name:'Player profile',exact:true}).getByRole('button',{name:'Close profile',exact:true}).click();
   await page.reload(); await expect(account).not.toContainText('🐱');
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click(); await page.getByRole('button', { name: 'Create a table', exact: true }).click(); await createTemporaryTable(page);
   await expect(page.getByRole('button', { name: 'Open betting' })).toBeEnabled();

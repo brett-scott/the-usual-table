@@ -4,7 +4,7 @@ import s from './TableChat.module.css';
 import { useWideChat } from './useWideChat';
 
 const empty: ChatFeed = { messages: [], available: false, unread: 0 };
-export type TableChatClient=Pick<TableClient<unknown,unknown>,'subscribe'|'getConnection'|'getChat'|'markChatRead'|'sendChat'>;
+export type TableChatClient=Pick<TableClient<unknown,unknown>,'subscribe'|'getConnection'|'getChat'|'markChatRead'|'sendChat'|'readProfile'|'syncProfile'> & {getSnapshot?():unknown};
 export function TableChat({ client,playerId, ownTurn, seconds,decisionLabel='round' }: { client: TableChatClient;playerId:string; ownTurn: boolean; seconds: number | null;decisionLabel?:string }) {
   const feed = useSyncExternalStore(client.subscribe, () => client.getChat?.() ?? empty);
   const connection = useSyncExternalStore(client.subscribe, client.getConnection);
