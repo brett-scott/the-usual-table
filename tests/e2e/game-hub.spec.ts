@@ -6,7 +6,7 @@ import { providerFixture } from './authFixture';
 async function expectCatalogFits(page: Page) {
   await expectOneScreen(page);
   const catalog = page.getByRole('region', { name: 'Game catalog' });
-  await expect(catalog.getByRole('article')).toHaveCount(5);
+  await expect(catalog.getByRole('article')).toHaveCount(6);
   const overflow = await catalog.evaluate(element => ({ height: element.clientHeight, scrollHeight: element.scrollHeight,
     width: element.clientWidth, scrollWidth: element.scrollWidth, scrollTop: element.scrollTop }));
   expect(overflow.scrollHeight, 'all game tiles must fit without scrolling the catalog').toBeLessThanOrEqual(overflow.height + 1);
@@ -33,10 +33,10 @@ async function expectCatalogFits(page: Page) {
 
 test('Club Gallery lists only playable games without changing existing invitations', async ({ page }, testInfo) => {
   await page.goto('./'); await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
-  for (const name of ['Texas Hold’em', 'Keno', 'Penguin Cross']) await expect(page.getByRole('article', { name, exact: true })).toHaveCount(0);
+  for (const name of ['Texas Hold’em', 'Penguin Cross']) await expect(page.getByRole('article', { name, exact: true })).toHaveCount(0);
   const catalog = page.getByRole('region', { name: 'Game catalog' });
   await expectCatalogFits(page);
-  await expect(catalog.getByRole('link')).toHaveCount(5);
+  await expect(catalog.getByRole('link')).toHaveCount(6);
   for(const copy of ['Five games. Your kind of table.','Choose a game to find or create a table.','Virtual chips. Real company.'])await expect(page.getByText(copy,{exact:true})).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('game-hub.png'), fullPage: true });
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();

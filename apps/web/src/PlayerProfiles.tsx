@@ -52,9 +52,9 @@ export function PlayerProfilesProvider({auth,children}:{auth:AuthController;chil
         if(!owner)throw new Error('Sign in to view your profile.');
         const settings=await accountRequest('profile?catalogue=2',owner,accountProfileSchema,'GET',abort.signal);auth.applyProfile(settings);
         const [wallet,stats,progress]=await Promise.allSettled([
-          accountRequest('wallet',owner,walletSummarySchema,'GET',abort.signal),accountRequest('statistics/details?version=5',owner,detailedStatisticsSchema,'GET',abort.signal),
+          accountRequest('wallet',owner,walletSummarySchema,'GET',abort.signal),accountRequest('statistics/details?version=6',owner,detailedStatisticsSchema,'GET',abort.signal),
           accountRequest('progression',owner,progressionSchema,'GET',abort.signal)]);
-        const statistics=stats.status==='fulfilled'?{games:stats.value.summary.games,blackjack:stats.value.blackjack,crash:stats.value.crash,baccarat:stats.value.baccarat,roulette:stats.value.roulette}:undefined;
+        const statistics=stats.status==='fulfilled'?{games:stats.value.summary.games,blackjack:stats.value.blackjack,crash:stats.value.crash,baccarat:stats.value.baccarat,roulette:stats.value.roulette,keno:stats.value.keno}:undefined;
         const w=wallet.status==='fulfilled'?wallet.value:null;const p=progress.status==='fulfilled'?progress.value:undefined;
         return {kind:'account' as const,name:settings.nickname??account.nickname??'Your profile',appearance:settings.appearance,settings,visibility:{...DEFAULT_PROFILE_VISIBILITY},version:settings.version,
           total:w?(BigInt(w.availableUnits)+BigInt(w.atTablesUnits)+BigInt(w.pendingReturnUnits)).toString():undefined,statistics,level:p?.level,achievements:p?.achievements,progress:p,
@@ -116,6 +116,7 @@ function Statistics({data:d}:{data:Data}){
   if(game==='blackjack')fields.push(...Object.entries(d.statistics.blackjack).filter(([k])=>!['trackedRounds','perfectPairsWageredUnits','perfectPairsReturnedUnits'].includes(k)).map(([k,v])=>[({hands:'Hands played',blackjacks:'Natural blackjacks',insuranceTaken:'Insurance bets',insuranceWon:'Insurance wins',perfectPairsBets:'Perfect Pairs bets',perfectPairsWins:'Perfect Pairs wins'} as Record<string,string>)[k]??k[0]!.toUpperCase()+k.slice(1),v]));
   if(game==='crash'&&d.statistics.crash)fields.push(['Cash-outs',d.statistics.crash.cashouts],['Crashes',d.statistics.crash.crashes],['Highest cash-out',`${(Number(d.statistics.crash.highestCashoutCents)/100).toFixed(2)}×`]);
   if(game==='baccarat'&&d.statistics.baccarat){const b=d.statistics.baccarat;fields.push(['Player bets',b.playerBets],['Banker bets',b.bankerBets],['Tie bets',b.tieBets],['Tie wins',b.tieWins],['Banker wins on six',b.bankerSixWins],['Commission paid',statisticsChips(b.commissionUnits)]);}
+  if(game==='keno'&&d.statistics.keno)fields.push(['Total matches',d.statistics.keno.totalMatches],['Numbers picked',d.statistics.keno.totalPicks],['Most matches',d.statistics.keno.bestMatches],['Best multiplier',`${Number(d.statistics.keno.bestMultiplierCents)/100}×`]);
   if(game==='roulette'&&d.statistics.roulette)fields.push(['Straight-up wins',d.statistics.roulette.straightUpWins]);
   return <section aria-label={`${game==='general'?'General':GAME_CATALOG.find(g=>g.id===game)?.name} statistics`}><div className={s.sectionTop}><h3>Statistics</h3><GameSelect value={game} onChange={setGame} general/></div>{!d.statistics.games.length&&<p className={s.note}>No saved rounds yet.</p>}<div className={`${s.grid} ${s.stats}`}>{fields.map(([label,value])=><div key={label} className={s.stat}><span>{label}</span><strong>{value}</strong></div>)}</div><p className={s.note}>Saved-chip play only. Results update after the round is saved.</p></section>;
 }

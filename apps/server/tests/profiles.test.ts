@@ -13,7 +13,7 @@ it('requires current room membership and never accepts arbitrary account identif
   const response=await http(`/${host.session.inviteId}/profile`,host.session,{playerId:peer.session.playerId});
   expect(response.status).toBe(200);expect(roomProfileSchema.parse(await response.json())).toMatchObject({name:'Host',stackUnits:100000,funding:'temporary',profile:{kind:'guest'}});
 });
-for(const game of ['blackjack','baccarat','crash','duck-race','roulette'])it(`${game} keeps legacy snapshots free of unnegotiated profile fields`,async()=>{
+for(const game of ['blackjack','baccarat','crash','duck-race','roulette','keno'])it(`${game} keeps legacy snapshots free of unnegotiated profile fields`,async()=>{
   const response=await SELF.fetch(`https://example.test/api/v1/games/${game}/rooms`,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'Legacy',appearance:{avatar:{kind:'illustration',id:'owl'},border:'sage'}})});
   expect(response.status).toBe(201);const created=await response.json<{session:import('@casual/protocol').GuestSession;snapshot:{players:unknown[]}}>();
   expect(created.snapshot.players[0]).not.toHaveProperty('appearance');expect(created.snapshot.players[0]).not.toHaveProperty('profileVersion');

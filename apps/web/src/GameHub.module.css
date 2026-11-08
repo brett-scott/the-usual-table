@@ -9,7 +9,7 @@
 .eyebrow { color:#e4c89d;font-size:9px;letter-spacing:1.8px;margin:0 0 9px; }
 .main h1 { font:44px/1 Georgia,serif;letter-spacing:-1.3px;margin:0; }
 .returnTable { color:#e4c89d;font-size:12px;min-height:44px;display:flex;align-items:center;gap:8px;text-align:right; }
-.catalog { flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;padding:3px; }
+.catalog { flex:1;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;padding:3px; }
 .catalog:focus-visible { outline:2px solid #ead594;outline-offset:2px;border-radius:8px; }
 .game { --art-bg:#a5b7a0;--art-ink:#2e513c;min-width:0;min-height:0;display:flex;flex-direction:column;position:relative;color:#243d2f;background:#f2e7cd;overflow:hidden;border-radius:7px; }
 .game[data-game='baccarat'] { --art-bg:#d0a8a0;--art-ink:#7b4144; }.game[data-game='roulette'] { --art-bg:#d1b573;--art-ink:#755528; }.game[data-game='duck-race'] { --art-bg:#9cbdc3;--art-ink:#335a68; }.game[data-game='crash'] { --art-bg:#b1a4bf;--art-ink:#57446f; }
@@ -28,7 +28,7 @@
 @media(max-width:1000px), (max-height:500px) {
  .main { padding:17px 0 16px;gap:14px; }.header { height:auto;min-height:62px;padding-block:9px; }.brand { font-size:20px;gap:9px; }.brand > span:first-child { width:26px;height:31px;font-size:20px;border-radius:5px; }
  .heading h1 { font-size:30px;letter-spacing:-.8px; }.heading .eyebrow { font-size:7px;letter-spacing:1.3px;margin-bottom:6px; }.returnTable { font-size:10px;max-width:120px; }
- .catalog { grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(5,minmax(44px,1fr));gap:8px; }
+ .catalog { grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(6,minmax(44px,1fr));gap:8px; }
  .game { flex-direction:row;border-radius:5px; }.art { width:clamp(54px,18vw,76px);height:100%;min-height:0;flex-shrink:0; }.art:before { inset:6px; }.art svg { max-height:94px; }.artNumber,.category,.description { display:none; }
  .gameCopy { flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:6px 12px;gap:8px; }.game h2 { font-size:clamp(19px,4.8vw,22px);margin:0; }
  .findLink { min-height:44px;border:0;border-left:1px solid #b4b79f;padding:0 0 0 12px;margin:0;font-size:11px;gap:10px; }.findLink span { font-size:16px; }
@@ -38,3 +38,6 @@
  .header { min-height:48px;height:48px;padding-block:2px; }.brand { font-size:19px; }.brand > span:first-child { height:30px;width:25px;font-size:20px; }.main { padding:10px 0 12px;gap:10px; }.heading .eyebrow { display:none; }.heading h1 { font-size:26px; }.catalog { gap:4px; }.gameCopy { padding-block:0; }.returnTable { min-height:32px;max-width:none; }
 }
 @media(prefers-reduced-motion:reduce) { .findLink { transition:none; } }
+
+.game[data-game='keno']{--art-bg:#b7c4a4;--art-ink:#486344}
+@media(max-height:500px){.main{padding:2px 0;gap:2px}.heading h1{font-size:22px}.returnTable{min-height:24px}.catalog{gap:2px}}

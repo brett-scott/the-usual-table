@@ -15,7 +15,7 @@ export function walletActions(room: OnlineRoom, playerId: string, actions: Actio
   return actions.filter(action => action !== 'Refill' && (!pending || ['Leave', 'StartBetting', 'NextRound', 'SitOut'].includes(action)));
 }
 /** Trusted identity/seat authorization must precede this call. No browser account ID is accepted. */
-export function beginWalletFunding(previous: OnlineRoom, playerId: string, accountId: string, buyInUnits: number, sessionId = crypto.randomUUID()): OnlineRoom {
+export function beginWalletFunding(previous: OnlineRoom, playerId: string, accountId: string, buyInUnits: number, sessionId: string = crypto.randomUUID()): OnlineRoom {
   id.parse(accountId); walletUnitsSchema.parse(buyInUnits);
   id.parse(sessionId);
   const chips = walletUnitsToBlackjack(buyInUnits);

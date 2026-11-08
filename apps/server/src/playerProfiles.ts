@@ -26,7 +26,7 @@ async function accountRpc<T>(request:Request,env:Env,rpc:string,input:unknown,sc
     return schema.parse(data);
   }catch(error){if(error instanceof GameError)throw error;throw new GameError('PROFILE_UNAVAILABLE','Your profile could not be loaded or saved. Please try again.');}
 }
-export async function roomAccountProfile(env:Env,id:string,modern=false){
+export async function roomAccountProfile(env:Env,id:string,modern=false,keno=false){
   if(!env.WALLET_DB)throw new GameError('PROFILE_UNAVAILABLE','Player profiles are not connected yet.');
   const pool=new Pool({connectionString:env.WALLET_DB.connectionString,max:1,connectionTimeoutMillis:2000,query_timeout:4000});
   const close=postgresPoolCloser(pool);
@@ -36,7 +36,7 @@ export async function roomAccountProfile(env:Env,id:string,modern=false){
       // A transaction bypasses shared query caching and gives every projection one consistent snapshot.
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
       await client.query("SET LOCAL statement_timeout = '3000ms'");
-      const result=await client.query<{profile:unknown}>(`SELECT wallet_private.room_player_profile${modern?'_v2':''}($1::uuid) AS profile`,[id]);
+      const result=await client.query<{profile:unknown}>(`SELECT wallet_private.room_player_profile${keno?'_v3':modern?'_v2':''}($1::uuid) AS profile`,[id]);
       const profile=publicAccountProfileSchema.parse(result.rows[0]?.profile);
       await client.query('COMMIT');return profile;
     }catch(error){try{await client.query('ROLLBACK');}catch{/* The original read failed. */}throw error;}

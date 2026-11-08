@@ -138,3 +138,5 @@ export * from './baccaratHistory';
 export * from './rouletteBets';
 export * from './roulette';
 export * from './cosmetics';
+export * from './kenoRules';
+export * from './keno';

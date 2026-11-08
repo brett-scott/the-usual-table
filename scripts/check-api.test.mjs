@@ -7,7 +7,7 @@ const origin = 'https://player.example.test';
 const project = 'https://npqvazffslqmfjtyyhpn.supabase.co';
 globalThis.fetch = async (input, options) => {
   const path = new URL(input).pathname;
-  if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,
+  if (path === '/api/v1/health') return Response.json({status:'ok',protocol:1,...(process.env.CHECK_SCENARIO==='missing-keno'?{}:{kenoProtocol:process.env.CHECK_SCENARIO==='legacy-keno'?1:2}),
     ...(process.env.CHECK_SCENARIO==='missing-roulette'?{}:{rouletteProtocol:1}),...(process.env.CHECK_SCENARIO==='missing-duck-race'?{}:{duckRaceProtocol:1}),...(process.env.CHECK_SCENARIO==='missing-baccarat'?{}:{baccaratProtocol:process.env.CHECK_SCENARIO==='old-baccarat'?2:3}),...(process.env.CHECK_SCENARIO==='missing-crash'?{}:{crashProtocol:process.env.CHECK_SCENARIO==='old-crash'?1:2}),
     ...(process.env.CHECK_SCENARIO==='missing-game-adapters'?{}:{gameAdapterProtocol:1}),
     ...(process.env.CHECK_SCENARIO === 'missing-collections-protocol' ? {} : {accountCollectionsProtocol:1}),
@@ -69,3 +69,7 @@ it('requires the Duck Race Worker before publishing its entry',()=>{const result
 it('requires the Roulette Worker before Pages',()=>{const result=check('missing-roulette');expect(result.status).toBe(1);expect(result.stderr).toContain('Roulette');});
 
 it.each(['missing-collections-protocol','collections-missing'])('requires private collection support before Pages: %s',scenario=>{const result=check(scenario);expect(result.status).toBe(1);expect(result.stderr).toContain('account collections');});
+
+it('requires the Keno Worker before Pages',()=>{const result=check('missing-keno');expect(result.status).toBe(1);expect(result.stderr).toContain('Keno');});
+
+it('requires the updated Keno rules before Pages',()=>{const result=check('legacy-keno');expect(result.status).toBe(1);expect(result.stderr).toContain('one-second');});

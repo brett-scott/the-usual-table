@@ -11,6 +11,7 @@ import { GameArtwork } from './GameArtwork';
 const galleryDetails:Partial<Record<GameId,{category:string;short:string}>>={
   blackjack:{category:'The card table',short:'Find your twenty-one.'},
   baccarat:{category:'The card table',short:'Player. Banker. Tie.'},
+  keno:{category:'The number draw',short:'Choose your numbers.'},
   roulette:{category:'The wheel',short:'One wheel. Your numbers.'},
   'duck-race':{category:'The race',short:'Pick your duck.'},
   crash:{category:'The multiplier',short:'Choose your moment.'},

@@ -7,7 +7,7 @@ export const GAME_CATALOG = [
   { id: 'baccarat', name: 'Baccarat', symbol: '♦', badge: '9', status: 'available', description: 'Player, Banker or Tie. Share the reveal.' },
   { id: 'roulette', name: 'Roulette', symbol: '◉', badge: '0', status: 'available', description: 'Pick your numbers. Watch the wheel.' },
   { id: 'texas-holdem', name: 'Texas Hold’em', symbol: '♣', badge: 'A K', status: 'coming-soon', description: 'Community cards, shared pots, and a little table talk.' },
-  { id: 'keno', name: 'Keno', symbol: '#', badge: '7', status: 'coming-soon', description: 'Pick your numbers. See what the draw brings.' },
+  { id: 'keno', name: 'Keno', symbol: '#', badge: '40', status: 'available', description: 'Pick your numbers. See what the draw brings.' },
   { id: 'duck-race', name: 'Duck Race', symbol: '🦆', badge: 'GO', status: 'available', description: 'Pick a duck. Follow the race with your friends.' },
   { id: 'penguin-cross', name: 'Penguin Cross', symbol: '🐧', badge: '→', status: 'coming-soon', description: 'A little timing. A little nerve. A new game ahead.' },
   { id: 'crash', name: 'Crash', symbol: '↗', badge: '×', status: 'available', description: 'Watch the multiplier. Choose your moment.' },

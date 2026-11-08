@@ -15,6 +15,7 @@ try {
   if (body.accountCollectionsProtocol !== 1) throw new Error('Deploy the updated Worker for account collections before publishing Pages.');
   if (body.accountRewardsProtocol !== 1) throw new Error('Deploy the updated Worker for account rewards before publishing Pages.');
   if (body.gameAdapterProtocol !== 1) throw new Error('Deploy the updated Worker for shared game adapters before publishing Pages.');
+  if (body.kenoProtocol !== 2) throw new Error('Deploy the updated Keno Worker (whole-chip payouts and one-second reveals) before publishing Pages.');
   if (body.rouletteProtocol !== 1) throw new Error('Deploy the Roulette Worker before publishing Pages.');
   if (body.duckRaceProtocol !== 1) throw new Error('Deploy the Duck Race Worker before publishing Pages.');
   if (body.baccaratProtocol !== 3) throw new Error('Deploy the Baccarat side-bet Worker before publishing Pages.');

@@ -26,7 +26,7 @@ test('each game opens its own table popup over the gallery and closing restores 
     if(game.id==='roulette')await page.screenshot({path:info.outputPath('find-table-popup.png')});
     await page.keyboard.press('Escape');await expect(picker(page)).toHaveCount(0);await expect(link).toBeFocused();await expect(page).toHaveURL(/#\/games$/);
   }
-  expect(new Set(requested)).toEqual(new Set(['blackjack','baccarat','roulette','duck-race','crash']));
+  expect(new Set(requested)).toEqual(new Set(['blackjack','baccarat','roulette','keno','duck-race','crash']));
 });
 
 test('public and private popup choices prefill creation, preserve the guest draft and return without stacked modals',async({page})=>{

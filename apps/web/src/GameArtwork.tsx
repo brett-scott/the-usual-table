@@ -15,6 +15,10 @@ export function GameArtwork({ gameId }: { gameId: GameId }) {
       <circle cx="150" cy="103" r="83" fill="#b89752"/><circle cx="150" cy="103" r="76" fill="#253d30" stroke="#f0d399" strokeWidth="2"/><circle cx="150" cy="103" r="65" fill="#9d4e46"/>
       {Array.from({length:20},(_,i)=><path key={i} d={`M150 103L${150+65*Math.cos(i*Math.PI/10)} ${103+65*Math.sin(i*Math.PI/10)}`} stroke="#f6dfb1" strokeWidth="1.2"/>)}
       <circle cx="150" cy="103" r="42" fill="#314f3a" stroke="#dfc38b" strokeWidth="3"/><circle cx="150" cy="103" r="14" fill="#d7b977"/><path d="M150 74v58M121 103h58" stroke="#ead9b4" strokeWidth="5"/><circle cx="192" cy="43" r="5" fill="#fff9e8"/>
+    </>:gameId==='keno'?<>
+      <rect x="61" y="20" width="178" height="167" rx="13" fill="#f4edda" stroke="#486344" strokeWidth="2"/>
+      {Array.from({length:20},(_,i)=><g key={i} transform={`translate(${82+i%5*33} ${45+Math.floor(i/5)*39})`}><circle r="12" fill={[2,7,11,18].includes(i)?'#486344':'#d1d9bf'}/><text y="4" textAnchor="middle" fontFamily="Georgia" fontSize="12" fill={[2,7,11,18].includes(i)?'#fff1cb':'#486344'}>{i+1}</text></g>)}
+      <circle cx="228" cy="153" r="24" fill="#dfc18b" stroke="#486344" strokeWidth="2"/><text x="228" y="161" textAnchor="middle" fontFamily="Georgia" fontSize="24" fill="#304f38">7</text>
     </>:gameId==='duck-race'?<>
       <path d="M29 154q30-15 60 0t60 0t60 0t60 0M29 170q30-15 60 0t60 0t60 0t60 0" stroke="#276473" opacity=".35" strokeWidth="2"/><path d="M91 120c-29-20-26-47-5-45 7 1 14 7 20 13 3-24 18-48 39-48 26 0 41 21 36 42l27 8-29 11c-4 34-22 49-54 49-19 0-33-10-34-30Z" fill="#efd29a" stroke="#3a6261" strokeWidth="2"/><path d="M113 109q28-15 39 12-24 20-39-12Z" fill="#d6ad6c"/><circle cx="158" cy="63" r="4" fill="#173a3d"/><path d="M179 79l26 10-27 7" fill="#cb8254"/><path d="M228 37v88m0-85h31v24h-31" stroke="#3a6261" strokeWidth="2"/><path d="M229 41h9v8h-9m18-8h9v8h-9m-9 0h9v8h-9m-9 0h9v8h-9m18-8h9v8h-9" fill="#3a6261"/>
     </>:gameId==='crash'?<>

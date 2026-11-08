@@ -19,7 +19,8 @@
     "zod": "4.6.7",
     "@casual/baccarat": "*",
     "@casual/duck-race": "*",
-    "@casual/roulette": "*"
+    "@casual/roulette": "*",
+    "@casual/keno": "*"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",

@@ -12,7 +12,7 @@ import { walletBackend } from './walletBackend';
 import { verifyPlayingAccount } from './accountPlay';
 import { errorResponse, hashSecret, originAllowed, randomSecret, readJson, secureRandomIndex } from './security';
 import type { Env } from './env';
-import { DEFAULT_APPEARANCE,PROFILE_CAPABILITY,COLLECTION_CAPABILITY,legacyAppearance,legacyAppearanceSchema } from '@casual/protocol';
+import { DEFAULT_APPEARANCE,PROFILE_CAPABILITY,COLLECTION_CAPABILITY,KENO_PROFILE_CAPABILITY,legacyAppearance,legacyAppearanceSchema } from '@casual/protocol';
 import { verifyAccountSession } from './accountAuth';
 import { accountProfile, roomAccountProfile } from './playerProfiles';
 
@@ -263,7 +263,7 @@ export class TableRoom extends DurableObject<Env> {
             try{viewerId=(await verifyAccountSession(new Request(request.url,{headers}),this.env)).accountId;}catch{/* Public inspection still requires valid seat membership. */}
           }
           return Response.json({contract:1,ownAccount:!!accountId&&viewerId===accountId,playerId:target.id,name:target.name,stackUnits:current.balanceUnits??current.balance!*50,
-            funding:fundedSeat(room,target.id)?'saved':'temporary',profile:accountId?await roomAccountProfile(this.env,accountId,capabilities.includes(COLLECTION_CAPABILITY)):{kind:'guest',appearance:this.projectAppearance(member.appearance??(target.icon?{avatar:{kind:'emoji',id:target.icon},border:'none'}:DEFAULT_APPEARANCE),capabilities)}});
+            funding:fundedSeat(room,target.id)?'saved':'temporary',profile:accountId?await roomAccountProfile(this.env,accountId,capabilities.includes(COLLECTION_CAPABILITY),capabilities.includes(KENO_PROFILE_CAPABILITY)):{kind:'guest',appearance:this.projectAppearance(member.appearance??(target.icon?{avatar:{kind:'emoji',id:target.icon},border:'none'}:DEFAULT_APPEARANCE),capabilities)}});
         }
         if(operation==='profile-sync'&&request.method==='POST'){
           const token=request.headers.get('X-Profile-Authorization');assertRule(token,'ACCOUNT_REQUIRED','Sign in to update your table picture.');

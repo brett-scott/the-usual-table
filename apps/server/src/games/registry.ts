@@ -1,3 +1,4 @@
+import {kenoRoomAdapter} from './keno';
 import { GameError } from '@casual/engine';
 import { GAME_CATALOG,gameIdSchema,type GameId } from '@casual/protocol';
 import { blackjackRoomAdapter } from './blackjack';
@@ -53,4 +54,4 @@ export class GameAdapterRegistry {
     return adapter.restore(value,now);
   }
 }
-export const gameAdapters=new GameAdapterRegistry([hostGame(blackjackRoomAdapter),hostGame(crashRoomAdapter),hostGame(baccaratRoomAdapter),hostGame(duckRaceRoomAdapter),hostGame(rouletteRoomAdapter)]);
+export const gameAdapters=new GameAdapterRegistry([hostGame(blackjackRoomAdapter),hostGame(crashRoomAdapter),hostGame(baccaratRoomAdapter),hostGame(duckRaceRoomAdapter),hostGame(rouletteRoomAdapter),hostGame(kenoRoomAdapter)]);

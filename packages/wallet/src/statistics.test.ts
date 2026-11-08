@@ -39,10 +39,10 @@ it('reads only verified settled rounds, groups games and counts replayed results
     const command = result(session, returned);
     const receipt = await store.execute(command); expect(await store.execute(command)).toEqual(receipt); session = receipt.session!;
   }
-  const roulette = await playing(id, 'keno'); await store.execute(result(roulette, 1500));
+  const roulette = await playing(id, 'penguin-cross'); await store.execute(result(roulette, 1500));
   const stats = accountStatisticsSchema.parse(await rpc(id));
   expect(stats.games.find(game => game.gameId === 'blackjack')).toEqual({ gameId: 'blackjack', roundsPlayed: '3', roundsWon: '1', roundsLost: '1', roundsEven: '1', wageredUnits: '3000', returnedUnits: '3000', netUnits: '0', bestRoundNetUnits: '1000' });
-  expect(stats.games.find(game => game.gameId === 'keno')).toMatchObject({ roundsPlayed: '1', netUnits: '500' });
+  expect(stats.games.find(game => game.gameId === 'penguin-cross')).toMatchObject({ roundsPlayed: '1', netUnits: '500' });
   const other = await account('discord'); expect(accountStatisticsSchema.parse(await rpc(other))).toMatchObject({ accountId: other, games: [] });
   const returning = (await store.execute({ contract: 1, accountId: id, operationId: crypto.randomUUID(), kind: 'request_return', sessionId: session.sessionId, expectedVersion: session.version, finalSequence: 3, finalStackUnits: session.stackUnits })).session!;
   await store.execute({ contract: 1, accountId: id, operationId: crypto.randomUUID(), kind: 'complete_return', sessionId: returning.sessionId, expectedVersion: returning.version });

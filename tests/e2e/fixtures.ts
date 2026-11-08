@@ -37,6 +37,15 @@ export async function openTableEntry(page: Page, visibility: 'public' | 'private
   }
 }
 
+/** Lobby discovery is published asynchronously after the controlling socket connects. */
+export async function waitForPublicTable(page:Page,gameId:string,roomId:string){
+  await expect.poll(async()=>{
+    const response=await page.request.get(`http://127.0.0.1:${process.env.E2E_API_PORT||8787}/api/v1/games/${gameId}/lobbies`,{headers:{Origin:new URL(page.url()).origin}});
+    if(!response.ok())return false;
+    return (await response.json() as {lobbies:{roomId:string}[]}).lobbies.some(lobby=>lobby.roomId===roomId);
+  }).toBe(true);
+}
+
 export async function openTableOptions(page: Page, section: 'Rules' | 'Cards' | 'Themes') {
   await page.getByRole('button', { name: 'Table options', exact: true }).click();
   const options = page.getByRole('dialog', { name: 'Table options', exact: true });

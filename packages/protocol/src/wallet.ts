@@ -1,3 +1,4 @@
+import {kenoRoundFactsSchema} from './kenoRules';
 import { z } from 'zod';
 import { gameIdSchema } from './games';
 import { blackjackRoundFactsSchema } from './blackjackStatistics';
@@ -28,7 +29,7 @@ export const walletCommandSchema = z.discriminatedUnion('kind', [
   z.object({ ...base, ...session, kind: z.literal('cancel_allocation'), rejectionId: id }).strict(),
   z.object({ ...base, ...session, kind: z.literal('settle'), gameId: gameIdSchema, roomId: label,
     funding: z.literal('account'), sequence: version, roundId: label, rulesetVersion: label,
-    wageredUnits: positiveUnits, returnedUnits: walletUnitsSchema, blackjack: blackjackRoundFactsSchema.optional(),crash:crashRoundFactsSchema.optional(),baccarat:baccaratRoundFactsSchema.optional(),duckRace:duckRaceRoundFactsSchema.optional(),roulette:rouletteRoundFactsSchema.optional() }).strict(),
+    wageredUnits: positiveUnits, returnedUnits: walletUnitsSchema, blackjack: blackjackRoundFactsSchema.optional(),crash:crashRoundFactsSchema.optional(),baccarat:baccaratRoundFactsSchema.optional(),duckRace:duckRaceRoundFactsSchema.optional(),roulette:rouletteRoundFactsSchema.optional(),keno:kenoRoundFactsSchema.optional() }).strict(),
   // The room must seal play and persist this final watermark before sending this command.
   z.object({ ...base, ...session, kind: z.literal('request_return'),
     finalSequence: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), finalStackUnits: walletUnitsSchema }).strict(),

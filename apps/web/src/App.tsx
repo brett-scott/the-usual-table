@@ -3,7 +3,7 @@ import {gameIdFromHash,roomIdFromHash,type GameId,type TableInfo} from '@casual/
 import {BlackjackTable as Table} from './BlackjackTable';
 export {BlackjackTable as Table} from './BlackjackTable';
 import { ApiError,tableInfo } from './onlineClient';
-import { blackjackClientAdapter,crashClientAdapter,baccaratClientAdapter,duckRaceClientAdapter,rouletteClientAdapter } from './gameClientAdapters';
+import { blackjackClientAdapter,crashClientAdapter,baccaratClientAdapter,duckRaceClientAdapter,rouletteClientAdapter,kenoClientAdapter } from './gameClientAdapters';
 import { PlayingCard } from './PlayingCard';
 import { GameHub } from './GameHub';
 import { AccountControls, AccountProvider } from './AccountControls';
@@ -28,7 +28,8 @@ function AppRoutes() {
 
 const RouletteRoom=lazy(()=>import('./RouletteTable').then(module=>({default:module.RouletteRoom})));
 const DuckRaceRoom=lazy(()=>import('./DuckRace').then(module=>({default:module.DuckRaceRoom})));
-const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={roulette:{version:rouletteClientAdapter.version,component:RouletteRoom},'duck-race':{version:duckRaceClientAdapter.version,component:DuckRaceRoom},blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:crashClientAdapter.version,component:CrashRoom},baccarat:{version:baccaratClientAdapter.version,component:BaccaratRoom}};
+const KenoRoom=lazy(()=>import('./KenoTable').then(module=>({default:module.KenoRoom})));
+const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={keno:{version:kenoClientAdapter.version,component:KenoRoom},roulette:{version:rouletteClientAdapter.version,component:RouletteRoom},'duck-race':{version:duckRaceClientAdapter.version,component:DuckRaceRoom},blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:crashClientAdapter.version,component:CrashRoom},baccarat:{version:baccaratClientAdapter.version,component:BaccaratRoom}};
 function GameRoomRoute({invite}:{invite:string}){
   const [info,setInfo]=useState<TableInfo|null>(null);const [error,setError]=useState<ApiError|null>(null);const [attempt,setAttempt]=useState(0);
   useEffect(()=>{let active=true;const abort=new AbortController();setError(null);

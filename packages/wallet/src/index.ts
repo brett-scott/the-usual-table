@@ -1,3 +1,4 @@
+import {kenoReturned} from '@casual/protocol';
 import { rouletteWagerUnits,rouletteReturned,baccaratReturned,baccaratWagerUnits } from '@casual/protocol';
 import { z } from 'zod';
 import {
@@ -146,6 +147,11 @@ export class PostgresWalletStore {
             if(command.rulesetVersion==='blackjack-perfect-pairs-v2')requireWallet(command.gameId==='blackjack'&&!!command.blackjack?.perfectPairs,'INVALID_RESULT');
             requireWallet(!command.crash || command.gameId === 'crash', 'WRONG_GAME');
             requireWallet(!command.baccarat || command.gameId === 'baccarat', 'WRONG_GAME');
+            requireWallet(!command.keno||command.gameId==='keno','WRONG_GAME');
+            if(command.gameId==='keno'){
+              requireWallet(!!command.keno&&(command.rulesetVersion==='keno-40-10-v1'||command.rulesetVersion==='keno-40-10-v2'),'INVALID_RESULT');
+              requireWallet(command.wageredUnits>=1000&&command.wageredUnits<=100000&&command.wageredUnits%1000===0&&command.returnedUnits===kenoReturned({numbers:command.keno.numbers,amountUnits:command.wageredUnits},command.keno.draw,command.rulesetVersion==='keno-40-10-v2'?'keno-40-10-v2':'keno-40-10-v1'),'INVALID_RESULT');
+            }
             requireWallet(!command.roulette||command.gameId==='roulette','WRONG_GAME');
             if(command.gameId==='roulette'){
               requireWallet(!!command.roulette&&command.rulesetVersion==='roulette-european-v1','INVALID_RESULT');
@@ -173,7 +179,7 @@ export class PostgresWalletStore {
             current.resultSequence = command.sequence;
             await tx.query(`INSERT INTO wallet_private.results (account_id, operation_id, session_id, sequence, round_id, ruleset_version, wagered_units, returned_units, facts)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`, [command.accountId, command.operationId, current.sessionId, command.sequence,
-              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):command.baccarat?JSON.stringify(command.baccarat):command.duckRace?JSON.stringify(command.duckRace):command.roulette?JSON.stringify(command.roulette):null]);
+              command.roundId, command.rulesetVersion, command.wageredUnits, command.returnedUnits, command.blackjack ? JSON.stringify(command.blackjack) : command.crash?JSON.stringify(command.crash):command.baccarat?JSON.stringify(command.baccarat):command.duckRace?JSON.stringify(command.duckRace):command.roulette?JSON.stringify(command.roulette):command.keno?JSON.stringify(command.keno):null]);
             break;
           }
           case 'request_return':

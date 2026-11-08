@@ -7,13 +7,14 @@ const detailed={accountId,summary,blackjack};
 async function open(page:Page){await page.goto('./#/games');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Continue with Google'}).click();await page.getByRole('button',{name:'Account menu for Stats player'}).click();await page.getByRole('menuitem',{name:'Statistics',exact:true}).click();return page.getByRole('dialog',{name:'Player profile',exact:true});}
 test('profile statistics show precise saved totals, game-specific counters and owner refresh',async({page},info)=>{
   await providerFixture(page,'google','success','Stats player');let reads=0;
-  await page.route('**/api/v1/account/statistics/details*',async route=>{expect(route.request().method()).toBe('GET');expect(route.request().postData()).toBeNull();expect(new URL(route.request().url()).search).toBe('?version=5');reads++;await route.fulfill({json:detailed});});
+  await page.route('**/api/v1/account/statistics/details*',async route=>{expect(route.request().method()).toBe('GET');expect(route.request().postData()).toBeNull();expect(new URL(route.request().url()).search).toBe('?version=6');reads++;await route.fulfill({json:{...detailed,summary:{...summary,games:[game,{...game,gameId:'keno'}]},keno:{trackedRounds:'4',totalMatches:'15',totalPicks:'20',bestMatches:'5',bestMultiplierCents:'60000'}}});});
   const dialog=await open(page);await expect(dialog.getByRole('region',{name:'General statistics'})).toBeVisible();
   await dialog.getByRole('combobox',{name:'Game',exact:true}).selectOption('blackjack');
   const region=dialog.getByRole('region',{name:'Blackjack statistics',exact:true});
   await expect(region.getByText('+15',{exact:true})).toHaveCount(2);
   for(const [label,value] of [['Rounds played','4'],['Chips wagered','40'],['Chips returned','55'],['Hands played','5'],['Natural blackjacks','1'],['Perfect Pairs bets','2'],['Perfect Pairs wins','1']])await expect(region.locator('div').filter({has:page.locator('span').filter({hasText:new RegExp(`^${label}$`)})}).last().locator('strong')).toHaveText(value!);
   await expect(dialog).toContainText('Saved-chip play only');await page.screenshot({path:info.outputPath('profile-statistics.png')});
+  await dialog.getByRole('combobox',{name:'Game',exact:true}).selectOption('keno');const keno=dialog.getByRole('region',{name:'Keno statistics',exact:true});await expect(keno).toContainText('Total matches');await expect(keno).toContainText('600×');
   await dialog.getByRole('button',{name:'Refresh profile'}).click();await expect.poll(()=>reads).toBe(2);
   await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'Account menu for Stats player'})).toBeFocused();
   await page.getByRole('button',{name:'Account menu for Stats player'}).click();await page.getByRole('menuitem',{name:'Sign out',exact:true}).click();await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();await expect(dialog).not.toBeVisible();

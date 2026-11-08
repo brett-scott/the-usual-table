@@ -8,7 +8,7 @@ export async function supabaseStatistics(request: Request, env: Pick<Env, 'SUPAB
     ?? (url.success && url.data === PUBLIC_SUPABASE_CONFIG.url ? PUBLIC_SUPABASE_CONFIG.publishableKey : '') });
   if (!config.success) throw new GameError('STATISTICS_NOT_CONNECTED', 'Account statistics are not configured for this project yet.');
   try {
-    const response = await fetch(`${config.data.url}/rest/v1/rpc/${detailed ? new URL(request.url).searchParams.get('version')==='5'?'usual_table_detailed_statistics_v5':new URL(request.url).searchParams.get('version')==='4'?'usual_table_detailed_statistics_v4':'usual_table_detailed_statistics_v3' : 'usual_table_account_statistics'}`, {
+    const response = await fetch(`${config.data.url}/rest/v1/rpc/${detailed ? new URL(request.url).searchParams.get('version')==='6'?'usual_table_detailed_statistics_v6':new URL(request.url).searchParams.get('version')==='5'?'usual_table_detailed_statistics_v5':new URL(request.url).searchParams.get('version')==='4'?'usual_table_detailed_statistics_v4':'usual_table_detailed_statistics_v3' : 'usual_table_account_statistics'}`, {
       method: 'POST', headers: { apikey: config.data.publishableKey, Authorization: request.headers.get('Authorization')!, 'Content-Type': 'application/json' },
       body: '{}', redirect: 'manual', cache: 'no-store', signal: AbortSignal.any([request.signal, AbortSignal.timeout(3000)]),
     });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { displayNameSchema, playerIconSchema } from './identity';
 import { gameIdSchema } from './games';
-import { gameStatisticsSchema, blackjackStatisticsSchema, crashStatisticsSchema, baccaratStatisticsSchema, rouletteStatisticsSchema } from './statistics';
+import { gameStatisticsSchema, blackjackStatisticsSchema, crashStatisticsSchema, baccaratStatisticsSchema, rouletteStatisticsSchema,kenoStatisticsSchema } from './statistics';
 
 export const PROFILE_ILLUSTRATIONS = ['fox','owl','panda','robot','cat','penguin','moon','club'] as const;
 export const PROFILE_CAPABILITY='usual-player-profiles-v1';
@@ -20,7 +20,7 @@ export const accountProfileSchema=z.object({contract:z.literal(1),accountId:z.st
   nickname:displayNameSchema.nullable(),appearance:appearanceSchema,visibility:profileVisibilitySchema}).strict();
 export const saveProfileSchema=profileDraftSchema.extend({version:z.number().int().nonnegative().safe()}).strict();
 export const publicStatisticsSchema=z.object({games:z.array(gameStatisticsSchema).max(8),blackjack:blackjackStatisticsSchema,
-  crash:crashStatisticsSchema.optional(),baccarat:baccaratStatisticsSchema.optional(),roulette:rouletteStatisticsSchema.optional()}).strict();
+  crash:crashStatisticsSchema.optional(),baccarat:baccaratStatisticsSchema.optional(),roulette:rouletteStatisticsSchema.optional(),keno:kenoStatisticsSchema.optional()}).strict();
 export const publicAchievementSchema=z.object({id:z.string().max(100),gameId:gameIdSchema,name:z.string().max(100),description:z.string().max(200),
   rewardUnits:z.number().int().nonnegative().safe(),target:z.number().int().positive(),progress:z.string().max(40).regex(/^(0|[1-9]\d*)$/),unlocked:z.boolean()}).strict();
 export const publicAccountProfileSchema=z.object({kind:z.literal('account'),appearance:appearanceSchema,version:z.number().int().nonnegative().safe(),

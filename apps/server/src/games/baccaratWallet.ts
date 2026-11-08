@@ -12,7 +12,8 @@ export function baccaratFunding(previous:BaccaratRoom,playerId:string,accountId:
   check(!fundedSeat(previous,playerId)&&!Object.values(previous.wallet?.seats??{}).some(s=>!terminal(s)&&s.accountId===accountId),'This seat already has a funding decision.');
   const room=structuredClone(previous);room.wallet??={schema:1,seats:{},outbox:[],retryAt:null,failures:0,error:null};
   check(Object.keys(room.wallet.seats).length<128,'This room has reached its funded-session limit.');
-  const seat:FundedSeat={sessionId,accountId,playerId,status:'funding',version:0,sequence:0,stackUnits:buyInUnits,lastRound:room.engine.roundId,leaveRequested:false};
+  // A seat funded during betting must still settle its first wager in the current round.
+  const seat:FundedSeat={sessionId,accountId,playerId,status:'funding',version:0,sequence:0,stackUnits:buyInUnits,lastRound:Math.max(0,room.engine.roundId-(room.engine.phase==='betting'?1:0)),leaveRequested:false};
   room.wallet.seats[sessionId]=seat;room.engine.players.find(p=>p.id===playerId)!.balanceUnits=0;
   queue(room,seat,{contract:1,operationId:crypto.randomUUID(),accountId,sessionId,kind:'allocate',gameId:'baccarat',roomId:room.id,funding:'account',amountUnits:buyInUnits},'pending_activation');
   queue(room,seat,{...operation(seat),kind:'activate'},'active');room.revision++;return room;
