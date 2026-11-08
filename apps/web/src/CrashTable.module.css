@@ -24,7 +24,7 @@
 .feedback:empty { display:none; }
 .feedback p { margin:3px 0; }
 .feedback button { border:1px solid var(--line); border-radius:5px; padding:7px; margin:3px; }
-.rules { width:min(540px,calc(100vw - 24px)); max-height:85dvh; overflow:auto; border:1px solid #7a714e; border-radius:14px; padding:22px; background:#18251f; color:#eeeee2; font-size:14px; line-height:1.65; }
+.rules { width:min(540px,calc(100vw - 24px)); max-height:85dvh; overflow:auto; border:1px solid var(--collection-border,#7a714e); border-radius:14px; padding:22px; background:var(--collection-panel,#18251f); color:#eeeee2; font-size:14px; line-height:1.65; }
 .rules::backdrop { background:#07140ecc; }
 .rules header { display:flex; justify-content:space-between; align-items:center; }
 .rules h2 { margin:0; font:26px Georgia,serif; }

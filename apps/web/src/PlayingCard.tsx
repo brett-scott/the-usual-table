@@ -40,7 +40,7 @@ export function PlayingCard({ card, cue, shoeRef, reducedMotion = false }: {
       <div ref={flipper} className={s.cardFlipper} style={{ transform: hidden ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
         <div className={`${s.cardBack} ${back === 'geometric' ? s.geometricBack : ''}`} aria-hidden="true"><span>{({traditional:'♣',geometric:'◇',moonphase:'☾',deco:'✦',botanical:'❧'})[back]}</span></div>
         {!hidden && <svg className={`${s.cardFace} ${card.suit === 'hearts' || card.suit === 'diamonds' ? s.red : ''}`} viewBox="0 0 76 106" aria-hidden="true">
-          <rect x=".5" y=".5" width="75" height="105" rx="6" fill="var(--card-paper)" stroke="#d8d2c3" />
+          <rect x=".5" y=".5" width="75" height="105" rx="6" fill="var(--card-paper, #faf7ed)" stroke="#d8d2c3" />
           {artwork==='letterpress'&&<rect x="3" y="3" width="70" height="100" rx="4" fill="none" stroke="#929178" strokeWidth=".8"/>}
           {face === 'large-index' ? <>
             <text x="6" y="32" fontSize={card.rank === '10' ? 30 : 34} fontWeight="800" fontFamily="Arial, sans-serif">{card.rank}</text><text x="9" y="55" fontSize="25">{suits[card.suit]}</text>
