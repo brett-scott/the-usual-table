@@ -3,6 +3,7 @@ import { gameIdSchema, type GameId } from './games';
 import type { ChatFeed, ChatMessage, ConnectionInfo, GuestSession } from './index';
 
 export const GAME_ADAPTER_CAPABILITY = 'usual-game-adapter-v1';
+export const BET_CANCELLATION_CAPABILITY = 'usual-bet-cancellation-v1';
 export interface GameEntryRules {capacity:number;minPlayers:number;guestStartingChips:number;minBuyInUnits:number;buyInStepUnits:number;accountFunding:'house'|'temporary-only'}
 export const BLACKJACK_TABLE_RULES={capacity:4,minPlayers:1,guestStartingChips:1000,minBuyInUnits:1000,buyInStepUnits:50,accountFunding:'house'} as const satisfies GameEntryRules;
 export const tableInfoSchema=z.object({roomId:z.string().regex(/^[a-f0-9]{32}$/),gameId:gameIdSchema,adapterVersion:z.number().int().min(1).max(1000),

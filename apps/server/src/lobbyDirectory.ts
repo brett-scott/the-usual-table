@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { publicLobbySchema, type PublicLobby } from '@casual/protocol';
+import { publicLobbySchema, type PublicLobby,type GameId } from '@casual/protocol';
 import type { Env } from './env';
 
 export const LOBBY_TTL_MS = 90_000;
@@ -21,6 +21,9 @@ export class LobbyDirectory extends DurableObject<Env> {
   list(): PublicLobby[] {
     return [...this.ctx.storage.sql.exec<{ report: string }>("SELECT report FROM lobbies WHERE expires > ? AND report IS NOT NULL AND json_extract(report, '$.players') < json_extract(report, '$.capacity') ORDER BY expires DESC, id LIMIT 50", Date.now())]
       .map(row => publicLobbySchema.parse(JSON.parse(row.report)));
+  }
+  count(gameId:GameId): number {
+    return this.ctx.storage.sql.exec<{ total:number }>("SELECT COUNT(*) AS total FROM lobbies WHERE expires > ? AND report IS NOT NULL AND json_extract(report, '$.gameId') = ? AND json_extract(report, '$.players') < json_extract(report, '$.capacity')",Date.now(),gameId).one().total;
   }
   async alarm() {
     this.ctx.storage.sql.exec('DELETE FROM lobbies WHERE expires <= ?', Date.now());

@@ -1,8 +1,8 @@
 import { profileMemberFields } from '../profileMembership';
 import { z } from 'zod';
 import { GameError } from '@casual/engine';
-import { newCrash,beginBetting,placeBet,cashOut,advanceCrash,nextCrashAlarm,validCrashState,crashStateSchema,CrashError,multiplierAt,targetTime,type CrashState } from '@casual/crash';
-import { CRASH_RULES,CRASH_PROGRESS_CAPABILITY,CRASH_PROGRESS_INTERVAL_MS,crashCommandSchema,type CrashSnapshot,type CrashAction } from '@casual/protocol';
+import { newCrash,beginBetting,placeBet,cancelBet,cashOut,advanceCrash,nextCrashAlarm,validCrashState,crashStateSchema,CrashError,multiplierAt,targetTime,type CrashState } from '@casual/crash';
+import { BET_CANCELLATION_CAPABILITY,CRASH_RULES,CRASH_PROGRESS_CAPABILITY,CRASH_PROGRESS_INTERVAL_MS,crashCommandSchema,type CrashSnapshot,type CrashAction } from '@casual/protocol';
 import { newMember,disconnectMember } from '../roomMembership';
 import { fundedSeat,roomWalletSchema,walletHasFunds } from '../tableWallet';
 import { crashFunding,crashWalletReady,recordCrashResult,sealCrashSeat,flushCrashWallet,validCrashWallet } from './crashWallet';
@@ -15,6 +15,7 @@ export function crashActions(room:CrashRoom,id:string):CrashAction['type'][] {
   const p=room.engine.players.find(p=>p.id===id);const m=room.members[id];if(!p||!m||m.leaveAfterRound)return[];
   const actions:CrashAction['type'][]=['Leave'];
   if(room.engine.phase==='waiting'&&room.managerId===id)actions.push('StartBetting');
+  if (room.engine.phase === 'betting' && p.betUnits > 0) actions.push('CancelBet');
   if(crashWalletReady(room,id)){
     if(room.engine.phase==='betting'&&!p.betUnits&&p.balanceUnits>=1000)actions.push('PlaceBet');
     if(room.engine.phase==='running'&&p.betUnits>0&&p.cashedOutCents===null)actions.push('CashOut');
@@ -30,10 +31,12 @@ export function crashSnapshot(room:CrashRoom,id:string,context?:SnapshotContext)
     const multiplierCents=Math.min(multiplierAt(e.startedAt!,context.now),Math.max(100,e.outcome!.multiplierCents-1));
     progress={multiplierCents,elapsedMs:targetTime(0,multiplierCents),sampledAt:context.now};
   }
+  const actions = crashActions(room, id);
+  const legalActions = context?.capabilities.includes(BET_CANCELLATION_CAPABILITY) ? actions : actions.filter(action => action !== 'CancelBet');
   return{gameId:'crash',roomId:room.id,you:id,revision:room.revision,claimVersion:room.members[id]!.claimVersion,managerId:room.managerId,roundId:e.roundId,phase:e.phase,
     bettingDeadline:e.phase==='betting'?e.deadline:null,startedAt:e.startedAt,resultsDeadline:e.phase==='results'?e.deadline:null,
     outcome:e.phase==='results'?e.outcome:null,history:e.history,...(context?.capabilities.includes(CRASH_PROGRESS_CAPABILITY)?{progress}:{}),players:e.players.map(p=>({...p,connected:room.members[p.id]!.connected,leaving:room.members[p.id]!.leaveAfterRound})),
-    legalActions:crashActions(room,id),...(seat?{wallet:{status:seat.status,error:room.wallet?.error??null}}:{})};
+    legalActions,...(seat?{wallet:{status:seat.status,error:room.wallet?.error??null}}:{})};
 }
 export function collectCrashSeats(room:CrashRoom,now:number){
   let changed=false;
@@ -43,7 +46,7 @@ export function collectCrashSeats(room:CrashRoom,now:number){
     if(!m.connected&&m.reservationDeadline!==null&&now>=m.reservationDeadline){m.reservationDeadline=null;m.leaveAfterRound=true;changed=true;}
     const committed=p.betUnits>0&&(room.engine.phase==='betting'||room.engine.phase==='running');
     if(m.leaveAfterRound&&!committed&&sealCrashSeat(room,p.id)){
-      room.engine.players=room.engine.players.filter(other=>other.id!==p.id);delete room.members[p.id];delete room.commandRates[p.id];room.tickets=room.tickets.filter(t=>t.playerId!==p.id);changed=true;
+      room.engine.players=room.engine.players.filter(other=>other.id!==p.id);if(room.engine.cashoutMethods)delete room.engine.cashoutMethods[p.id];delete room.members[p.id];delete room.commandRates[p.id];room.tickets=room.tickets.filter(t=>t.playerId!==p.id);changed=true;
     }
   }
   if(!room.members[room.managerId]?.connected||room.members[room.managerId]?.leaveAfterRound){
@@ -87,6 +90,7 @@ export const crashRoomAdapter:GameRoomAdapter<CrashRoom>={
     try{switch(action.type){
       case 'StartBetting':beginBetting(room.engine,now);break;
       case 'PlaceBet':placeBet(room.engine,p,action.amountUnits,action.autoCashoutCents,now);break;
+      case 'CancelBet': cancelBet(room.engine, p, now); break;
       case 'CashOut':cashOut(room.engine,p,now);break;
       case 'Refill':p.balanceUnits=CRASH_RULES.guestStartingChips*100;break;
       case 'Leave':{const m=room.members[playerId]!;m.connected=false;m.leaveAfterRound=true;m.presenceDeadline=null;m.reservationDeadline=null;break;}
@@ -102,7 +106,7 @@ export const crashRoomAdapter:GameRoomAdapter<CrashRoom>={
     if(resultsOver){
       collectCrashSeats(room,now);
       if(Object.values(room.members).some(m=>m.connected&&!m.leaveAfterRound))beginBetting(room.engine,now);
-      else{room.engine.phase='waiting';room.engine.deadline=null;room.engine.startedAt=null;room.engine.outcome=null;for(const p of room.engine.players){p.betUnits=0;p.autoCashoutCents=null;p.cashedOutCents=null;p.returnedUnits=0;}}
+      else{room.engine.cashoutMethods={};room.engine.phase='waiting';room.engine.deadline=null;room.engine.startedAt=null;room.engine.outcome=null;for(const p of room.engine.players){p.betUnits=0;p.autoCashoutCents=null;p.cashedOutCents=null;p.returnedUnits=0;}}
     }
     room.revision++;room.lastActivity=now;return room;
   },collectSeats:collectCrashSeats,

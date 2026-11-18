@@ -121,10 +121,7 @@ export function AccountControls({ beforeSignIn, signedInOnly = false, compact = 
       }
     }}>
       <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf(); }}>View profile</button>
-      <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('edit'); }}>Edit profile</button>
       <button role="menuitem" onClick={() => { closeMenu(); collection.open(); }}>Your collection</button>
-      <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('statistics'); }}>Statistics</button>
-      <button role="menuitem" onClick={() => { closeMenu(); profiles?.openSelf('achievements'); }}>Progress & achievements</button>
       <button role="menuitem" disabled={state.working || state.savingNickname} onClick={() => { closeMenu(); void auth.signOut(); }}>Sign out</button>
       <div className={s.wallet} role="group" aria-label="Account wallet" aria-live="polite">
         <span>Wallet balance</span>

@@ -76,7 +76,7 @@ test('desktop table, controls and chat fit laptop screens with four players', as
       if (snapshot.phase === 'BETTING') expect(snapshot.players.find(player => player.id === snapshot.you)?.ready).toBe(true);
     }
     expect(latest.get(page)!.phase).not.toBe('BETTING');
-    await expect(page.getByRole('button', { name: /^Ready/ })).toHaveCount(0); await fit();
+    await expect(page.getByRole('button', { name: /^(Ready|Cancel ready)/ })).toHaveCount(0); await fit();
     for (const view of pages) {
       if (latest.get(view)!.legalActions.includes('InsuranceDecision')) await click(view, 'No insurance');
     }

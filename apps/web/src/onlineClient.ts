@@ -1,4 +1,4 @@
-import {legacyAppearance} from '@casual/protocol';
+import {legacyAppearance,lobbyCountsSchema,GAME_CATALOG} from '@casual/protocol';
 import { CHAT_CAPABILITY,GAME_ADAPTER_CAPABILITY,gameServerEventSchema,tableInfoSchema,tableSessionResponseSchema, chatTextSchema, lobbyListSchema, sessionResponseSchema, snapshotSchema, type GameId,type GameClientAdapter,type TableClient,type TableSessionResponse,type LobbyVisibility, type PlayerIcon, type ChatFeed, type ConnectionInfo, type GameClient, type GuestSession, type SessionResponse } from '@casual/protocol';
 import { browserAuth } from './authClient';
 import { roomProfileSchema,appearanceSchema } from '@casual/protocol';
@@ -59,6 +59,13 @@ export async function listLobbies(signal?: AbortSignal,gameId:GameId='blackjack'
   if (!response.ok) throw new Error(response.status === 429 ? 'Please wait a moment before refreshing tables.' : 'The table browser is unavailable. Try again shortly.');
   const parsed=lobbyListSchema.parse(await response.json());if(parsed.gameId!==gameId||parsed.lobbies.some(lobby=>lobby.gameId!==gameId))throw new Error('The table browser returned a different game.');
   return parsed.lobbies;
+}
+export async function listLobbyCounts(signal:AbortSignal):Promise<Partial<Record<GameId,number>>>{
+  const response=await fetch(`${apiBase}/api/v1/games/lobby-counts`,{signal:AbortSignal.any([signal,AbortSignal.timeout(8000)]),cache:'no-store'});
+  if(!response.ok)throw new Error('Table counts unavailable');
+  const {counts}=lobbyCountsSchema.parse(await response.json());
+  if(GAME_CATALOG.some(game=>game.status==='available'&&!counts.some(item=>item.gameId===game.id)))throw new Error('Incomplete table counts');
+  return Object.fromEntries(counts.map(item=>[item.gameId,item.count]));
 }
 export async function tableInfo(invite:string,signal?:AbortSignal){const info=tableInfoSchema.parse(await request(`/${invite}/info`,{method:'GET',signal}));if(info.roomId!==invite)throw new ApiError('CLIENT_INCOMPATIBLE','This invitation returned another table.');return info;}
 function parseGameSession<S,A>(value:unknown,adapter:GameClientAdapter<S,A>):TableSessionResponse<S>{

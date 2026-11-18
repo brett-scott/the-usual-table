@@ -1,5 +1,5 @@
 import { expect,test } from '@playwright/test';
-import { accountId,providerFixture } from './authFixture';
+import { accountId,openOwnProfile,providerFixture } from './authFixture';
 const initial={contract:1,currency:'virtual-chips',unitsPerChip:100,accountId,status:'active',version:1,availableUnits:123456,atTablesUnits:0,pendingReturnUnits:0};
 async function signIn(page:import('@playwright/test').Page){await page.goto('./#/games');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Continue with Google'}).click();await expect(page.getByRole('button',{name:'Account menu for Reward player'})).toBeVisible();}
 test('daily allowance claims once, updates the wallet, and recovers a lost response without double credit',async({page},info)=>{
@@ -24,7 +24,7 @@ test('daily allowance claims once, updates the wallet, and recovers a lost respo
 test('level and game achievements show earned rewards, claim once and stay private to accounts',async({page},info)=>{
   await providerFixture(page,'google','success','Reward player');let claimed=false;let grants=0;
   await page.route('**/api/v1/account/wallet',route=>route.fulfill({json:{...initial,availableUnits:initial.availableUnits+(claimed?110000:0)}}));
-  await page.route('**/api/v1/account/progression',async route=>{
+  await page.route('**/api/v1/account/progression*',async route=>{
     let amount=0;if(route.request().method()==='POST'){expect(route.request().postData()).toBeNull();if(!claimed){claimed=true;grants++;amount=110000;}}
     await route.fulfill({json:{contract:1,accountId,policy:'progress-v1',startsAt:Date.now()-10000,xpPerRound:10,xp:'100',level:2,levelStartXp:'100',nextLevelXp:'300',
       levelRewardUnits:100000,claimedLevel:claimed?2:1,readyRewardUnits:claimed?'0':'110000',claimedUnits:amount,wallet:{...initial,availableUnits:initial.availableUnits+(claimed?110000:0)},
@@ -32,8 +32,8 @@ test('level and game achievements show earned rewards, claim once and stay priva
         {id:'blackjack:first-round',gameId:'blackjack',name:'First Round',description:'Complete a saved-chip Blackjack round.',rewardUnits:10000,target:1,progress:'10',unlocked:true,claimed},
         {id:'blackjack:first-win',gameId:'blackjack',name:'First Win',description:'Win a saved-chip round.',rewardUnits:10000,target:1,progress:'1',unlocked:true,claimed:true}]}});
   });
-  await signIn(page);const menu=page.getByRole('button',{name:'Account menu for Reward player'});await menu.click();await page.getByRole('menuitem',{name:'Progress & achievements',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Player profile',exact:true});await expect(dialog).toContainText('Level 2');
+  await signIn(page);const menu=page.getByRole('button',{name:'Account menu for Reward player'});
+  const dialog=await openOwnProfile(page, 'Achievements');await expect(dialog).toContainText('Level 2');
   await expect(dialog.getByRole('list',{name:'Blackjack achievements'})).toContainText('First Round');
   const achievements=dialog.getByRole('list',{name:'Blackjack achievements'}),hideCompleted=dialog.getByRole('checkbox',{name:'Hide completed achievements',exact:true});
   await expect(achievements.locator('li b')).toHaveText(['First Round','First Win','25 Rounds']);

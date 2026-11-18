@@ -1,5 +1,5 @@
 import { expect,type Page,type WebSocketRoute } from '@playwright/test';
-import { CRASH_RULES,CRASH_PROGRESS_CAPABILITY,type WalletSummary } from '@casual/protocol';
+import { BET_CANCELLATION_CAPABILITY,CRASH_RULES,CRASH_PROGRESS_CAPABILITY,type WalletSummary } from '@casual/protocol';
 import { crashRoomAdapter,crashSnapshot,type CrashRoom } from '../../apps/server/src/games/crash';
 import { newMember } from '../../apps/server/src/roomMembership';
 import { accountId,providerFixture } from './authFixture';
@@ -15,7 +15,7 @@ export async function crashFixture(page:Page,{saved=false,players=1}:{saved?:boo
   for(const m of Object.values(room.members)){m.connected=true;m.controllerId='controller';m.presenceDeadline=time+3600000;m.reservationDeadline=null;}
   const wallet=():WalletSummary=>({contract:1,currency:'virtual-chips',unitsPerChip:100,accountId,status:'active',version:room.revision+1,availableUnits:available,
     atTablesUnits:created?room.engine.players[0]!.balanceUnits+(['betting','running'].includes(room.engine.phase)?room.engine.players[0]!.betUnits-room.engine.players[0]!.returnedUnits:0):0,pendingReturnUnits:0});
-  function snapshot(){const value=crashSnapshot(room,playerId,{now:time,capabilities:[CRASH_PROGRESS_CAPABILITY]});if(saved){value.wallet={status:'active',error:null};value.legalActions=value.legalActions.filter(a=>a!=='Refill');}return value;}
+  function snapshot(){const value=crashSnapshot(room,playerId,{now:time,capabilities:[CRASH_PROGRESS_CAPABILITY,BET_CANCELLATION_CAPABILITY]});if(saved){value.wallet={status:'active',error:null};value.legalActions=value.legalActions.filter(a=>a!=='Refill');}return value;}
   const session={inviteId:roomId,playerId,credential:'d'.repeat(64),...(saved?{funding:'account' as const}:{})};
   function broadcast(){if(holdingUpdates)return;for(const socket of sockets)socket.send(JSON.stringify({type:'game-snapshot',protocol:1,gameId:'crash',adapterVersion:1,snapshot:snapshot(),serverTime:time}));}
   await page.route('**/api/v1/account/wallet',route=>route.fulfill({json:wallet()}));

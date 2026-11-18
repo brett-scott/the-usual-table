@@ -1,8 +1,14 @@
 import { expect,it } from 'vitest';
-import { newCrash,beginBetting,placeBet,cashOut,advanceCrash,drawOutcome,multiplierAt,targetTime,nextCrashAlarm,validCrashState,crashStateSchema,type CrashState } from './index';
+import { newCrash,beginBetting,placeBet,cancelBet,cashOut,advanceCrash,drawOutcome,multiplierAt,targetTime,nextCrashAlarm,validCrashState,crashStateSchema,type CrashState } from './index';
 
 const randomFor=(cents:number)=>()=>Math.floor(1_000_000_000-97_000_000_000/cents);
 function betting():CrashState{const state=newCrash();state.players.push({id:'one',name:'One',seat:0,balanceUnits:100000,betUnits:0,autoCashoutCents:null,cashedOutCents:null,returnedUnits:0});beginBetting(state,1000);return state;}
+it('records the actual cash-out method independently of a configured automatic target',()=>{
+ let manual=betting();placeBet(manual,manual.players[0]!,1000,500,1001);manual=advanceCrash(manual,11000,randomFor(1000));cashOut(manual,manual.players[0]!,targetTime(11000,200));expect(manual.cashoutMethods).toEqual({one:'manual'});expect(validCrashState(crashStateSchema.parse(manual))).toBe(true);
+ let automatic=betting();placeBet(automatic,automatic.players[0]!,1000,200,1001);automatic=advanceCrash(automatic,targetTime(11000,200),randomFor(1000));expect(automatic.cashoutMethods).toEqual({one:'automatic'});
+ let ceiling=betting();placeBet(ceiling,ceiling.players[0]!,1000,null,1001);ceiling=advanceCrash(ceiling,targetTime(11000,10000),()=>999999999);expect(ceiling.cashoutMethods).toEqual({one:'ceiling'});expect(validCrashState(ceiling)).toBe(true);
+ const legacy=structuredClone(manual);delete legacy.cashoutMethods;expect(validCrashState(crashStateSchema.parse(legacy))).toBe(true);beginBetting(ceiling,ceiling.deadline!);expect(ceiling.cashoutMethods).toEqual({});
+});
 it('uses the approved exponential pacing and exact integer deadlines',()=>{
   expect(targetTime(0,200)).toBe(6932);expect(targetTime(0,1000)).toBe(23026);
   for(const target of [101,150,200,500,1000,9999,10000]){const at=targetTime(900,target);expect(multiplierAt(900,at)).toBeGreaterThanOrEqual(target);expect(multiplierAt(900,at-1)).toBeLessThan(target);}
@@ -18,6 +24,12 @@ it('samples a 3% immediate-crash tail and approximately 97% returns at fixed cas
 it('keeps one exact wager, rejects late/invalid/insufficient bets and pauses an empty window',()=>{
   const e=betting();placeBet(e,e.players[0]!,1000,150,1001);expect(e.players[0]!.balanceUnits).toBe(99000);
   expect(()=>placeBet(e,e.players[0]!,1000,null,1002)).toThrow('locked');
+  expect(()=>cancelBet(e,e.players[0]!,11000)).toThrow('closed');
+  expect(e.players[0]).toMatchObject({balanceUnits:99000,betUnits:1000,autoCashoutCents:150});
+  cancelBet(e,e.players[0]!,10999);
+  expect(()=>cancelBet(e,e.players[0]!,10999)).toThrow('no wager');
+  expect(e.players[0]).toMatchObject({balanceUnits:100000,betUnits:0,autoCashoutCents:null});
+  expect(advanceCrash(e,11000,randomFor(200)).phase).toBe('waiting');
   const empty=betting();expect(()=>placeBet(empty,empty.players[0]!,1000,null,11000)).toThrow('closed');
   expect(()=>placeBet(empty,empty.players[0]!,1050,null,1001)).toThrow();
   empty.players[0]!.balanceUnits=500;expect(()=>placeBet(empty,empty.players[0]!,1000,null,1001)).toThrow('enough');

@@ -1,6 +1,6 @@
 import { SELF,evictDurableObject,runInDurableObject,runDurableObjectAlarm } from 'cloudflare:test';
 import { expect,it } from 'vitest';
-import { GAME_ADAPTER_CAPABILITY,CRASH_PROGRESS_CAPABILITY,CRASH_PROGRESS_INTERVAL_MS,crashSnapshotSchema,type CrashAction,type CrashSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
+import { BET_CANCELLATION_CAPABILITY,GAME_ADAPTER_CAPABILITY,CRASH_PROGRESS_CAPABILITY,CRASH_PROGRESS_INTERVAL_MS,crashSnapshotSchema,type CrashAction,type CrashSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
 import { targetTime } from '@casual/crash';
 import { crashRoomAdapter,crashSnapshot,restoreCrashRoom,type CrashRoom } from '../src/games/crash';
 import { bindings,http,origin } from './helpers';
@@ -9,7 +9,7 @@ async function create(visibility='private'){
   const result=await SELF.fetch('https://example.test/api/v1/games/crash/rooms',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'Pilot',visibility})});
   expect(result.status).toBe(201);return result.json<TableSessionResponse<CrashSnapshot>>();
 }
-async function view(session:GuestSession,confirmed=false){const response=await http(`/${session.inviteId}/snapshot${confirmed?`?capabilities=${CRASH_PROGRESS_CAPABILITY}`:''}`,session,undefined,'GET');expect(response.status).toBe(200);return(await response.json<{snapshot:CrashSnapshot}>()).snapshot;}
+async function view(session:GuestSession,confirmed=false){const response=await http(`/${session.inviteId}/snapshot${confirmed?`?capabilities=${CRASH_PROGRESS_CAPABILITY},${BET_CANCELLATION_CAPABILITY}`:''}`,session,undefined,'GET');expect(response.status).toBe(200);return(await response.json<{snapshot:CrashSnapshot}>()).snapshot;}
 async function edit(invite:string,change:(r:CrashRoom)=>void){return runInDurableObject(bindings.ROOMS.getByName(invite),async(_instance,state)=>{const room=(await state.storage.get<CrashRoom>('room'))!;change(room);await state.storage.put('room',room);});}
 async function connect(session:GuestSession){
   const initial=await view(session);const ticket=await http(`/${session.inviteId}/ticket`,session,{claimId:crypto.randomUUID(),claimVersion:initial.claimVersion});
@@ -46,7 +46,21 @@ it('keeps outcomes private, deduplicates wagers and cash-outs, and enforces host
     expect(await a.send({type:'PlaceBet',amountUnits:1000,autoCashoutCents:null},{id})).toMatchObject({type:'ack'});
     expect((await view(session)).players[0]!.balanceUnits).toBe(99000);
     expect(await a.send({type:'PlaceBet',amountUnits:1000,autoCashoutCents:null},{playerId:joined.session.playerId})).toMatchObject({type:'error',code:'SESSION_INVALID'});
+    const open = await view(session,true);
+    expect(open.legalActions).toContain('CancelBet');
+    expect((await view(session)).legalActions).not.toContain('CancelBet');
+    const cancelId=crypto.randomUUID();
+    expect(await a.send({type:'CancelBet'},{id:cancelId})).toMatchObject({type:'ack'});
+    expect(await a.send({type:'CancelBet'},{id:cancelId})).toMatchObject({type:'ack'});
+    expect(await b.send({type:'CancelBet'},{playerId:session.playerId})).toMatchObject({type:'error',code:'SESSION_INVALID'});
+    const cancelled=await view(session,true);
+    expect(cancelled.bettingDeadline).toBe(open.bettingDeadline);
+    expect(cancelled.players[0]).toMatchObject({balanceUnits:100000,betUnits:0,autoCashoutCents:null});
+    expect(await a.send({type:'PlaceBet',amountUnits:2000,autoCashoutCents:300})).toMatchObject({type:'ack'});
+    expect(await a.send({type:'CancelBet'},{id:cancelId})).toMatchObject({type:'ack'});
+    expect((await view(session)).players[0]).toMatchObject({balanceUnits:98000,betUnits:2000,autoCashoutCents:300});
     await edit(session.inviteId,r=>{r.engine.phase='running';r.engine.startedAt=Date.now();r.engine.outcome={multiplierCents:1000,capped:false};r.engine.deadline=targetTime(r.engine.startedAt,1000);});
+    expect(await a.send({type:'CancelBet'})).toMatchObject({type:'error',code:'INVALID_ACTION'});
     const running=await view(session);expect(running.outcome).toBeNull();expect(running).not.toHaveProperty('deadline');expect(running).not.toHaveProperty('engine');
     const cashId=crypto.randomUUID();expect(await a.send({type:'CashOut'},{id:cashId})).toMatchObject({type:'ack'});const balance=(await view(session)).players[0]!.balanceUnits;
     expect(await a.send({type:'CashOut'},{id:cashId})).toMatchObject({type:'ack'});expect((await view(session)).players[0]!.balanceUnits).toBe(balance);

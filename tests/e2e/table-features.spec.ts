@@ -78,8 +78,20 @@ test('guests see ready and waiting states, shared results and the host skipping 
     await expect(host.getByText('✓ Ready · 100 chips', { exact: true }).filter({ visible: true })).toHaveCount(1);
     if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
     await page.screenshot({ path: testInfo.outputPath('ready-and-waiting.png'), fullPage: true });
+    const cancel = page.getByRole('button', { name: 'Cancel ready', exact: true });
+    const mainBet = page.getByRole('button', { name: 'Bet on Blackjack', exact: true });
+    const originalDeadline = latest.get(page)!.room!.bettingDeadline;
+    await expect(mainBet).toBeDisabled();
+    await cancel.click();
+    await sharedState(snapshot => !snapshot.players[0]!.ready && snapshot.room!.bettingDeadline === originalDeadline);
+    await expect(host.getByText('◷ Place your bet', { exact: true }).filter({ visible: true })).toHaveCount(1);
+    await expect(mainBet).toHaveAttribute('data-amount', '200');
+    await mainBet.click();
+    await page.getByRole('button', { name: 'Ready', exact: true }).click();
+    await sharedState(snapshot => snapshot.players[0]!.ready === true && snapshot.players[0]!.bet === 400);
     await guest.getByRole('button', { name: /^Ready/ }).click();
     let state = await sharedState(snapshot => snapshot.phase !== 'BETTING');
+    await expect(cancel).toHaveCount(0);
     if (state.phase === 'INSURANCE') for (const peer of [page, guest]) {
       const revision = state.revision; const decidingPlayer = latest.get(peer)!.you;
       await peer.getByRole('button', { name: 'No insurance' }).click();

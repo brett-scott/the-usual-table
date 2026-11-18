@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { CRASH_BETTING_MS,CRASH_RESULTS_MS,CRASH_GROWTH_MS,CRASH_MAX_MULTIPLIER,MAX_WALLET_UNITS,
   crashBetSchema,crashTargetSchema,crashPlayerSchema,crashOutcomeSchema,crashHistorySchema } from '@casual/protocol';
 
-export const crashStateSchema=z.object({phase:z.enum(['waiting','betting','running','results']),roundId:z.number().int().nonnegative().safe(),
+export const crashStateSchema=z.object({cashoutMethods:z.record(z.string(),z.enum(['manual','automatic','ceiling'])).optional(),phase:z.enum(['waiting','betting','running','results']),roundId:z.number().int().nonnegative().safe(),
   deadline:z.number().int().nonnegative().safe().nullable(),startedAt:z.number().int().nonnegative().safe().nullable(),outcome:crashOutcomeSchema.nullable(),
   players:z.array(crashPlayerSchema).max(8),history:crashHistorySchema}).strict();
 export type CrashState=z.infer<typeof crashStateSchema>;
@@ -23,7 +23,7 @@ export function drawOutcome(random:CrashRandom){
 }
 export function beginBetting(state:CrashState,now:number){
   requireRule(state.phase==='waiting'||state.phase==='results','A round is already in progress.');
-  state.phase='betting';state.roundId++;state.deadline=now+CRASH_BETTING_MS;state.startedAt=null;state.outcome=null;
+  state.cashoutMethods={};state.phase='betting';state.roundId++;state.deadline=now+CRASH_BETTING_MS;state.startedAt=null;state.outcome=null;
   for(const p of state.players){p.betUnits=0;p.autoCashoutCents=null;p.cashedOutCents=null;p.returnedUnits=0;}
 }
 export function placeBet(state:CrashState,player:CrashPlayer,amountUnits:number,autoCashoutCents:number|null,now:number){
@@ -34,13 +34,21 @@ export function placeBet(state:CrashState,player:CrashPlayer,amountUnits:number,
   requireRule(player.balanceUnits+amountUnits*99<=MAX_WALLET_UNITS,'This wager could exceed the table balance limit.');
   player.betUnits=amountUnits;player.autoCashoutCents=autoCashoutCents;player.balanceUnits-=amountUnits;
 }
-function pay(player:CrashPlayer,cents:number){
+export function cancelBet(state:CrashState, player:CrashPlayer, now:number) {
+  requireRule(state.phase === 'betting' && state.deadline !== null && now < state.deadline, 'Betting has closed.');
+  requireRule(player.betUnits > 0, 'You have no wager to cancel.');
+  player.balanceUnits += player.betUnits;
+  player.betUnits = 0;
+  player.autoCashoutCents = null;
+}
+function pay(state:CrashState,player:CrashPlayer,cents:number,method:'manual'|'automatic'|'ceiling'){
+  state.cashoutMethods??={};state.cashoutMethods[player.id]=method;
   player.cashedOutCents=cents;player.returnedUnits=Math.floor(player.betUnits*cents/100);player.balanceUnits+=player.returnedUnits;
 }
 export function cashOut(state:CrashState,player:CrashPlayer,now:number){
   requireRule(state.phase==='running'&&state.startedAt!==null&&state.deadline!==null&&now<state.deadline,'The round has crashed.');
   requireRule(player.betUnits>0&&player.cashedOutCents===null,'You have no live wager to cash out.');
-  pay(player,multiplierAt(state.startedAt,now));
+  pay(state,player,multiplierAt(state.startedAt,now),'manual');
 }
 /** Advance one phase at a time so the host durably records results before opening another round. */
 export function advanceCrash(previous:CrashState,now:number,random:CrashRandom):CrashState{
@@ -53,10 +61,10 @@ export function advanceCrash(previous:CrashState,now:number,random:CrashRandom):
     const outcome=state.outcome!;const started=state.startedAt!;
     for(const p of state.players){
       const target=p.autoCashoutCents;
-      if(p.betUnits>0&&p.cashedOutCents===null&&target!==null&&(target<outcome.multiplierCents||outcome.capped&&target===CRASH_MAX_MULTIPLIER)&&now>=targetTime(started,target))pay(p,target);
+      if(p.betUnits>0&&p.cashedOutCents===null&&target!==null&&(target<outcome.multiplierCents||outcome.capped&&target===CRASH_MAX_MULTIPLIER)&&now>=targetTime(started,target))pay(state,p,target,'automatic');
     }
     if(now>=state.deadline!){
-      if(outcome.capped)for(const p of state.players)if(p.betUnits>0&&p.cashedOutCents===null)pay(p,CRASH_MAX_MULTIPLIER);
+      if(outcome.capped)for(const p of state.players)if(p.betUnits>0&&p.cashedOutCents===null)pay(state,p,CRASH_MAX_MULTIPLIER,'ceiling');
       state.phase='results';state.deadline=state.deadline!+CRASH_RESULTS_MS;
       state.history=[{roundId:state.roundId,...outcome},...state.history].slice(0,10);
     }
@@ -79,6 +87,7 @@ export function validCrashState(state:CrashState){
   if(state.phase==='results'&&(!state.history[0]||state.history[0].roundId!==state.roundId||state.history[0].multiplierCents!==state.outcome!.multiplierCents||state.history[0].capped!==state.outcome!.capped))return false;
   if(state.phase==='running'&&!state.players.some(p=>p.betUnits>0))return false;
   if(state.outcome&&state.deadline!==targetTime(state.startedAt!,state.outcome.multiplierCents)+(state.phase==='results'?CRASH_RESULTS_MS:0))return false;
+  for(const [id,method] of Object.entries(state.cashoutMethods??{})){const p=state.players.find(p=>p.id===id);if(!p||p.cashedOutCents===null||method==='automatic'&&p.autoCashoutCents!==p.cashedOutCents||method==='ceiling'&&(!state.outcome?.capped||p.cashedOutCents!==CRASH_MAX_MULTIPLIER))return false;}
   for(const p of state.players){
     if(state.phase==='waiting'&&p.betUnits!==0)return false;
     if(p.betUnits!==0&&!crashBetSchema.safeParse(p.betUnits).success)return false;

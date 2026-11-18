@@ -1,5 +1,5 @@
 import { useEffect,useMemo,useRef,useState,useSyncExternalStore,type CSSProperties } from 'react';
-import { ROULETTE_BETS,rouletteBet,rouletteColor,rouletteWagerUnits,type RouletteAction,type RouletteSnapshot,type RouletteWager,type TableClient,type TableInfo } from '@casual/protocol';
+import { ROULETTE_BETS,ROULETTE_SPIN_MS,rouletteBet,rouletteColor,rouletteWagerUnits,type RouletteAction,type RouletteSnapshot,type RouletteWager,type TableClient,type TableInfo } from '@casual/protocol';
 import { rouletteClientAdapter } from './gameClientAdapters';
 import { RouletteBettingController,type RouletteChip } from './rouletteBettingController';
 import { BaccaratChipTray as ChipTray } from './BaccaratBetting';
@@ -23,9 +23,11 @@ export function RouletteTable({client,onLeave}:{client:TableClient<RouletteSnaps
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[landedRound,setLandedRound]=useState<number|null>(null),[releasedRound,setReleasedRound]=useState<number|null>(null);const flight=useRef(false),options=useRef<HTMLDialogElement>(null);
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),100);const small=window.matchMedia('(max-height:500px) and (min-width:641px)'),motion=window.matchMedia('(prefers-reduced-motion: reduce)');const change=()=>{setLandscape(small.matches);setReduced(motion.matches);};small.addEventListener('change',change);motion.addEventListener('change',change);return()=>{clearInterval(timer);small.removeEventListener('change',change);motion.removeEventListener('change',change);};},[]);
  const own=state.players.find(p=>p.id===state.you)!,connected=connection.status==='connected',result=state.phase==='results',betting=state.phase==='betting';
- const holdingResult=result&&landedRound===state.roundId&&releasedRound!==state.roundId;
+ const landed = result && landedRound === state.roundId;
+ const holdingResult = landed && releasedRound !== state.roundId;
+ const wheelFocus = state.phase === 'spinning' || (result && releasedRound !== state.roundId);
  useEffect(()=>{if(!result||landedRound!==state.roundId)return;const timer=setTimeout(()=>setReleasedRound(state.roundId),3000);return()=>clearTimeout(timer);},[result,landedRound,state.roundId]);
- const deadline=state.bettingDeadline??state.resultsDeadline??(state.startedAt===null?null:state.startedAt+8000),seconds=deadline===null?null:Math.max(0,Math.ceil((deadline-now-(connection.clockOffsetMs??0))/1000));
+ const deadline=state.bettingDeadline??state.resultsDeadline??(state.startedAt===null?null:state.startedAt+ROULETTE_SPIN_MS),seconds=deadline===null?null:Math.max(0,Math.ceil((deadline-now-(connection.clockOffsetMs??0))/1000));
  const can=(type:RouletteAction['type'])=>connected&&!busy&&state.legalActions.includes(type),enabled=can('PlaceBet')&&seconds!==0;
  const wager=bets.wager,total=rouletteWagerUnits(wager),confirmed=rouletteWagerUnits(own.wager),available=own.balanceUnits+confirmed-(betting?total:confirmed),net=own.returnedUnits-confirmed;
  async function send(action:RouletteAction){if(flight.current)return;flight.current=true;setBusy(true);setError('');try{await client.send(action);if(action.type==='Leave')onLeave(true);}catch(problem){setError(problem instanceof Error?problem.message:'Your action could not be completed.');}finally{flight.current=false;setBusy(false);}}
@@ -34,15 +36,25 @@ export function RouletteTable({client,onLeave}:{client:TableClient<RouletteSnaps
  function tile(id:string,number?:number,position?:CSSProperties,covered?:boolean){const rule=rouletteBet(id)!;const amount=wager.find(b=>b.betId===id)?.amountUnits??0;const wins=result&&rule.numbers.includes(state.winner!);return <button key={id} className={s.bet} data-bet-tile={id} data-color={number===undefined?id==='red'?'red':id==='black'?'black':undefined:rouletteColor(number)} data-selected={amount>0} data-winning={wins} data-amount={amount} data-number={number} data-covered={covered} style={position??(number!==undefined?{'--number-column':Math.floor((number-1)/3)+2,'--number-row':3-((number-1)%3)} as CSSProperties:id.startsWith('column-')?{'--number-column':14,'--number-row':4-Number(id.at(-1))} as CSSProperties:undefined)} disabled={!enabled} aria-label={`Bet on ${rule.kind==='straight'?`number ${rule.label}`:rule.kind==='outside'?rule.label:`${groupLabels[rule.kind]} ${rule.label}`}`} aria-description={`${chips(amount)} chips. Pays ${rule.profit}:1 profit. ${enabled?`Tap to add ${chip} chips.`:'Betting is closed.'}`} onClick={()=>controller.add(id,chip)}>
    <span>{rule.kind==='six-line'?`${rule.numbers[0]}–${rule.numbers.at(-1)}`:rule.label}</span>{rule.kind!=='straight'&&<small>{rule.profit}:1</small>}{amount>0&&<span className={s.stake}><WagerChips amount={amount/50} returned={wins?amount*(rule.profit+1)/50:0} settled={result} reducedMotion={reduced} compact/><strong>{chips(amount)}</strong></span>}
   </button>;}
- const summary=result&&confirmed?`${net>0?'Won':net<0?'Lost':'Even'} · ${net>0?'+':''}${chips(net)} chips`:state.phase==='spinning'?'No more bets · The ball is spinning':betting?bets.pending?'Placing chips…':seconds===0?'Bets closed · Waiting for the spin':bets.notice||`Select a chip, then tap a bet. ${total?`${chips(total)} chips placed.`:''}`:state.managerId===own.id?'Start rounds when you are ready.':'Waiting for the host.';
- return <div data-game-table="roulette" className={s.app} data-phase={state.phase} data-result-hold={holdingResult} data-wheel-focus={state.phase==='spinning'||result&&releasedRound!==state.roundId} data-connection={connection.status} data-revision={state.revision}>
+ const summary=result
+   ? landed && confirmed ? `${net>0?'Won':net<0?'Lost':'Even'} · ${net>0?'+':''}${chips(net)} chips` : ''
+   : state.phase==='spinning'?'':betting?bets.pending?'Placing chips…':seconds===0?'Bets closed · Waiting for the spin':bets.notice||`Select a chip, then tap a bet. ${total?`${chips(total)} chips placed.`:''}`:state.managerId===own.id?'Start rounds when you are ready.':'Waiting for the host.';
+ const visibleHistory = result && !landed ? state.history.filter(entry => entry.roundId !== state.roundId) : state.history;
+ return <div data-game-table="roulette" className={s.app} data-phase={state.phase} data-result-hold={holdingResult} data-wheel-focus={wheelFocus} data-connection={connection.status} data-revision={state.revision}>
   <TableHeader client={client} playerId={own.id} online ownTurn={false} seconds={null} showAccountSignIn={!!state.wallet}><button aria-label="Table options" onClick={()=>openMenu('rules')}>Options</button></TableHeader>
   <main className={s.main}>
    <div className={s.toolbar}><TableToolbar connection={connection} leaveDisabled={!connected||busy} onLeave={()=>void send({type:'Leave'})}/></div>
-   <section data-collection-surface className={s.stage} aria-label="Roulette game"><RouletteWheel state={state} offset={connection.clockOffsetMs??0} reduced={reduced} onLanded={setLandedRound} highlight={holdingResult}/><div className={s.phase}><span className={s.eyebrow}>{holdingResult?'WINNING NUMBER':'EUROPEAN · SINGLE ZERO'}</span><h1>{result?`${state.winner} · ${rouletteColor(state.winner!)}`:state.phase==='spinning'?'No more bets':betting?'Place your chips':'Roulette'}</h1><span className={s.stageNote}>{result?'Winning number':state.phase==='spinning'?'One ball. One shared result.':'Your usual table. A new spin.'}</span></div>
-    {seconds!==null&&<div className={s.timer} data-urgent={betting&&seconds<=5} role="timer" aria-label={betting?'Betting countdown':result?'Next spin countdown':'Spin countdown'}><strong>{seconds}s</strong><span>{betting?'BETS CLOSE':result?'NEXT SPIN':'SPINNING'}</span></div>}
-    <div className={s.stageActions}><button onClick={()=>openMenu('history')}>History & stats</button><button onClick={()=>openMenu('players')}>Players · {state.players.length}</button></div>
-    <div className={s.inlineHistory} aria-label="Last 20 Roulette results">{state.history.map(h=><span key={h.roundId} data-color={rouletteColor(h.winner)}>{h.winner}</span>)}</div>
+   <section data-collection-surface className={s.stage} aria-label="Roulette game">
+    <RouletteWheel state={state} offset={connection.clockOffsetMs??0} reduced={reduced} onLanded={setLandedRound} landed={landed} highlight={holdingResult}/>
+    <div className={s.stageDetails}>
+      <div className={s.phase}>
+        <span className={s.eyebrow}>{landed?'WINNING NUMBER':'EUROPEAN · SINGLE ZERO'}</span>
+        <h1>{landed ? `${state.winner} · ${rouletteColor(state.winner!)}` : result ? 'Ball settling' : state.phase==='spinning' ? 'No more bets' : betting ? 'Place your chips' : 'Roulette'}</h1>
+      </div>
+      {seconds!==null&&<div className={s.timer} data-urgent={betting&&seconds<=5} role="timer" aria-label={betting?'Betting countdown':result?'Next spin countdown':'Spin countdown'}><strong>{seconds}s</strong><span>{betting?'BETS CLOSE':result?'NEXT SPIN':'SPINNING'}</span></div>}
+      <div className={s.stageActions}><button onClick={()=>openMenu('history')}>History & stats</button><button onClick={()=>openMenu('players')}>Players · {state.players.length}</button></div>
+      <div className={s.inlineHistory} aria-label="Last 20 Roulette results">{visibleHistory.map(h=><span key={h.roundId} data-color={rouletteColor(h.winner)}>{h.winner}</span>)}</div>
+    </div>
    </section>
    <section data-collection-surface className={s.board} data-numbers-view={tab==='numbers'} aria-label="Roulette betting table" data-pending={bets.pending}>
     <div className={s.tabs} role="tablist" aria-label="Betting areas">{[['numbers','Numbers'],['groups','Group bets'],['outside','Outside']].map(([id,name])=><button key={id} role="tab" aria-selected={tab===id} onClick={()=>setTab(id!)}>{name}</button>)}</div>
@@ -52,11 +64,11 @@ export function RouletteTable({client,onLeave}:{client:TableClient<RouletteSnaps
      {tab==='outside'&&<div className={s.outside}>{ROULETTE_BETS.filter(b=>b.kind==='outside').map(b=>tile(b.id))}</div>}
     </div>
    </section>
-   <section className={s.controls} aria-label="Game controls" data-outcome={result&&confirmed?net>0?'won':net<0?'lost':'even':undefined}><div className={s.bankroll}><div><span>Your table chips</span><strong>{chips(available)}</strong></div><div><span>Total bet</span><strong>{chips(total)}</strong></div><div className={s.actions}>{state.phase==='waiting'&&<button className={s.primary} disabled={!can('StartBetting')} onClick={()=>void send({type:'StartBetting'})}>{state.managerId===own.id?'Start rounds':'Waiting for host'}</button>}{result&&state.managerId===own.id&&<button className={s.primary} disabled={!can('NextRound')} onClick={()=>void send({type:'NextRound'})}>Next round</button>}{can('Refill')&&<button onClick={()=>void send({type:'Refill'})}>Refill temporary chips</button>}{!connected&&<button onClick={()=>client.reconnect?.()}>Reconnect</button>}</div></div>
-    <ChipTray denomination={chip} enabled={enabled} pending={bets.pending} canUndo={bets.canUndo} canClear={bets.canClear} onSelect={setChip} onUndo={()=>controller.undo()} onClear={()=>controller.clear()}/>
+   <section className={s.controls} aria-label="Game controls" data-outcome={landed&&confirmed?net>0?'won':net<0?'lost':'even':undefined}><div className={s.bankroll}><div><span>Your table chips</span><strong>{chips(available)}</strong></div><div><span>Total bet</span><strong>{chips(total)}</strong></div><div className={s.actions}>{state.phase==='waiting'&&<button className={s.primary} disabled={!can('StartBetting')} onClick={()=>void send({type:'StartBetting'})}>{state.managerId===own.id?'Start rounds':'Waiting for host'}</button>}{result&&state.managerId===own.id&&<button className={s.primary} disabled={!can('NextRound')} onClick={()=>void send({type:'NextRound'})}>Next round</button>}{can('Refill')&&<button onClick={()=>void send({type:'Refill'})}>Refill temporary chips</button>}{!connected&&<button onClick={()=>client.reconnect?.()}>Reconnect</button>}</div></div>
+    {!wheelFocus&&<ChipTray denomination={chip} enabled={enabled} pending={bets.pending} canUndo={bets.canUndo} canClear={bets.canClear} onSelect={setChip} onUndo={()=>controller.undo()} onClear={()=>controller.clear()}/>}
     <p className={s.feedback} role={error||bets.error?'alert':'status'}>{error||bets.error||state.wallet?.error||(state.wallet&&state.wallet.status!=='active'?`Wallet: ${state.wallet.status}`:summary)}</p>
    </section>
-   <section className={s.players} aria-label="Roulette players">{state.players.map(p=><RouletteSeat key={p.id} player={p} own={state.you} result={result} client={client}/>)}</section>
+   <section className={s.players} aria-label="Roulette players">{state.players.map(p=><RouletteSeat key={p.id} player={p} own={state.you} result={landed} client={client}/>)}</section>
   </main>
   <dialog ref={options} className={s.dialog} aria-label="Roulette table options"><header><h2>Roulette table</h2><button aria-label="Close table options" onClick={()=>options.current?.close()}>×</button></header><div className={s.menuTabs} role="tablist" aria-label="Table information">{['rules','history','players','bets'].map(id=><button key={id} role="tab" aria-selected={menu===id} onClick={()=>setMenu(id)}>{id==='bets'?'Your bets':id==='history'?'History & stats':id[0]!.toUpperCase()+id.slice(1)}</button>)}</div>
    <section role="tabpanel" aria-label={menu==='history'?'Lobby history and statistics':menu==='players'?'Table players':menu==='bets'?'Your bet summary':'Roulette rules'}>

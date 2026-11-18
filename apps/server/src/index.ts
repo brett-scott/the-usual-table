@@ -24,10 +24,15 @@ export default {
       if (request.method === 'OPTIONS') response = new Response(null, { status: 204 });
       else if (url.pathname === '/api/v1/health' && request.method === 'GET') {
         const auth = supabaseUrlSchema.safeParse(env.SUPABASE_URL ?? PUBLIC_SUPABASE_CONFIG.url);
-        response = Response.json({ status: 'ok', protocol: 1, authProjectUrl: auth.success ? auth.data : null,
-          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountProfilesProtocol:1,accountCollectionsProtocol:1,accountStatisticsProtocol: 1, accountRewardsProtocol:1,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:3,duckRaceProtocol:1,rouletteProtocol:1,kenoProtocol:2 });
+        response = Response.json({ status: 'ok', protocol: 1, lobbyCountsProtocol:1,authProjectUrl: auth.success ? auth.data : null,
+          accountPlayProtocol: 1, accountPlayConfigured: !!(env.WALLET_DB || env.WALLET_SERVICE), accountProfilesProtocol:1,accountCollectionsProtocol:1,accountStatisticsProtocol: 1, accountRewardsProtocol:1,accountAchievementsProtocol:2,gameAdapterProtocol:1,crashProtocol:2,baccaratProtocol:3,duckRaceProtocol:1,rouletteProtocol:1,kenoProtocol:2 });
       }
       else if (url.pathname === '/api/v1/games' && request.method === 'GET') response = Response.json({ games: GAME_CATALOG });
+      else if (url.pathname === '/api/v1/games/lobby-counts' && request.method === 'GET') {
+        if (!(await env.ENTRY_LIMITER.limit({ key: `lobby-counts:${request.headers.get('CF-Connecting-IP') ?? 'local'}` })).success) throw new GameError('RATE_LIMITED', 'Wait a moment before refreshing the tables.');
+        const counts=await Promise.all(GAME_CATALOG.filter(game=>game.status==='available').map(async game=>({gameId:game.id,count:await env.LOBBIES.getByName(game.id).count(game.id)})));
+        response=Response.json({counts});
+      }
       else if(url.pathname==='/api/v1/account/profile'&&['GET','POST'].includes(request.method)){
         if(!(await env.ENTRY_LIMITER.limit({key:`profiles:${request.headers.get('CF-Connecting-IP')??'local'}`})).success)throw new GameError('RATE_LIMITED','Wait a moment before refreshing your profile.');
         const account=await verifyAccountSession(request,env);

@@ -14,7 +14,7 @@ async function expectCatalogFits(page: Page) {
   for (const tile of await catalog.getByRole('article').all()) {
     await expect(tile).toBeInViewport({ ratio: 1 });
     const bounds = (await tile.boundingBox())!;
-    const content = tile.getByRole('heading').or(tile.getByRole('link'));
+    const content = tile.getByRole('heading').or(tile.getByRole('link')).or(tile.locator('p[data-state]'));
     for (const item of await content.all()) {
       if (!(await item.isVisible())) continue;
       const rect = (await item.boundingBox())!;
@@ -72,10 +72,11 @@ test('all playable home games fit smaller desktop, tablet and phone screens', as
     localStorage.setItem('casual-last-room', invite);
     localStorage.setItem(`casual-room:${invite}`, JSON.stringify({ inviteId: invite, playerId: 'layout-fixture', credential: 'b'.repeat(64) }));
   });
-  for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768], [768, 1024], [320, 568], [667, 375]]) {
+  for (const [width, height] of [[1440,2560],[2560,1440],[1080,1920],[1366, 768], [1280, 720], [1024, 768], [768, 1024], [320, 568], [667, 375]]) {
     await page.setViewportSize({ width: width!, height: height! }); await page.goto('./#/games');
     await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
     await expectCatalogFits(page); await page.screenshot({ path: testInfo.outputPath(`games-${width}x${height}.png`), fullPage: true });
+    expect((await page.getByRole('region',{name:'Game catalog'}).boundingBox())!.y+(await page.getByRole('region',{name:'Game catalog'}).boundingBox())!.height).toBeLessThanOrEqual(1001);
   }
 });
 

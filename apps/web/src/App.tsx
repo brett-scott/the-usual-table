@@ -2,12 +2,13 @@ import { lazy,Suspense,useEffect, useState,type ComponentType } from 'react';
 import {gameIdFromHash,roomIdFromHash,type GameId,type TableInfo} from '@casual/protocol';
 import {BlackjackTable as Table} from './BlackjackTable';
 export {BlackjackTable as Table} from './BlackjackTable';
-import { ApiError,tableInfo } from './onlineClient';
+import { ApiError, forgetSession, tableInfo } from './onlineClient';
 import { blackjackClientAdapter,crashClientAdapter,baccaratClientAdapter,duckRaceClientAdapter,rouletteClientAdapter,kenoClientAdapter } from './gameClientAdapters';
 import { PlayingCard } from './PlayingCard';
 import { GameHub } from './GameHub';
-import { AccountControls, AccountProvider } from './AccountControls';
+import { AccountProvider } from './AccountControls';
 import { GameRoomEntry } from './GameRoomEntry';
+import { TableRecovery } from './TableRecovery';
 import { CrashRoom } from './CrashTable';
 import { BaccaratRoom } from './BaccaratTable';
 import s from './App.module.css';
@@ -31,15 +32,36 @@ const DuckRaceRoom=lazy(()=>import('./DuckRace').then(module=>({default:module.D
 const KenoRoom=lazy(()=>import('./KenoTable').then(module=>({default:module.KenoRoom})));
 const gameRoomViews:Partial<Record<GameId,{version:number;component:ComponentType<{invite:string;info:TableInfo}>}>>={keno:{version:kenoClientAdapter.version,component:KenoRoom},roulette:{version:rouletteClientAdapter.version,component:RouletteRoom},'duck-race':{version:duckRaceClientAdapter.version,component:DuckRaceRoom},blackjack:{version:blackjackClientAdapter.version,component:BlackjackRoom},crash:{version:crashClientAdapter.version,component:CrashRoom},baccarat:{version:baccaratClientAdapter.version,component:BaccaratRoom}};
 function GameRoomRoute({invite}:{invite:string}){
-  const [info,setInfo]=useState<TableInfo|null>(null);const [error,setError]=useState<ApiError|null>(null);const [attempt,setAttempt]=useState(0);
-  useEffect(()=>{let active=true;const abort=new AbortController();setError(null);
-    void tableInfo(invite,abort.signal).then(value=>{if(active)setInfo(value);}).catch(problem=>{if(active)setError(problem instanceof ApiError?problem:new ApiError('CLIENT_INCOMPATIBLE','This app cannot open this game. Refresh and try again.'));});
-    return()=>{active=false;abort.abort();};},[invite,attempt]);
-  const view=info?gameRoomViews[info.gameId]:undefined;const View=view?.component;
-  if(info&&View&&info.adapterVersion===view?.version)return <Suspense fallback={<main className={s.welcome}><p role="status">Opening your table...</p></main>}><View invite={invite} info={info}/></Suspense>;
-  return <main className={s.welcome}><div className={s.welcomeNav}><a href="#/games">All games</a><AccountControls/></div><div className={s.welcomeMain}>
-    {!error&&!info?<p role="status">Opening your table…</p>:<><h1>{error?.code==='ROOM_EXPIRED'?'Table expired':'Table unavailable'}</h1><p>{error?.message??'Refresh the app to open this game.'}</p><button onClick={()=>setAttempt(x=>x+1)}>Retry table</button><a href="#/games">Find or create another table</a></>}
-  </div></main>;
+  const [result, setResult] = useState<{info: TableInfo} | {error: ApiError} | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const abort = new AbortController();
+    void tableInfo(invite, abort.signal).then(info => {
+      if (active) setResult({info});
+    }).catch(problem => {
+      if (!active) return;
+      const error = problem instanceof ApiError ? problem : new ApiError('CLIENT_INCOMPATIBLE', 'Refresh the app to open this game.');
+      if (error.code === 'ROOM_EXPIRED') forgetSession(invite);
+      setResult({error});
+    });
+    return () => { active = false; abort.abort(); };
+  }, [invite, attempt]);
+
+  if (!result) return <TableRecovery state="loading" />;
+  if ('info' in result) {
+    const {info} = result;
+    const view = gameRoomViews[info.gameId];
+    if (view && info.adapterVersion === view.version) {
+      const View = view.component;
+      return <Suspense fallback={<TableRecovery state="loading" />}><View invite={invite} info={info}/></Suspense>;
+    }
+  } else if (result.error.code === 'ROOM_EXPIRED') {
+    return <TableRecovery state="expired" />;
+  }
+  return <TableRecovery state="unavailable"
+    message={'error' in result ? result.error.message : 'Refresh the app to open this game.'}
+    onRetry={() => { setResult(null); setAttempt(value => value + 1); }} />;
 }
 function BlackjackRoom({invite,info}:{invite:string;info:TableInfo}) {
   return <GameRoomEntry invite={invite} info={info} adapter={blackjackClientAdapter} gameName="Blackjack"

@@ -29,7 +29,7 @@ export function recordCrashResult(room:CrashRoom){
     seat.stackUnits=p.balanceUnits;seat.sequence++;seat.lastRound=room.engine.roundId;
     queue(room,seat,{...operation(seat),kind:'settle',gameId:'crash',roomId:room.id,funding:'account',sequence:seat.sequence,roundId:String(room.engine.roundId),
       rulesetVersion:'crash-97-v1',wageredUnits:p.betUnits,returnedUnits:p.returnedUnits,
-      crash:{cashedOut:p.cashedOutCents!==null,cashoutCents:p.cashedOutCents,crashCents:room.engine.outcome!.multiplierCents,capped:room.engine.outcome!.capped}},'active');
+      crash:{...(room.engine.cashoutMethods?.[p.id]?{cashoutMethod:room.engine.cashoutMethods[p.id]}:{}),cashedOut:p.cashedOutCents!==null,cashoutCents:p.cashedOutCents,crashCents:room.engine.outcome!.multiplierCents,capped:room.engine.outcome!.capped}},'active');
   }
 }
 export function sealCrashSeat(room:CrashRoom,playerId:string){

@@ -1,10 +1,10 @@
 import { expect,test } from '@playwright/test';
-import { providerFixture } from './authFixture';
+import { openOwnProfile, providerFixture } from './authFixture';
 import { expectOneScreen,rigShoe,openTableEntry } from './fixtures';
 async function fit(dialog:import('@playwright/test').Locator){const bounds=await dialog.evaluate(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,right:r.right,bottom:r.bottom,w:innerWidth,h:innerHeight,scroll:document.documentElement.scrollHeight};});expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.y).toBeGreaterThanOrEqual(0);expect(bounds.right).toBeLessThanOrEqual(bounds.w);expect(bounds.bottom).toBeLessThanOrEqual(bounds.h);expect(bounds.scroll).toBeLessThanOrEqual(bounds.h+1);for(const button of await dialog.locator('footer button').all()){const r=await button.boundingBox();expect(r!.height).toBeGreaterThanOrEqual(44);expect(r!.y+r!.height).toBeLessThanOrEqual(bounds.h);}}
 test('profile editor previews illustrations and borders, cancels drafts, saves privacy and survives reload',async({page},info)=>{
   const fixture=await providerFixture(page,'google','success','Alex');await page.goto('./#/games');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Continue with Google'}).click();
-  async function edit(){await page.getByRole('button',{name:'Account menu for Alex'}).click();await page.getByRole('menuitem',{name:'Edit profile',exact:true}).click();return page.getByRole('dialog',{name:'Customise profile',exact:true});}
+  const edit = () => openOwnProfile(page, 'Edit profile');
   let dialog=await edit();await dialog.getByRole('button',{name:'Fox avatar',exact:true}).click();await dialog.getByRole('button',{name:'Borders',exact:true}).click();await dialog.getByRole('button',{name:'Brass border',exact:true}).click();
   await expect(dialog.locator('[data-border="brass"]').first()).toBeVisible();await fit(dialog);await page.screenshot({path:info.outputPath('profile-editor.png')});
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await page.getByRole('button',{name:'Close profile',exact:true}).click();dialog=await edit();await expect(dialog.getByRole('button',{name:'Initials avatar',exact:true})).toHaveAttribute('aria-pressed','true');

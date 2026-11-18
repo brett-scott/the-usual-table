@@ -1,7 +1,8 @@
 import { SELF, evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { expect, it } from 'vitest';
 import type { LobbyDirectory } from '../src/lobbyDirectory';
-import type { PublicLobby, SessionResponse } from '@casual/protocol';
+import worker from '../src/index';
+import { GAME_CATALOG,lobbyCountsSchema,type PublicLobby,type SessionResponse } from '@casual/protocol';
 import { bindings, close, connect, create, http, join, origin } from './helpers';
 
 async function listed() {
@@ -12,6 +13,47 @@ async function publicTable() {
   const response = await http('', undefined, { name: 'Public host', visibility: 'public' });
   expect(response.status).toBe(201); return response.json<SessionResponse>();
 }
+async function counts(){
+  const response=await SELF.fetch('https://example.test/api/v1/games/lobby-counts',{headers:{Origin:origin}});
+  expect(response.status).toBe(200);expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);expect(response.headers.get('Cache-Control')).toBe('no-store');
+  return lobbyCountsSchema.parse(await response.json()).counts;
+}
+it('keeps gallery count throttling separate from the table browser request budget',async()=>{
+  const used=new Set<string>();const environment:typeof bindings={...bindings,ENTRY_LIMITER:{limit:async({key})=>{const success=!used.has(key);used.add(key);return{success};}}};
+  const request=(path:string)=>worker.fetch(new Request(`https://example.test/api/v1/games/${path}`,{headers:{Origin:origin}}),environment);
+  expect((await request('lobby-counts')).status).toBe(200);
+  expect((await request('lobby-counts')).status).toBe(429);
+  expect((await request('blackjack/lobbies')).status).toBe(200);
+});
+it('counts all joinable public lobbies per game without the fifty-table listing cap or stale/removed/full reports',async()=>{
+  const games=GAME_CATALOG.filter(game=>game.status==='available');
+  try{
+  for(const game of games){
+    const directory=bindings.LOBBIES.getByName(game.id);
+    const total=game.id==='blackjack'?60:1;
+    for(let i=0;i<total+4;i++){
+      const id=i.toString(16).padStart(32,'0');
+      const report:PublicLobby={roomId:id,gameId:i===total+3?'texas-holdem':game.id,hostName:'Host',players:i===total?4:1,capacity:4,phase:'waiting',updatedAt:0};
+      await directory.update(id,1,report);
+      if(i===total+1)await directory.update(id,2,null);
+      if(i===total+2)await runInDurableObject(directory,(_instance:LobbyDirectory,state)=>{state.storage.sql.exec('UPDATE lobbies SET expires = ? WHERE id = ?',Date.now()-1,id);});
+    }
+  }
+  expect(await counts()).toEqual(games.map(game=>({gameId:game.id,count:game.id==='blackjack'?60:1})));
+  expect(await bindings.LOBBIES.getByName('blackjack').list()).toHaveLength(50);
+  }finally{
+    for(const game of games)for(let i=0;i<(game.id==='blackjack'?64:5);i++)await bindings.LOBBIES.getByName(game.id).update(i.toString(16).padStart(32,'0'),3,null);
+  }
+});
+it('returns zero for empty games and updates real public-room counts when the last player leaves',async()=>{
+  expect((await counts()).every(game=>game.count===0)).toBe(true);
+  const hidden=await create('Private host'),visible=await publicTable();const a=await connect(hidden.session),b=await connect(visible.session);
+  try{
+    await expect.poll(async()=>(await counts()).find(game=>game.gameId==='blackjack')?.count).toBe(1);
+    expect(await b.send({type:'Leave'})).toMatchObject({type:'ack'});
+    await expect.poll(async()=>(await counts()).find(game=>game.gameId==='blackjack')?.count).toBe(0);
+  }finally{await close(a,b);}
+});
 it('serves the game catalog and rejects lobby discovery for unavailable games', async () => {
   const response = await SELF.fetch('https://example.test/api/v1/games', { headers: { Origin: origin } });
   const { games } = await response.json<{ games: { id: string; status: string }[] }>();

@@ -1,8 +1,8 @@
 import { createRoom, expireDecision, project, transition, type RandomIndex, type RoomState } from '@casual/engine';
-import { RESULTS_DURATION_MS, resultsRevealDelay, type LobbyVisibility, type PlayerIcon, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
+import { BET_CANCELLATION_CAPABILITY, RESULTS_DURATION_MS, resultsRevealDelay, type LobbyVisibility, type PlayerIcon, type Action, type ActionType, type Command, type Snapshot } from '@casual/protocol';
 import { fundedSeat, recordWalletRound, sealWalletSeat, walletActions, walletHasFunds, type RoomWallet } from './roomWallet';
 import { assertRule,disconnectMember,newMember,ROOM_IDLE_MS,type Member } from './roomMembership';
-import type { HostedRoom } from './games/contracts';
+import type { HostedRoom, SnapshotContext } from './games/contracts';
 export { assertRule,disconnectMember,newMember,ROOM_IDLE_MS,PRESENCE_MS,RESERVATION_MS } from './roomMembership';
 export type { Member } from './roomMembership';
 
@@ -60,7 +60,7 @@ function baseRoomActions(room: OnlineRoom, playerId: string): ActionType[] {
     else if (!room.locked[playerId]) {
       actions.push('PlaceBet', 'SitOut');
       if (p.bet >= 20 && p.balance >= p.bet+(p.perfectPairsBet??0)) actions.push('Ready');
-    }
+    } else if (room.locked[playerId] === 'ready') actions.push('Unready');
     return actions;
   }
   if (room.engine.phase === 'ROUND_COMPLETE') {
@@ -73,11 +73,13 @@ function baseRoomActions(room: OnlineRoom, playerId: string): ActionType[] {
 export function roomActions(room: OnlineRoom, playerId: string): ActionType[] {
   return walletActions(room, playerId, baseRoomActions(room, playerId));
 }
-export function roomSnapshot(room: OnlineRoom, playerId: string): Snapshot {
+export function roomSnapshot(room: OnlineRoom, playerId: string, context?: SnapshotContext): Snapshot {
   assertRule(room.members[playerId], 'SESSION_INVALID', 'Your guest session is no longer valid.');
   const snapshot = project(room.engine, playerId);
   const seat = fundedSeat(room, playerId);
-  return { ...snapshot, revision: room.revision, roundDeadline: resultsDeadline(room), legalActions: roomActions(room, playerId),
+  const actions = roomActions(room, playerId);
+  const legalActions = context?.capabilities.includes(BET_CANCELLATION_CAPABILITY) ? actions : actions.filter(action => action !== 'Unready');
+  return { ...snapshot, revision: room.revision, roundDeadline: resultsDeadline(room), legalActions,
     ...(seat ? { wallet: { status: seat.status, stackUnits: seat.stackUnits, error: room.wallet?.error ?? null } } : {}),
     room: { inviteId: room.id, gameId: room.gameId ?? 'blackjack', visibility: room.visibility ?? 'private', managerPlayerId: room.managerId, bettingOpen: room.bettingDeadline !== null, bettingDeadline: room.bettingDeadline, insuranceDeadline: room.insuranceDeadline, claimVersion: room.members[playerId]!.claimVersion },
     players: snapshot.players.map(p => ({ ...p, connected: room.members[p.id]!.connected, reservationDeadline: room.members[p.id]!.reservationDeadline, leavingAfterRound: room.members[p.id]!.leaveAfterRound, ready: room.locked[p.id] === 'ready', sittingOut: room.locked[p.id] === 'out' })) };
@@ -92,6 +94,10 @@ export function applyCommand(previous: OnlineRoom, command: Command, random: Ran
     case 'StartBetting': openBetting(room, now); break;
     case 'NextRound': core(room, playerId, action, random, now); openBetting(room, now); break;
     case 'Ready': room.locked[playerId] = 'ready'; break;
+    case 'Unready':
+      assertRule(room.bettingDeadline !== null && now < room.bettingDeadline, 'INVALID_ACTION', 'Betting has closed.');
+      delete room.locked[playerId];
+      break;
     case 'SitOut': room.locked[playerId] = 'out'; break;
     case 'Leave': {
       const member = room.members[playerId]!;

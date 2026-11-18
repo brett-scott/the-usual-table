@@ -25,6 +25,8 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
   const {cents,graphCents,elapsedMs}=useCrashProgress(state);
   const deadline=state.bettingDeadline??state.resultsDeadline;const seconds=deadline===null?null:Math.max(0,Math.ceil((deadline-serverNow)/1000));
   const connected=connection.status==='connected';const can=(action:CrashAction['type'])=>connected&&!busy&&state.legalActions.includes(action);
+  const bettingOpen = betting && state.bettingDeadline !== null && serverNow < state.bettingDeadline;
+  const canCancel = state.legalActions.includes('CancelBet');
   const units=Number(amount)*100;const target=auto.trim()===''?null:Math.round(Number(auto)*100);
   const valid=amount.trim()!==''&&Number.isSafeInteger(units)&&units>=1000&&units<=100000&&units%1000===0&&units<=p.balanceUnits
     &&(target===null||/^\d+(\.\d{1,2})?$/.test(auto)&&target>=101&&target<=10000);
@@ -33,8 +35,13 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
     try{await client.send(action);if(action.type==='Leave')onLeave(true);}catch(problem){setError(problem instanceof Error?problem.message:'Your action could not be completed.');}
     finally{inFlight.current=false;setBusy(false);}
   }
-  function bet(event:FormEvent){event.preventDefault();if(can('PlaceBet')&&valid)void send({type:'PlaceBet',amountUnits:units,autoCashoutCents:target});}
-  const note=committed?(p.cashedOutCents!==null?`Cashed out at ${crashMultiplier(p.cashedOutCents)} · ${crashChips(p.returnedUnits)} chips returned`:betting?'Your wager is locked':'Cash out before the crash')
+  function bet(event:FormEvent){event.preventDefault();if(bettingOpen&&can('PlaceBet')&&valid)void send({type:'PlaceBet',amountUnits:units,autoCashoutCents:target});}
+  function cancelWager() {
+    setAmount(String(p.betUnits / 100));
+    setAuto(p.autoCashoutCents === null ? '' : String(p.autoCashoutCents / 100));
+    void send({type:'CancelBet'});
+  }
+  const note=committed?(p.cashedOutCents!==null?`Cashed out at ${crashMultiplier(p.cashedOutCents)} · ${crashChips(p.returnedUnits)} chips returned`:betting?`${crashChips(p.betUnits)} chips wagered`:'Cash out before the crash')
     :state.phase==='results'&&p.betUnits>0?(p.cashedOutCents===null?`Lost ${crashChips(p.betUnits)} chips`:`Returned ${crashChips(p.returnedUnits)} chips at ${crashMultiplier(p.cashedOutCents)}`)
     :live?'Watching this flight · Bet next round':state.phase==='waiting'?'The host can start the next betting window':'Choose your wager for the next flight';
   return <div data-game-table="crash" className={s.app} data-connection={connection.status} data-phase={state.phase} data-revision={state.revision}>
@@ -47,15 +54,17 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
         <CrashFlight phase={state.phase} cents={cents} graphCents={graphCents} seconds={seconds} history={state.history} elapsedMs={elapsedMs} capped={state.outcome?.capped}/>
       </section>
       <section className={s.players} aria-label="Crash players">{state.players.map(other=><article key={other.id} className={s.player} data-own={other.id===p.id} data-cashed={other.cashedOutCents!==null} aria-label={`Seat ${other.seat+1}: ${other.name}`}>
-        <ChatBubble client={client} playerId={other.id} name={other.name}/><div><PlayerIdentityButton compact player={other}>{other.name}{other.id===p.id?' · You':''}</PlayerIdentityButton><span>{other.betUnits>0?other.cashedOutCents!==null?`${crashMultiplier(other.cashedOutCents)} · +${crashChips(other.returnedUnits-other.betUnits)}`:state.phase==='results'?`Lost ${crashChips(other.betUnits)}`:`${crashChips(other.betUnits)} chips locked`:other.leaving?'Leaving':other.connected?'Watching':'Reconnecting'}</span></div>
+        <ChatBubble client={client} playerId={other.id} name={other.name}/><div><PlayerIdentityButton compact player={other}>{other.name}{other.id===p.id?' · You':''}</PlayerIdentityButton><span>{other.betUnits>0?other.cashedOutCents!==null?`${crashMultiplier(other.cashedOutCents)} · +${crashChips(other.returnedUnits-other.betUnits)}`:state.phase==='results'?`Lost ${crashChips(other.betUnits)}`:`${crashChips(other.betUnits)} chips wagered`:other.leaving?'Leaving':other.connected?'Watching':'Reconnecting'}</span></div>
       </article>)}</section>
       <section className={s.controls} aria-label="Game controls">
         <div className={s.balance}><span>Your table chips</span><strong>{crashChips(p.balanceUnits)} <small>chips</small></strong><p role="status">{note}</p></div>
         <form className={s.betForm} onSubmit={bet}>
-          <label>Wager (chips)<input aria-label="Wager (chips)" type="number" min="10" max="1000" step="10" value={amount} disabled={committed||busy} onChange={e=>setAmount(e.target.value)}/></label>
-          <label>Auto cash-out (×)<input aria-label="Auto cash-out multiplier" inputMode="decimal" type="number" min="1.01" max="100" step="0.01" placeholder="Optional" value={auto} disabled={committed||busy} onChange={e=>setAuto(e.target.value)}/></label>
+          <label>Wager (chips)<input aria-label="Wager (chips)" type="number" min="10" max="1000" step="10" value={committed?p.betUnits/100:amount} disabled={committed||busy} onChange={e=>setAmount(e.target.value)}/></label>
+          <label>Auto cash-out (×)<input aria-label="Auto cash-out multiplier" inputMode="decimal" type="number" min="1.01" max="100" step="0.01" placeholder="Optional" value={committed?p.autoCashoutCents===null?'':p.autoCashoutCents/100:auto} disabled={committed||busy} onChange={e=>setAuto(e.target.value)}/></label>
           {state.phase==='waiting'?<button type="button" className={s.primary} disabled={!can('StartBetting')} onClick={()=>void send({type:'StartBetting'})}>{state.managerId===p.id?'Start rounds':'Waiting for host'}</button>
-            :betting?<button className={s.primary} disabled={!can('PlaceBet')||!valid}>{p.betUnits>0?'Wager locked':busy?'Placing wager…':'Place bet'}</button>
+            :betting?committed
+              ? <button type="button" className={s.primary} disabled={!bettingOpen||!can('CancelBet')} onClick={cancelWager}>{canCancel?'Cancel bet':'Wager locked'}</button>
+              : <button className={s.primary} disabled={!bettingOpen||!can('PlaceBet')||!valid}>{busy?'Placing wager…':'Place bet'}</button>
             :live?<button type="button" className={s.primary} disabled={!can('CashOut')} onClick={()=>void send({type:'CashOut'})}>{p.cashedOutCents!==null?'Cashed out':p.betUnits>0?`Cash out · ${crashChips(Math.floor(p.betUnits*cents/100))} chips`:'Watching this flight'}</button>
             :<button className={s.primary} type="button" disabled>Next flight in {seconds}s</button>}
         </form>
@@ -68,7 +77,7 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
     </main>
     <dialog ref={rules} className={s.rules} aria-label="Crash rules"><header><h2>Crash rules</h2><button aria-label="Close Crash rules" onClick={()=>rules.current?.close()}>×</button></header>
       <p>Place one wager of 10–1,000 chips in the 10-second betting window. Cash out before the shared flight crashes. Your payout includes your original wager.</p>
-      <p>Set an optional auto cash-out from 1.01× to 100× before betting. Crash wins ties. At the 100× ceiling, surviving wagers pay automatically. Immediate crashes at 1.00× are possible; the outcome distribution has a 3% house edge before display precision.</p>
+      <p>Set an optional auto cash-out from 1.01× to 100× when placing your bet. Use Cancel bet before the countdown ends to return the stake to your table stack and edit your wager. Crash wins ties. At the 100× ceiling, surviving wagers pay automatically. Immediate crashes at 1.00× are possible; the outcome distribution has a 3% house edge before display precision.</p>
       <p>The server decides cash-out and crash ordering; the display only advances through confirmed flight values. An existing auto target works while disconnected. Without one, a disconnected wager stays live and may be lost. Leaving never cancels a locked wager.</p>
       <p>Results last five seconds, then betting reopens. An empty betting window pauses rounds until the host resumes. Only saved-chip wagers earn account statistics and 10 XP per completed round.</p>
     </dialog>

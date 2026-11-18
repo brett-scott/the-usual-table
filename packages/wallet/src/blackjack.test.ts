@@ -96,6 +96,7 @@ it('aggregates split/double stakes and payouts in one authoritative round result
   expect(f.room.engine.phase).toBe('ROUND_COMPLETE');
   const entries = f.room.wallet!.outbox; expect(entries).toHaveLength(1);
   expect(entries[0]!.command).toMatchObject({ kind: 'settle', wageredUnits: 3000, returnedUnits: 4000, sequence: 1 });
+  expect(entries[0]!.command).toHaveProperty('blackjack.doubledHandsWon',1);
   recordWalletRound(f.room); expect(f.room.wallet!.outbox).toHaveLength(1);
   await f.flush();
   expect(await wallet.getWallet(f.accountId)).toMatchObject({ availableUnits: 80_000, atTablesUnits: 21_000 });

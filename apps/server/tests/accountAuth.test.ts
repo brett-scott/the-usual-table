@@ -257,6 +257,11 @@ it.each(['GET','POST'])('returns verified progression through its fixed %s RPC',
   expect(response.status).toBe(200);expect(await response.json()).toEqual(progress);
   expect(rpc.mock.calls[0]![0]).toContain(method==='POST'?'usual_table_claim_rewards':'usual_table_progression');
 });
+it.each(['GET','POST'])('negotiates expanded achievement details through the fixed %s v2 RPC',async method=>{
+ const progress={contract:1,accountId,policy:'progress-v1',startsAt:1000,xpPerRound:10,xp:'0',level:1,levelStartXp:'0',nextLevelXp:'100',levelRewardUnits:100000,claimedLevel:1,readyRewardUnits:'0',claimedUnits:0,wallet,
+ achievements:[{id:'crash:safe-landing',gameId:'crash',name:'Safe Landing',description:'Cash out at 2x or higher.',difficulty:'Easy',rewardUnits:50000,target:1,progress:'0',unlocked:false,claimed:false,breakdown:[{label:'Cash-outs at 2x or higher',current:'0',target:1}]}]};
+ rpc.mockImplementationOnce(async()=>Response.json(progress));const response=await SELF.fetch('https://api.test/api/v1/account/progression?version=2',{method,headers:{Origin:origin,Authorization:`Bearer ${await token()}`}});expect(response.status).toBe(200);expect(await response.json()).toEqual(progress);expect(rpc.mock.calls[0]![0]).toContain(method==='POST'?'usual_table_claim_rewards_v2':'usual_table_progression_v2');
+});
 it('returns caller-owned detailed statistics while retaining the original summary contract',async()=>{
   const details={accountId,summary:statistics,blackjack:{trackedRounds:'0',hands:'0',wins:'0',losses:'0',pushes:'0',blackjacks:'0',busts:'0',doubles:'0',splits:'0',insuranceTaken:'0',insuranceWon:'0'}};
   rpc.mockImplementationOnce(async()=>Response.json(details));

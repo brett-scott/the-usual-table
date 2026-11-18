@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { wagerUnits } from '@casual/baccarat';
+import { wagerUnits,baccaratTotal } from '@casual/baccarat';
 import { MAX_WALLET_UNITS,walletUnitsSchema,baccaratPairOutcomes } from '@casual/protocol';
 import type { BaccaratRoom } from './baccarat';
 import { assertWalletState as check,fundedSeat,walletSeatTerminal as terminal,queueWalletOperation as queue,walletOperation as operation,flushTableWallet,type WalletGateway,type FundedSeat } from '../tableWallet';
@@ -30,7 +30,7 @@ export function recordBaccaratResult(room:BaccaratRoom){
     seat.stackUnits=p.balanceUnits;seat.sequence++;seat.lastRound=room.engine.roundId;
     queue(room,seat,{...operation(seat),kind:'settle',gameId:'baccarat',roomId:room.id,funding:'account',sequence:seat.sequence,roundId:String(room.engine.roundId),
       rulesetVersion:'baccarat-no-commission-v2',wageredUnits:wagerUnits(p),returnedUnits:p.returnedUnits,
-      baccarat:{...p.wager,factsVersion:2,...baccaratPairOutcomes(room.engine.deal),outcome:room.engine.outcome!.outcome,playerTotal:room.engine.outcome!.playerTotal,bankerTotal:room.engine.outcome!.bankerTotal,commissionUnits:0}},'active');
+      baccarat:{...p.wager,factsVersion:2,initialTotals:{player:baccaratTotal(room.engine.deal.filter(c=>c.side==='player').slice(0,2).map(c=>c.card)),banker:baccaratTotal(room.engine.deal.filter(c=>c.side==='banker').slice(0,2).map(c=>c.card))},...baccaratPairOutcomes(room.engine.deal),outcome:room.engine.outcome!.outcome,playerTotal:room.engine.outcome!.playerTotal,bankerTotal:room.engine.outcome!.bankerTotal,commissionUnits:0}},'active');
   }
 }
 export function sealBaccaratSeat(room:BaccaratRoom,playerId:string){

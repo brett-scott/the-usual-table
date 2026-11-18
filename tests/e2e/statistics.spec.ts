@@ -1,10 +1,10 @@
 import { expect,test,type Page } from '@playwright/test';
-import { accountId,providerFixture } from './authFixture';
+import { accountId,openOwnProfile,providerFixture } from './authFixture';
 const game={gameId:'blackjack',roundsPlayed:'4',roundsWon:'2',roundsLost:'1',roundsEven:'1',wageredUnits:'4000',returnedUnits:'5500',netUnits:'1500',bestRoundNetUnits:'1500'};
 const summary={contract:1,accountId,unitsPerChip:100,basis:'saved-rounds',games:[game]};
 const blackjack={trackedRounds:'4',hands:'5',wins:'2',losses:'2',pushes:'1',blackjacks:'1',busts:'1',doubles:'1',splits:'1',insuranceTaken:'1',insuranceWon:'0',perfectPairsBets:'2',perfectPairsWins:'1'};
 const detailed={accountId,summary,blackjack};
-async function open(page:Page){await page.goto('./#/games');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Continue with Google'}).click();await page.getByRole('button',{name:'Account menu for Stats player'}).click();await page.getByRole('menuitem',{name:'Statistics',exact:true}).click();return page.getByRole('dialog',{name:'Player profile',exact:true});}
+async function open(page:Page){await page.goto('./#/games');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Continue with Google'}).click();return openOwnProfile(page, 'Statistics');}
 test('profile statistics show precise saved totals, game-specific counters and owner refresh',async({page},info)=>{
   await providerFixture(page,'google','success','Stats player');let reads=0;
   await page.route('**/api/v1/account/statistics/details*',async route=>{expect(route.request().method()).toBe('GET');expect(route.request().postData()).toBeNull();expect(new URL(route.request().url()).search).toBe('?version=6');reads++;await route.fulfill({json:{...detailed,summary:{...summary,games:[game,{...game,gameId:'keno'}]},keno:{trackedRounds:'4',totalMatches:'15',totalPicks:'20',bestMatches:'5',bestMultiplierCents:'60000'}}});});

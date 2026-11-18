@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef,useState } from 'react';
 import { GAME_CATALOG,type GameId } from '@casual/protocol';
-import { lastTable } from './onlineClient';
+import { lastTable,listLobbyCounts } from './onlineClient';
 import { gameEntries } from './gameEntries';
 import s from './GameHub.module.css';
 import { AccountControls } from './AccountControls';
@@ -21,6 +21,20 @@ export function GameHub({ browse = false,gameId='blackjack' }: { browse?: boolea
   const recent = lastTable();
   const identity = useTableIdentity();
   const catalog=useRef<HTMLDivElement>(null),openedGame=useRef<GameId|null>(null);
+  const [counts,setCounts]=useState<Partial<Record<GameId,number>>|null>(null),[countsUnavailable,setCountsUnavailable]=useState(false);
+  useEffect(()=>{
+    if(browse)return;
+    let active=true,request:AbortController|undefined;
+    async function update(){
+      if(document.visibilityState!=='visible')return;
+      request?.abort();const next=new AbortController();request=next;
+      try{const result=await listLobbyCounts(next.signal);if(active&&!next.signal.aborted){setCounts(result);setCountsUnavailable(false);}}
+      catch{if(active&&!next.signal.aborted){setCounts(null);setCountsUnavailable(true);}}
+    }
+    void update();const interval=setInterval(()=>void update(),15000);
+    const visible=()=>void update();document.addEventListener('visibilitychange',visible);window.addEventListener('focus',visible);
+    return()=>{active=false;request?.abort();clearInterval(interval);document.removeEventListener('visibilitychange',visible);window.removeEventListener('focus',visible);};
+  },[browse]);
   useEffect(()=>{
     if(browse){openedGame.current=gameId;return;}
     if(openedGame.current){catalog.current?.querySelector<HTMLAnchorElement>(`[data-game="${openedGame.current}"] a`)?.focus();openedGame.current=null;}
@@ -33,7 +47,7 @@ export function GameHub({ browse = false,gameId='blackjack' }: { browse?: boolea
       <div className={s.heading}><div><p className={s.eyebrow}>THE GAME ROOM</p><h1>Take your pick.</h1></div>{recent&&<a className={s.returnTable} href={`#/room/${recent.inviteId}`}>Return to your last table <span aria-hidden="true">↗</span></a>}</div>
       <div ref={catalog} className={s.catalog} role="region" aria-label="Game catalog" tabIndex={0}>{GAME_CATALOG.filter(game=>game.status==='available'&&gameEntries[game.id]).map(game => <article key={game.id} className={s.game} data-game={game.id} aria-label={game.name}>
         <div className={s.art} aria-hidden="true"><GameArtwork gameId={game.id}/><span className={s.artNumber}>{game.badge}</span></div>
-        <div className={s.gameCopy}><p className={s.category}>{galleryDetails[game.id]?.category??'The game room'}</p><h2>{game.name}</h2><p className={s.description}>{galleryDetails[game.id]?.short??game.description}</p>
+        <div className={s.gameCopy}><p className={s.category}>{galleryDetails[game.id]?.category??'The game room'}</p><div className={s.gameTitle}><h2>{game.name}</h2><p className={s.lobbyCount} data-state={countsUnavailable?'unavailable':counts?.[game.id]===undefined?'loading':'ready'}>{countsUnavailable?'Tables unavailable':counts?.[game.id]===undefined?'Checking tables…':`${counts[game.id]} open ${counts[game.id]===1?'table':'tables'}`}</p></div><p className={s.description}>{galleryDetails[game.id]?.short??game.description}</p>
         <a className={s.findLink} href={`#/games/${game.id}`} aria-haspopup="dialog" onClick={identity.saveDraft}>Find a Table <span aria-hidden="true">↗</span></a></div>
       </article>)}</div>
     </main>}

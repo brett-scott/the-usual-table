@@ -37,6 +37,7 @@ const amount = z.number().int().nonnegative();
 const actions = z.discriminatedUnion('type', [
   z.object({ type: z.literal('PlaceBet'), amount: blackjackBetAmountSchema, perfectPairsAmount: blackjackBetAmountSchema.optional() }),
   z.object({ type: z.literal('Ready') }),
+  z.object({ type: z.literal('Unready') }),
   z.object({ type: z.literal('Hit') }),
   z.object({ type: z.literal('Stand') }),
   z.object({ type: z.literal('Double') }),
@@ -108,7 +109,7 @@ export const snapshotSchema = z.object({
   room: z.object({ inviteId: z.string(), managerPlayerId: z.string(), bettingOpen: z.boolean(), bettingDeadline: z.number().nullable(), insuranceDeadline: z.number().nullable(), claimVersion: amount.optional(), gameId: gameIdSchema.optional(), visibility: lobbyVisibilitySchema.optional() }).optional(),
   players: z.array(z.object({ appearance:appearanceSchema.optional(),profileVersion:z.number().int().nonnegative().safe().optional(),id: z.string(), name: z.string(), icon: playerIconSchema.optional(), seat: z.number().int(), balance: amount, bet: amount, perfectPairs:perfectPairsSchema.optional(), hands: z.array(handSchema), connected: z.boolean().optional(), ready: z.boolean().optional(), sittingOut: z.boolean().optional(), reservationDeadline: z.number().nullable().optional(), leavingAfterRound: z.boolean().optional(), roundResult: z.object({ net: z.number().int(), outcome: z.enum(['won', 'lost', 'even', 'out']) }).optional() })).max(4),
   dealer: z.array(z.union([cardSchema, z.object({ hidden: z.literal(true) })])), dealerTotal: z.number().nullable(),
-  activePlayerId: z.string().nullable(), activeHandId: z.string().nullable(), decisionDeadline: z.number().nullable(), legalActions: z.array(z.enum(['PlaceBet', 'Ready', 'Hit', 'Stand', 'Double', 'Split', 'InsuranceDecision', 'NextRound', 'Refill', 'StartBetting', 'SitOut', 'Leave'])),
+  activePlayerId: z.string().nullable(), activeHandId: z.string().nullable(), decisionDeadline: z.number().nullable(), legalActions: z.array(z.enum(['PlaceBet', 'Ready', 'Unready', 'Hit', 'Stand', 'Double', 'Split', 'InsuranceDecision', 'NextRound', 'Refill', 'StartBetting', 'SitOut', 'Leave'])),
   roundDeadline: z.number().nullable().optional(),
   insurance: z.object({ wager: amount, returned: amount }).nullable(),
   shoe: z.object({ decks: z.literal(6), remaining: amount, shuffled: z.boolean(), shuffleNext: z.boolean() }),
@@ -140,3 +141,5 @@ export * from './roulette';
 export * from './cosmetics';
 export * from './kenoRules';
 export * from './keno';
+
+export * from './achievements';

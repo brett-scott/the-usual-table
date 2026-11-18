@@ -1,5 +1,5 @@
 import { createContext,useContext,useEffect,useId,useRef,useState,useSyncExternalStore,type ReactNode } from 'react';
-import { accountProfileSchema,DEFAULT_APPEARANCE,DEFAULT_PROFILE_VISIBILITY,detailedStatisticsSchema,GAME_CATALOG,profileDraftSchema,progressionSchema,walletSummarySchema,
+import { accountProfileSchema,DEFAULT_APPEARANCE,DEFAULT_PROFILE_VISIBILITY,detailedStatisticsSchema,GAME_CATALOG,EXPANDED_ACHIEVEMENTS,profileDraftSchema,progressionSchema,walletSummarySchema,
   type AccountProfile,type Appearance,type ProfileDraft,type PublicAccountProfile,type RoomProfile,type TableClient,type Progression } from '@casual/protocol';
 import { type AuthController, saveAccountProfile } from './authClient';
 import { accountRequest } from './accountRequest';
@@ -13,7 +13,7 @@ type Identity={id:string;name:string;icon?:import('@casual/protocol').PlayerIcon
 type Client=Pick<TableClient<unknown,unknown>,'readProfile'|'syncProfile'|'subscribe'>&{getSnapshot?():unknown};
 type Table={client:Client;you:string;online:boolean;ownTurn:boolean;seconds:number|null;label:string};
 type Target={own:boolean;identity?:Identity;opener:HTMLElement|null};
-const Context=createContext<{openSelf(view?:View):void;openPlayer(player:Identity):void;register(table:Table|null):void}|null>(null);
+const Context=createContext<{openSelf():void;openPlayer(player:Identity):void;register(table:Table|null):void}|null>(null);
 export function useProfiles(){return useContext(Context);}
 export function useProfileTable(table:Table){
   const context=useContext(Context);const register=context?.register;
@@ -38,7 +38,7 @@ export function PlayerProfilesProvider({auth,children}:{auth:AuthController;chil
   const ownerAtOpen=useRef<string|undefined>(undefined);
   const [actions]=useState(()=>({
     register:setTable,
-    openSelf(next:View='profile'){ownerAtOpen.current=auth.getSnapshot().account?.accountId;setTarget({own:true,opener:document.activeElement as HTMLElement|null});setView(next);setData(null);setError('');setNotice('');},
+    openSelf(){ownerAtOpen.current=auth.getSnapshot().account?.accountId;setTarget({own:true,opener:document.activeElement as HTMLElement|null});setView('profile');setData(null);setError('');setNotice('');},
     openPlayer(identity:Identity){ownerAtOpen.current=auth.getSnapshot().account?.accountId;setTarget({own:false,identity,opener:document.activeElement as HTMLElement|null});setView('profile');setData(null);setError('');setNotice('');},
   }));
   function close(){dialog.current?.close();setTarget(null);setData(null);setError('');setNotice('');target?.opener?.focus();}
@@ -53,7 +53,7 @@ export function PlayerProfilesProvider({auth,children}:{auth:AuthController;chil
         const settings=await accountRequest('profile?catalogue=2',owner,accountProfileSchema,'GET',abort.signal);auth.applyProfile(settings);
         const [wallet,stats,progress]=await Promise.allSettled([
           accountRequest('wallet',owner,walletSummarySchema,'GET',abort.signal),accountRequest('statistics/details?version=6',owner,detailedStatisticsSchema,'GET',abort.signal),
-          accountRequest('progression',owner,progressionSchema,'GET',abort.signal)]);
+          accountRequest('progression?version=2',owner,progressionSchema,'GET',abort.signal)]);
         const statistics=stats.status==='fulfilled'?{games:stats.value.summary.games,blackjack:stats.value.blackjack,crash:stats.value.crash,baccarat:stats.value.baccarat,roulette:stats.value.roulette,keno:stats.value.keno}:undefined;
         const w=wallet.status==='fulfilled'?wallet.value:null;const p=progress.status==='fulfilled'?progress.value:undefined;
         return {kind:'account' as const,name:settings.nickname??account.nickname??'Your profile',appearance:settings.appearance,settings,visibility:{...DEFAULT_PROFILE_VISIBILITY},version:settings.version,
@@ -79,7 +79,7 @@ export function PlayerProfilesProvider({auth,children}:{auth:AuthController;chil
   },[target,table?.client,view]);
   const cosmeticVersion=account.profile?.version;
   useEffect(()=>{if(owner&&cosmeticVersion!==undefined&&table?.client.syncProfile)void table.client.syncProfile().catch(()=>{/* The next seat uses the saved picture; current table can reconnect independently. */});},[owner,cosmeticVersion,table?.client]);
-  async function claim(){if(!owner)return;setClaiming(true);setError('');try{const result=await accountRequest('progression',owner,progressionSchema,'POST');await auth.refreshWallet();setRefresh(r=>r+1);setNotice(`${statisticsChips(String(result.claimedUnits))} chips added to your wallet.`);}catch{setError('Could not confirm your reward claim. Refresh your profile to check before trying again.');}finally{setClaiming(false);}}
+  async function claim(){if(!owner)return;setClaiming(true);setError('');try{const result=await accountRequest('progression?version=2',owner,progressionSchema,'POST');await auth.refreshWallet();setRefresh(r=>r+1);setNotice(`${statisticsChips(String(result.claimedUnits))} chips added to your wallet.`);}catch{setError('Could not confirm your reward claim. Refresh your profile to check before trying again.');}finally{setClaiming(false);}}
   const identity=target?.identity;const name=data?.name??identity?.name??account.nickname??'Your profile';
   const appearance=data?.appearance??identity?.appearance??account.profile?.appearance??DEFAULT_APPEARANCE;
   const turn=table?.ownTurn?<span className={s.turn}><i/><b>{table.seconds===null?'Live':`${table.seconds}s`}</b>Your {table.label}</span>:<span className={s.turn}>{table?'Game continues':''}</span>;
@@ -124,12 +124,13 @@ function Achievements({data:d,own,claiming,onClaim,view,onViewChange}:{data:Data
   const id=useId();const {game,hideCompleted}=view;
   if(!d.visibility.achievements)return <State title="Achievements are private"/>;if(!d.achievements)return <State title="Achievements unavailable"/>;
   const achievements=d.achievements.filter(a=>a.gameId===game);
-  const visible=achievements.filter(a=>!hideCompleted||!a.unlocked).sort((a,b)=>Number(b.unlocked)-Number(a.unlocked));
+  const visible=achievements.filter(a=>!hideCompleted||!a.unlocked).sort((a,b)=>Number(b.unlocked)-Number(a.unlocked)||(difficultyRank(a.id)-difficultyRank(b.id)));
   return <>{own&&d.progress&&<div className={s.wealth}><span>Level {d.progress.level} · {d.progress.xp} XP</span><p className={s.note}>Each level-up earns 1,000 chips.</p><button type="button" disabled={claiming||d.progress.readyRewardUnits==='0'||d.progress.wallet?.status==='suspended'} onClick={onClaim}>{claiming?'Claiming…':d.progress.readyRewardUnits==='0'?'No rewards to claim':`Claim ${statisticsChips(d.progress.readyRewardUnits)} reward chips`}</button></div>}
     <div className={s.sectionTop}><h3>Achievements</h3><GameSelect value={game} onChange={game=>onViewChange({...view,game})}/></div>
     <label className={s.achievementFilter} htmlFor={id}><input id={id} type="checkbox" checked={hideCompleted} onChange={event=>onViewChange({...view,hideCompleted:event.target.checked})}/>Hide completed achievements</label>
-    <ul className={s.achievementList} aria-label={`${GAME_CATALOG.find(g=>g.id===game)?.name} achievements`}>{visible.map(a=><li key={a.id} className={s.achievement} data-earned={a.unlocked}><i aria-hidden="true">{a.unlocked?'♠':'◇'}</i><div><b>{a.name}</b><p>{a.description}</p>{!a.unlocked&&<progress aria-label={`${a.name} progress`} max={a.target} value={Math.min(a.target,Number(a.progress))}/>}</div><span>{own&&d.progress?.achievements.find(item=>item.id===a.id)?.claimed?'Claimed':a.unlocked?'✓ Earned':`${a.progress} / ${a.target}`}<br/>{statisticsChips(String(a.rewardUnits))} chips</span></li>)}</ul>{!achievements.length?<p className={s.note}>No achievements available for this game yet.</p>:!visible.length&&<p className={s.note}>All achievements for this game are completed.</p>}</>;
+    <ul className={s.achievementList} aria-label={`${GAME_CATALOG.find(g=>g.id===game)?.name} achievements`}>{visible.map(a=>{const definition=EXPANDED_ACHIEVEMENTS.find(item=>item.id===a.id);const detail=d.progress?.achievements.find(item=>item.id===a.id);return <li key={a.id} className={s.achievement} data-earned={a.unlocked}><i aria-hidden="true">{a.unlocked?'♠':'◇'}</i><div><b>{a.name}</b>{definition&&<small className={s.difficulty} data-difficulty={definition.difficulty}>{definition.difficulty}</small>}<p>{a.description}</p>{detail?.trackedSince!==undefined&&<small className={s.tracking}>Tracking since {new Intl.DateTimeFormat('en',{day:'numeric',month:'short',year:'numeric'}).format(detail.trackedSince)}</small>}{detail?.breakdown&&detail.breakdown.length>1&&<details className={s.achievementDetails}><summary>Progress details</summary><ul>{detail.breakdown.map(part=><li key={part.label}><span>{part.label}</span><b>{Math.min(Number(part.current),part.target)} / {part.target}</b></li>)}</ul></details>}{!a.unlocked&&<progress aria-label={`${a.name} progress`} max={a.target} value={Math.min(a.target,Number(a.progress))}/>}</div><span>{own&&d.progress?.achievements.find(item=>item.id===a.id)?.claimed?'Claimed':a.unlocked?'✓ Earned':`${a.progress} / ${a.target}`}<br/>{statisticsChips(String(a.rewardUnits))} chips</span></li>;})}</ul>{!achievements.length?<p className={s.note}>No achievements available for this game yet.</p>:!visible.length&&<p className={s.note}>All achievements for this game are completed.</p>}</>;
 }
+function difficultyRank(id:string){const difficulty=EXPANDED_ACHIEVEMENTS.find(a=>a.id===id)?.difficulty;return difficulty?['Easy','Medium','Hard','Master'].indexOf(difficulty)+1:0;}
 function State({title}:{title:string}){return <div className={s.state}><h3>{title}</h3></div>;}
 function ProfileEditor({profile,auth,turn,onCancel,onSaved}:{profile:AccountProfile;auth:AuthController;turn:ReactNode;onCancel():void;onSaved(profile:AccountProfile):void}){
   const mounted=useRef(true);useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);

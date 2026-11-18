@@ -1,6 +1,7 @@
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { expect, it } from 'vitest';
-import { expireRoomDecisions, resultsDeadline } from '../src/roomState';
+import { BET_CANCELLATION_CAPABILITY } from '@casual/protocol';
+import { applyCommand, expireRoomDecisions, resultsDeadline, roomSnapshot } from '../src/roomState';
 import { restoreRoom } from '../src/roomStorage';
 import { bindings, close, connect, create, edit, inspect, join, rigShoe } from './helpers';
 
@@ -10,6 +11,35 @@ async function settled() {
   await peer.send({ type: 'StartBetting' }); await peer.send({ type: 'Ready' }); await peer.send({ type: 'Stand' });
   return { guest, peer };
 }
+it('lets a ready Blackjack seat unlock its wagers before the original deadline', async () => {
+  const host = await create('Host');
+  const guest = await join(host.session.inviteId, 'Guest');
+  const a = await connect(host.session); const b = await connect(guest.session);
+  try {
+    await rigShoe(host.session.inviteId, ['10', '6', '8', '10', '5']);
+    await a.send({ type: 'StartBetting' });
+    await a.send({ type: 'PlaceBet', amount: 200, perfectPairsAmount: 20 });
+    expect(await a.send({ type: 'Ready' })).toMatchObject({ type: 'ack' });
+    const playerId = host.session.playerId;
+    const room = await inspect(host.session.inviteId, room => room);
+    const deadline = room.bettingDeadline!;
+    expect(roomSnapshot(room, playerId).legalActions).not.toContain('Unready');
+    expect(roomSnapshot(room, playerId, {now:deadline-1,capabilities:[BET_CANCELLATION_CAPABILITY]}).legalActions).toContain('Unready');
+    expect(() => applyCommand(room, {protocol:1,id:'late-cancel',playerId,revision:room.revision,roundId:room.engine.roundId,action:{type:'Unready'}}, max=>max-1, deadline)).toThrow('Betting has closed');
+
+    expect(await a.send({ type: 'Unready' })).toMatchObject({ type: 'ack' });
+    const unlocked = await a.last();
+    expect(unlocked.room!.bettingDeadline).toBe(deadline);
+    expect(unlocked.players.find(p=>p.id===playerId)).toMatchObject({ ready:false,bet:200,perfectPairs:{wager:20} });
+    expect(unlocked.legalActions).toEqual(expect.arrayContaining(['PlaceBet','Ready']));
+    await b.send({ type: 'Ready' });
+    const pending = await inspect(host.session.inviteId, room => room);
+    expect(pending.engine.phase).toBe('BETTING');
+    const dealt = expireRoomDecisions(pending, max=>max-1, deadline);
+    expect(dealt.engine.players.find(p=>p.id===playerId)!.hands).toHaveLength(0);
+    expect(dealt.engine.players.find(p=>p.id===guest.session.playerId)!.hands).toHaveLength(1);
+  } finally { await close(a, b); }
+});
 it('settles dealer blackjack after the last insurance decision without offering a player turn', async () => {
   const host = await create('Host'); const guest = await join(host.session.inviteId, 'Guest');
   const a = await connect(host.session); const b = await connect(guest.session);

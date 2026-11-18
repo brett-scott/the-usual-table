@@ -16,6 +16,7 @@ export const crashTargetSchema=z.number().int().min(101).max(CRASH_MAX_MULTIPLIE
 export const crashActionSchema=z.discriminatedUnion('type',[
   z.object({type:z.literal('StartBetting')}).strict(),
   z.object({type:z.literal('PlaceBet'),amountUnits:crashBetSchema,autoCashoutCents:crashTargetSchema.nullable()}).strict(),
+  z.object({type:z.literal('CancelBet')}).strict(),
   z.object({type:z.literal('CashOut')}).strict(),z.object({type:z.literal('Leave')}).strict(),z.object({type:z.literal('Refill')}).strict(),
 ]);
 export type CrashAction=z.infer<typeof crashActionSchema>;
@@ -31,7 +32,7 @@ export const crashSnapshotSchema=z.object({gameId:z.literal('crash'),roomId:z.st
   bettingDeadline:z.number().int().nonnegative().safe().nullable(),startedAt:z.number().int().nonnegative().safe().nullable(),resultsDeadline:z.number().int().nonnegative().safe().nullable(),
   outcome:crashOutcomeSchema.nullable(),history:crashHistorySchema,
   progress:z.object({multiplierCents:z.number().int().min(100).max(CRASH_MAX_MULTIPLIER),elapsedMs:z.number().int().nonnegative().safe(),sampledAt:z.number().int().nonnegative().safe()}).strict().nullable().optional(),
-  players:z.array(crashPlayerSchema.extend({connected:z.boolean(),leaving:z.boolean(),appearance:appearanceSchema.optional(),profileVersion:z.number().int().nonnegative().safe().optional()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','CashOut','Leave','Refill'])),
+  players:z.array(crashPlayerSchema.extend({connected:z.boolean(),leaving:z.boolean(),appearance:appearanceSchema.optional(),profileVersion:z.number().int().nonnegative().safe().optional()})).max(8),legalActions:z.array(z.enum(['StartBetting','PlaceBet','CancelBet','CashOut','Leave','Refill'])),
   wallet:z.object({status:z.string(),error:z.string().nullable()}).optional(),
 }).strict();
 export type CrashSnapshot=z.infer<typeof crashSnapshotSchema>;

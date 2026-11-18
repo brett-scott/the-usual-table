@@ -4,6 +4,14 @@ import { BLACKJACK_TABLE_RULES,PUBLIC_SUPABASE_CONFIG, type PlayerIcon, type Soc
 import { DEFAULT_PROFILE_VISIBILITY,saveProfileSchema,COSMETICS,DEFAULT_COSMETICS,equipCosmeticSchema,type Appearance,type CosmeticSelection } from '@casual/protocol';
 
 export const accountId = 'a213ae22-a459-456d-976c-dc115e74abda';
+
+export async function openOwnProfile(page: Page, view: 'Edit profile' | 'Statistics' | 'Achievements') {
+  await page.getByRole('button', { name: /^Account menu for / }).click();
+  await page.getByRole('menuitem', { name: 'View profile', exact: true }).click();
+  const profile = page.getByRole('dialog', { name: 'Player profile', exact: true });
+  await profile.getByRole('button', { name: view, exact: true }).click();
+  return view === 'Edit profile' ? page.getByRole('dialog', { name: 'Customise profile', exact: true }) : profile;
+}
 export async function providerFixture(page: Page, provider: SocialProvider, mode: 'success' | 'cancel' | 'offline' = 'success', savedNickname: string | null = null, savedIcon: PlayerIcon | null = null) {
   await page.route('**/api/v1/rooms/*/info',route=>route.fulfill({json:{...BLACKJACK_TABLE_RULES,roomId:new URL(route.request().url()).pathname.split('/').at(-2),gameId:'blackjack',adapterVersion:1,visibility:'private'}}));
   let challenge = ''; let refreshes = 0; let exchanges = 0; let verifications = 0;
@@ -83,7 +91,7 @@ export async function providerFixture(page: Page, provider: SocialProvider, mode
     await route.fulfill({json:{contract:1,accountId,profile:profile(),selection:{...cosmetics,border:appearance.border},owned:[...owned]}});
   });
   await page.route('**/api/v1/account/statistics/details*',route=>route.fulfill({status:503,json:{code:'STATISTICS_UNAVAILABLE'}}));
-  await page.route('**/api/v1/account/progression',route=>route.fulfill({status:503,json:{code:'REWARDS_UNAVAILABLE'}}));
+  await page.route('**/api/v1/account/progression*',route=>route.fulfill({status:503,json:{code:'REWARDS_UNAVAILABLE'}}));
   // These are browser OAuth fixtures, not real signed Worker tokens. Worker tests cover
   // verified temporary-seat profile binding; keep real guest gameplay here.
   for(const pattern of ['**/api/v1/games/*/rooms*','**/api/v1/rooms/*/join*'])await page.route(pattern,async route=>{

@@ -12,7 +12,7 @@ export function walletActions(room: OnlineRoom, playerId: string, actions: Actio
   if (!seat) return actions;
   // Always reject legacy refill, including during a pending or rejected account buy-in.
   const pending = seat.status !== 'active' || room.wallet!.outbox.some(entry => 'sessionId' in entry.command && entry.command.sessionId === seat.sessionId);
-  return actions.filter(action => action !== 'Refill' && (!pending || ['Leave', 'StartBetting', 'NextRound', 'SitOut'].includes(action)));
+  return actions.filter(action => action !== 'Refill' && (!pending || ['Leave', 'StartBetting', 'NextRound', 'SitOut', 'Unready'].includes(action)));
 }
 /** Trusted identity/seat authorization must precede this call. No browser account ID is accepted. */
 export function beginWalletFunding(previous: OnlineRoom, playerId: string, accountId: string, buyInUnits: number, sessionId: string = crypto.randomUUID()): OnlineRoom {
@@ -63,6 +63,7 @@ export function recordWalletRound(room: OnlineRoom) {
       blackjack: { hands: player.hands.length, wins: player.hands.filter(h => h.outcome === 'win' || h.outcome === 'blackjack').length,
         losses: player.hands.filter(h => h.outcome === 'loss').length, pushes: player.hands.filter(h => h.outcome === 'push').length,
         blackjacks: player.hands.filter(h => h.naturalEligible && h.cards.length === 2 && score(h.cards).total === 21).length,
+        doubledHandsWon:player.hands.filter(h=>h.wager===player.bet*2&&(h.outcome==='win'||h.outcome==='blackjack')).length,
         busts: player.hands.filter(h => score(h.cards).total > 21).length, doubles: player.hands.filter(h => h.wager === player.bet * 2).length,
         ...(player.perfectPairsRound?{perfectPairs:{wagerUnits:blackjackUnitsToWallet(player.perfectPairsRound.wager),returnedUnits:blackjackUnitsToWallet(player.perfectPairsRound.returned!),kind:player.perfectPairsRound.kind}}:{}),
         splits: player.hands.length - 1, insuranceTaken: !!insurance?.wager, insuranceWon: (insurance?.returned ?? 0) > 0 } }, 'active');

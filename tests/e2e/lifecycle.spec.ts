@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Snapshot } from '@casual/protocol';
+import { BLACKJACK_TABLE_RULES, shortRoomHash, type Snapshot } from '@casual/protocol';
 import { openTableEntry, expectOneScreen } from './fixtures';
 
 const api = `http://127.0.0.1:${process.env.E2E_API_PORT || '8787'}`;
@@ -69,13 +69,23 @@ test('lost snapshots and acknowledgements recover without repeating the accepted
 });
 
 test('expired invitations and invalid saved sessions show recovery actions', async ({ page }, testInfo) => {
-  await page.goto(`./#/room/${'0'.repeat(32)}`);
+  const expiredId = '0'.repeat(32);
+  const hash = shortRoomHash(expiredId);
+  await page.addInitScript(({inviteId, hash}) => {
+    if (location.hash !== hash) return;
+    localStorage.setItem('casual-last-room', inviteId);
+    localStorage.setItem(`casual-room:${inviteId}`, JSON.stringify({inviteId, playerId:'guest', credential:'a'.repeat(64)}));
+  }, {inviteId:expiredId, hash});
+  await page.goto(`./${hash}`);
   await expect(page.getByRole('heading', { name: 'Table expired' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Join table', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry table', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Find or create another table' })).toBeVisible();
-  if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
+  await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('expired-invitation.png'), fullPage: true });
   await page.getByRole('link', { name: 'Find or create another table' }).click();
+  await expect(page.getByRole('heading', { name: 'Take your pick.' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Return to your last table' })).toHaveCount(0);
   await page.getByRole('article',{name:'Blackjack',exact:true}).getByRole('link', { name: 'Find a Table', exact: true }).click();
   await page.getByRole('button', { name: 'Create a table', exact: true }).click();
   await page.getByLabel('What should we call you?').fill('Guest');
@@ -88,4 +98,30 @@ test('expired invitations and invalid saved sessions show recovery actions', asy
   await page.reload(); await expect(page.getByRole('heading', { name: 'Seat unavailable' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Find or create another table' })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('invalid-session.png'), fullPage: true });
+});
+
+test('a failed table lookup can be retried and an invitation expiring during entry shows recovery', async ({ page }, testInfo) => {
+  const roomId = 'e'.repeat(32);
+  let unavailable = true;
+  await page.route(`**/api/v1/rooms/${roomId}/info`, route => unavailable
+    ? route.fulfill({ status: 503, json: { code:'SERVICE_UNAVAILABLE', message:'The table service is temporarily unavailable.' } })
+    : route.fulfill({ json: { ...BLACKJACK_TABLE_RULES, roomId, gameId:'blackjack', adapterVersion:1, visibility:'private' } }));
+  await page.route(`**/api/v1/rooms/${roomId}/join`, route => route.fulfill({
+    status: 404, json: { code:'ROOM_EXPIRED', message:'This table has expired.' },
+  }));
+  await page.goto(`./${shortRoomHash(roomId)}`);
+  await expect(page.getByRole('heading', { name: 'Table unavailable' })).toBeVisible();
+  const retry = page.getByRole('button', { name: 'Retry table', exact: true });
+  await expect(retry).toBeInViewport({ ratio: 1 });
+  await expectOneScreen(page);
+  await page.screenshot({ path: testInfo.outputPath('table-unavailable.png') });
+  unavailable = false;
+  await retry.click();
+  await page.getByLabel('What should we call you?').fill('Guest');
+  await page.getByRole('button', { name: 'Join table', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Table expired' })).toBeVisible();
+  await expect(retry).toHaveCount(0);
+  await expectOneScreen(page);
+  await page.getByRole('link', { name: 'Find or create another table' }).click();
+  await expect(page.getByRole('dialog', { name: 'Find a Table' })).toBeVisible();
 });

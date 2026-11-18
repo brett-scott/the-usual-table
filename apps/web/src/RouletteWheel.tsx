@@ -1,26 +1,152 @@
-import { useEffect,useLayoutEffect,useRef,useState } from 'react';
-import { ROULETTE_WHEEL,rouletteColor,type RouletteSnapshot } from '@casual/protocol';
+import { useId, useLayoutEffect, useRef } from 'react';
+import { ROULETTE_SPIN_MS, ROULETTE_WHEEL, rouletteColor, type RouletteSnapshot } from '@casual/protocol';
+import { landingFrame, POCKET_STEP, ROULETTE_LANDING_MS, spinFrame, type WheelFrame } from './rouletteWheelMotion';
 import s from './RouletteTable.module.css';
-const point=(radius:number,degrees:number)=>{const a=(degrees-90)*Math.PI/180;return{x:100+radius*Math.cos(a),y:100+radius*Math.sin(a)};};
-const modulo=(n:number)=>(n%360+360)%360;
-export const rouletteLandingAngle=(winner:number,wheel:number)=>ROULETTE_WHEEL.indexOf(winner as typeof ROULETTE_WHEEL[number])*360/37+wheel;
-export function RouletteWheel({state,offset,reduced,onLanded,highlight}:{state:RouletteSnapshot;offset:number;reduced:boolean;onLanded(roundId:number):void;highlight:boolean}){
- const [frame,setFrame]=useState({wheel:0,ball:0});const latest=useRef(frame);const landing=useRef<{at:number;from:number;to:number;wheel:number}|null>(null);
- useLayoutEffect(()=>{
-  if(state.phase==='results'){const wheel=176;const target=rouletteLandingAngle(state.winner!,wheel);const from=latest.current.ball;landing.current={at:performance.now(),from,to:from-720-modulo(from-target),wheel};}
-  else landing.current=null;
- },[state.phase,state.roundId,state.winner]);
- useEffect(()=>{let id:number;const render=()=>{
-  let next={wheel:0,ball:0};if(state.startedAt!==null&&state.phase==='spinning'){const elapsed=Math.min(8000,Math.max(0,Date.now()+offset-state.startedAt));next={wheel:elapsed*.022,ball:-elapsed*.25};}
-  if(state.phase==='results'){const l=landing.current;const t=reduced?1:Math.min(1,Math.max(0,(performance.now()-(l?.at??0))/900));const wheel=l?.wheel??176;next={wheel,ball:l?l.from+(l.to-l.from)*(1-Math.pow(1-t,3)):rouletteLandingAngle(state.winner!,wheel)};if(t===1)onLanded(state.roundId);}
-  if(reduced&&state.phase==='spinning')next={wheel:0,ball:0};latest.current=next;setFrame(next);if(!reduced&&(state.phase==='spinning'&&state.startedAt!==null&&Date.now()+offset<state.startedAt+8000||state.phase==='results'&&landing.current&&performance.now()<landing.current.at+950))id=requestAnimationFrame(render);
- };render();return()=>cancelAnimationFrame(id);},[state.phase,state.roundId,state.startedAt,state.winner,offset,reduced,onLanded]);
- const ball=point(83,frame.ball);
- return <svg className={s.wheel} viewBox="0 0 200 200" role="img" aria-label={state.phase==='results'?`Roulette wheel, winning number ${state.winner}`:state.phase==='spinning'?'Roulette wheel spinning':'European single-zero Roulette wheel'} data-ball-angle={frame.ball} data-wheel-angle={frame.wheel}>
-  <circle cx="100" cy="100" r="98" fill="#6b593e" stroke="#c1a16c" strokeWidth="2"/><circle cx="100" cy="100" r="92" fill="#152725"/>
-  <g transform={`rotate(${frame.wheel} 100 100)`}>{ROULETTE_WHEEL.map((n,i)=>{const a=i*360/37;const start=point(75,a-180/37),end=point(75,a+180/37),text=point(65,a);const winning=highlight&&n===state.winner;return <g key={n} data-winning-pocket={winning}><path d={`M100 100 L${start.x} ${start.y} A75 75 0 0 1 ${end.x} ${end.y} Z`} fill={n===0?'#357454':rouletteColor(n)==='red'?'#923e43':'#162425'} stroke={winning?'#fff0b0':'#b9a776'} strokeWidth={winning?2.5:.45}/><text x={text.x} y={text.y} dy="2" fill="#fff5dc" fontSize={winning?8:7} fontWeight={winning?700:400} textAnchor="middle" transform={`rotate(${a} ${text.x} ${text.y})`}>{n}</text></g>;})}</g>
-  <circle cx="100" cy="100" r="48" fill="#2a4037" stroke="#ae925e" strokeWidth="2"/><circle cx="100" cy="100" r="20" fill="#b79b68"/><path d="M100 65v70M65 100h70" stroke="#e5d3ac" strokeWidth="4"/><circle cx="100" cy="100" r="8" fill="#eddbb3"/>
-  <circle cx={ball.x} cy={ball.y} r="3.5" fill="#fff8dd" stroke="#c8c1a6" strokeWidth="1"/>
-  {highlight&&state.winner!==null&&<g role="group" aria-label={`Winning number ${state.winner} ${rouletteColor(state.winner)}`}><circle cx="100" cy="100" r="39" fill={rouletteColor(state.winner)==='red'?'#843e42':state.winner===0?'#327647':'#162724'} stroke="#f4d68e" strokeWidth="2"/><text x="100" y="84" textAnchor="middle" fill="#ffe6ae" fontSize="6" letterSpacing="1.5">WINNER</text><text x="100" y="116" textAnchor="middle" fill="#fff7e6" fontSize="34" fontWeight="700">{state.winner}</text></g>}
- </svg>;
+
+function point(radius: number, degrees: number) {
+  const angle = degrees * Math.PI / 180;
+  return { x: 100 + radius * Math.sin(angle), y: 100 - radius * Math.cos(angle) };
+}
+
+function sector(inner: number, outer: number, angle: number) {
+  const left = angle - POCKET_STEP / 2;
+  const right = angle + POCKET_STEP / 2;
+  const start = point(outer, left);
+  const end = point(outer, right);
+  const innerStart = point(inner, left);
+  const innerEnd = point(inner, right);
+  return `M${start.x} ${start.y}A${outer} ${outer} 0 0 1 ${end.x} ${end.y}L${innerEnd.x} ${innerEnd.y}A${inner} ${inner} 0 0 0 ${innerStart.x} ${innerStart.y}Z`;
+}
+
+const pockets = ROULETTE_WHEEL.map((number, index) => {
+  const angle = index * POCKET_STEP;
+  return { number, angle, color: rouletteColor(number), label: point(65, angle), band: sector(59, 71, angle), slot: sector(43, 59, angle) };
+});
+
+interface Playback {
+  roundId: number;
+  elapsed: number;
+  frame: WheelFrame;
+  landingAt?: number;
+}
+
+export function RouletteWheel({state, offset, reduced, onLanded, landed, highlight}: {
+  state: RouletteSnapshot;
+  offset: number;
+  reduced: boolean;
+  onLanded(roundId: number): void;
+  landed: boolean;
+  highlight: boolean;
+}) {
+  const { phase, roundId, startedAt, winner } = state;
+  const svg = useRef<SVGSVGElement>(null);
+  const rotor = useRef<SVGGElement>(null);
+  const ball = useRef<SVGGElement>(null);
+  const shadow = useRef<SVGEllipseElement>(null);
+  const playback = useRef<Playback | null>(null);
+  const announcedRound = useRef<number | null>(null);
+  const id = useId();
+  const fill = (name: string) => `url(#${id}-${name})`;
+
+  useLayoutEffect(() => {
+    let animation: number | undefined;
+    const priorSpin = playback.current?.roundId === roundId ? playback.current : null;
+    const paint = (frame: WheelFrame) => {
+      const position = point(frame.radius, frame.ball);
+      rotor.current?.setAttribute('transform', `rotate(${frame.rotor} 100 100)`);
+      ball.current?.setAttribute('transform', `translate(${position.x} ${position.y}) scale(${1 + frame.lift * 0.13})`);
+      shadow.current?.setAttribute('transform', `translate(${position.x + 0.6} ${position.y + 0.9})`);
+      shadow.current?.setAttribute('opacity', String(0.62 - frame.lift * 0.28));
+      svg.current?.setAttribute('data-wheel-angle', String(frame.rotor));
+      svg.current?.setAttribute('data-ball-angle', String(frame.ball));
+      svg.current?.setAttribute('data-ball-radius', String(frame.radius));
+    };
+
+    if (phase === 'spinning' && startedAt !== null) {
+      const spinStart = startedAt;
+      function orbit() {
+        const elapsed = Math.max(playback.current?.roundId === roundId ? playback.current.elapsed : 0, Date.now() + offset - spinStart);
+        const frame = spinFrame(roundId, reduced ? 0 : elapsed);
+        playback.current = { roundId, elapsed, frame };
+        paint(frame);
+        if (!reduced && elapsed < ROULETTE_SPIN_MS + 8000) animation = requestAnimationFrame(orbit);
+      }
+      orbit();
+    } else if (phase === 'results' && winner !== null) {
+      const confirmedPocket = winner;
+      const from = priorSpin?.frame ?? spinFrame(roundId, ROULETTE_SPIN_MS);
+      const landingAt = priorSpin ? (priorSpin.landingAt ??= performance.now()) : 0;
+      function settle() {
+        const progress = reduced || !priorSpin || announcedRound.current === roundId ? 1
+          : Math.min(1, (performance.now() - landingAt) / ROULETTE_LANDING_MS);
+        paint(landingFrame(from, confirmedPocket, progress));
+        if (progress < 1) animation = requestAnimationFrame(settle);
+        else if (announcedRound.current !== roundId) {
+          announcedRound.current = roundId;
+          onLanded(roundId);
+        }
+      }
+      settle();
+    } else {
+      playback.current = null;
+      paint(spinFrame(roundId, 0));
+    }
+
+    return () => { if (animation !== undefined) cancelAnimationFrame(animation); };
+  }, [phase, roundId, startedAt, winner, offset, reduced, onLanded]);
+
+  const label = landed ? `Roulette wheel, winning number ${winner}`
+    : phase === 'results' ? 'Roulette wheel, ball settling'
+    : phase === 'spinning' ? 'Roulette wheel spinning' : 'European single-zero Roulette wheel';
+  return <svg ref={svg} className={s.wheel} viewBox="0 0 200 200" role="img" aria-label={label}>
+    <defs>
+      <radialGradient id={`${id}-wood`} cx="42%" cy="28%">
+        <stop offset="55%" stopColor="#866144"/><stop offset="87%" stopColor="#654328"/><stop offset="100%" stopColor="#2b1d15"/>
+      </radialGradient>
+      <radialGradient id={`${id}-track`}>
+        <stop offset="75%" stopColor="#282720"/><stop offset="80%" stopColor="#4d4430"/>
+        <stop offset="86%" stopColor="#79684a"/><stop offset="94%" stopColor="#272821"/><stop offset="100%" stopColor="#4d4839"/>
+      </radialGradient>
+      <radialGradient id={`${id}-hub`}>
+        <stop stopColor="#5e6a52"/><stop offset="65%" stopColor="#334036"/><stop offset="100%" stopColor="#1c2723"/>
+      </radialGradient>
+      <linearGradient id={`${id}-metal`} x2="0" y2="1">
+        <stop stopColor="#f0d8a0"/><stop offset="50%" stopColor="#b39158"/><stop offset="100%" stopColor="#735331"/>
+      </linearGradient>
+      <radialGradient id={`${id}-ivory`} cx="34%" cy="26%" r="73%">
+        <stop stopColor="#fffef5"/><stop offset="62%" stopColor="#f2e4bd"/><stop offset="100%" stopColor="#aa9971"/>
+      </radialGradient>
+    </defs>
+    <circle cx="100" cy="100" r="98" fill={fill('wood')} stroke="#ab8958" strokeWidth="1"/>
+    <circle cx="100" cy="100" r="95" fill="none" stroke="#daab71" strokeOpacity=".48" strokeWidth=".7"/>
+    <circle cx="100" cy="100" r="91.5" fill={fill('track')} stroke="#c0a371" strokeWidth="1.2"/>
+    <circle cx="100" cy="100" r="89" fill="none" stroke="#f0d5a7" strokeOpacity=".29" strokeWidth=".5"/>
+    <circle cx="100" cy="100" r="82.5" fill="none" stroke="#241d16" strokeOpacity=".55" strokeWidth=".7"/>
+    {Array.from({length:8}, (_, i) => <path key={i} d="M96.5 22 100 20 103.5 22 100 24Z" fill={fill('metal')} stroke="#493522" strokeWidth=".45" transform={`rotate(${i * 45 + 12} 100 100)`}/>)}
+    <g ref={rotor}>
+      <circle cx="100" cy="100" r="72" fill="#9b8056" stroke="#35281b" strokeWidth=".8"/>
+      {pockets.map(({number, angle, color, label, band, slot}) => {
+        const winning = highlight && number === winner;
+        return <g key={number} data-winning-pocket={winning}>
+          <path d={band} fill={color === 'green' ? '#306b4a' : color === 'red' ? '#923a36' : '#242c2a'} stroke="#b49865" strokeWidth=".4"/>
+          <path d={slot} fill={color === 'green' ? '#235239' : color === 'red' ? '#602c2a' : '#151d1b'} stroke="#a28657" strokeWidth=".75"/>
+          {winning && <path d={slot} fill="#e7bc652d" stroke="#fff0ad" strokeWidth="1.25"/>}
+          <text x={label.x} y={label.y} dy="2.2" transform={`rotate(${angle} ${label.x} ${label.y})`} textAnchor="middle" fill="#fff5dc" fontSize="7" fontWeight={winning ? 750 : 600}>{number}</text>
+        </g>;
+      })}
+      <circle cx="100" cy="100" r="59" fill="none" stroke="#d8b878" strokeWidth=".85"/>
+      <circle cx="100" cy="100" r="42.7" fill={fill('hub')} stroke="#b19260" strokeWidth="1"/>
+      <circle cx="100" cy="100" r="35" fill="none" stroke="#aab196" strokeOpacity=".35" strokeWidth=".65"/>
+      <circle cx="100" cy="100" r="19" fill="#202d25" stroke="#887348" strokeWidth=".7"/>
+      <path d="M97 75h6l2 17 20 5v6l-20 2-2 20h-6l-2-20-20-2v-6l20-5Z" fill={fill('metal')} stroke="#5c482b" strokeWidth=".7"/>
+      <circle cx="100" cy="100" r="10" fill={fill('metal')} stroke="#765b38" strokeWidth=".8"/>
+      <circle cx="100" cy="100" r="5" fill="#e6cd97"/>
+    </g>
+    <ellipse ref={shadow} rx="3.1" ry="2" fill="#120e0a"/>
+    <g ref={ball}><circle r="2.85" fill={fill('ivory')} stroke="#c5b389" strokeWidth=".35"/></g>
+    {highlight && winner !== null && <g role="group" aria-label={`Winning number ${winner} ${rouletteColor(winner)}`}>
+      <circle cx="100" cy="100" r="33" fill={winner === 0 ? '#235239' : rouletteColor(winner) === 'red' ? '#73352e' : '#182622'} stroke="#f4d68e" strokeWidth="1.6"/>
+      <text x="100" y="111" textAnchor="middle" fill="#fff7e6" fontFamily="Georgia, serif" fontSize="37" fontWeight="700">{winner}</text>
+    </g>}
+  </svg>;
 }

@@ -21,3 +21,5 @@ export const publicLobbySchema = z.object({
 });
 export type PublicLobby = z.infer<typeof publicLobbySchema>;
 export const lobbyListSchema = z.object({ gameId: gameIdSchema, lobbies: z.array(publicLobbySchema).max(50) });
+export const lobbyCountsSchema = z.object({ counts:z.array(z.object({gameId:gameIdSchema,count:z.number().int().nonnegative().safe()}).strict()).max(GAME_CATALOG.length) }).strict()
+  .refine(value=>new Set(value.counts.map(item=>item.gameId)).size===value.counts.length,'Duplicate game counts');

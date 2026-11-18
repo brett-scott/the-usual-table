@@ -1,5 +1,5 @@
 .hub { height:100dvh;min-height:0;display:flex;flex-direction:column;background:#11251e;color:#f4ecda;padding-inline:max(16px,env(safe-area-inset-left));padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom); }
-.galleryShell { flex:1;min-height:0;display:flex;flex-direction:column; }
+.galleryShell { flex:1;min-height:0;max-height:1000px;display:flex;flex-direction:column; }
 .header { flex-shrink:0;width:min(100%,1404px);margin-inline:auto;height:88px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #4a5d4d; }
 .brand { min-width:0;display:flex;align-items:center;gap:13px;text-decoration:none;font:25px Georgia,serif;white-space:nowrap; }
 .brand > span:first-child { flex-shrink:0;color:#e4c89d;font-size:25px;width:35px;height:41px;display:grid;place-items:center;border:1px solid #e4c89d;border-radius:7px;transform:rotate(-8deg); }
@@ -20,6 +20,10 @@
 .gameCopy { padding:22px 17px 16px;display:flex;flex-direction:column;flex:1;min-height:0; }
 .category { margin:0 0 10px;font-size:8px;letter-spacing:1.3px;text-transform:uppercase;color:#5b6254; }
 .game h2 { font:27px/1.05 Georgia,serif;letter-spacing:-.7px;margin:0; }
+.gameTitle { min-width:0; }
+.lobbyCount { margin:6px 0 0;color:#3f5d47;font-size:11px;line-height:1.2; }
+.lobbyCount[data-state='ready']:before { content:'';display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:2px; }
+.lobbyCount[data-state='unavailable'] { color:#685f4b; }
 .description { font-size:11px;color:#526354;margin:10px 0 18px;line-height:1.4; }
 .findLink { display:flex;align-items:center;justify-content:space-between;min-height:44px;flex-shrink:0;padding:0 11px;border:1px solid #8c967d;border-radius:4px;font-size:11px;margin-top:auto;font-weight:600;text-decoration:none;color:#243d2f; }
 .findLink:hover { background:#243e31;color:#fff1d8;border-color:#243e31; }.findLink:focus-visible { outline:3px solid #84552d;outline-offset:2px; }.findLink span { font-size:19px;font-weight:400; }
@@ -31,6 +35,7 @@
  .catalog { grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(6,minmax(44px,1fr));gap:8px; }
  .game { flex-direction:row;border-radius:5px; }.art { width:clamp(54px,18vw,76px);height:100%;min-height:0;flex-shrink:0; }.art:before { inset:6px; }.art svg { max-height:94px; }.artNumber,.category,.description { display:none; }
  .gameCopy { flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:6px 12px;gap:8px; }.game h2 { font-size:clamp(19px,4.8vw,22px);margin:0; }
+ .lobbyCount { margin-top:3px;font-size:10px; }
  .findLink { min-height:44px;border:0;border-left:1px solid #b4b79f;padding:0 0 0 12px;margin:0;font-size:11px;gap:10px; }.findLink span { font-size:16px; }
 }
 @media(max-width:370px) { .hub { padding-inline:max(12px,env(safe-area-inset-left)); }.brand { font-size:18px; }.brand > span:first-child { width:23px;height:28px; }.main { padding-top:11px;gap:10px; }.heading h1 { font-size:27px; }.game h2 { font-size:19px; }.catalog { gap:7px; }.gameCopy { padding-inline:9px;gap:6px; }.findLink { font-size:10px;padding-left:9px;gap:7px; }.returnTable { max-width:94px;font-size:9px; } }

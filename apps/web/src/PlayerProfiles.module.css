@@ -29,3 +29,5 @@
 .avatar[data-motion='false']:after,:global(body[data-border-motion='off']) .avatar:after{animation:none!important}
 :global(body[data-border-motion='paused']) .avatar:after{animation-play-state:paused!important}
 @media(prefers-reduced-motion:reduce){.avatar:after{animation:none!important}}
+
+.difficulty{display:inline-block;margin:4px 0 0 6px;padding:2px 7px;border:1px solid #8ca97e;border-radius:12px;font-size:10px;color:#dce9cf}.difficulty[data-difficulty='Medium']{border-color:#8bafc3;color:#cee1ee}.difficulty[data-difficulty='Hard']{border-color:#c49e79;color:#efcfaa}.difficulty[data-difficulty='Master']{border-color:#b29ac8;color:#e3d4f0}.tracking{display:block;font-size:10px;color:var(--muted);margin:4px 0}.achievementDetails{margin:7px 0;font-size:11px}.achievementDetails summary{cursor:pointer;color:var(--accent);padding:5px 0}.achievementDetails ul{padding:0;list-style:none;margin:4px 0}.achievementDetails li{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid #ffffff12}.achievementDetails li b{white-space:nowrap;font-size:11px}

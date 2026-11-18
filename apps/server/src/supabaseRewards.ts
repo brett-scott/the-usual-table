@@ -7,7 +7,8 @@ export async function supabaseAllowance(request: Request, env: Env, account: Acc
   if (!config.success) throw new GameError('REWARDS_NOT_CONNECTED', 'Account rewards need setup.');
   try {
     const rpc = progression ? request.method === 'POST' ? 'usual_table_claim_rewards' : 'usual_table_progression' : request.method === 'POST' ? 'usual_table_claim_allowance' : 'usual_table_allowance';
-    const response = await fetch(`${config.data.url}/rest/v1/rpc/${rpc}`, {
+    const versioned=progression&&new URL(request.url).searchParams.get('version')==='2'?rpc+'_v2':rpc;
+    const response = await fetch(`${config.data.url}/rest/v1/rpc/${versioned}`, {
       method: 'POST', headers: { apikey: config.data.publishableKey, Authorization: request.headers.get('Authorization')!, 'Content-Type': 'application/json' },
       body: '{}', redirect: 'manual', cache: 'no-store', signal: AbortSignal.any([request.signal, AbortSignal.timeout(5000)]),
     });

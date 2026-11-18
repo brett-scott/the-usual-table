@@ -11,8 +11,9 @@ export const baccaratWagerSchema=z.object({...mainFields,sideBets:baccaratSideBe
 const resultFields={outcome:baccaratSideSchema,playerTotal:z.number().int().min(0).max(9),bankerTotal:z.number().int().min(0).max(9),commissionUnits:z.literal(0)};
 export const legacyBaccaratRoundFactsSchema=legacyBaccaratWagerSchema.safeExtend(resultFields).strict()
   .refine(v=>v.mainUnits+v.tieUnits>0&&v.outcome===(v.playerTotal===v.bankerTotal?'tie':v.playerTotal>v.bankerTotal?'player':'banker'),'Invalid Baccarat result');
-export const baccaratSideRoundFactsSchema=baccaratWagerSchema.safeExtend({...resultFields,factsVersion:z.literal(2),playerPair:z.boolean(),bankerPair:z.boolean()}).strict()
-  .refine(v=>baccaratWagerUnits(v)>0&&v.outcome===(v.playerTotal===v.bankerTotal?'tie':v.playerTotal>v.bankerTotal?'player':'banker'),'Invalid Baccarat result');
+export const baccaratSideRoundFactsSchema=baccaratWagerSchema.safeExtend({...resultFields,factsVersion:z.literal(2),playerPair:z.boolean(),bankerPair:z.boolean(),initialTotals:z.object({player:z.number().int().min(0).max(9),banker:z.number().int().min(0).max(9)}).strict().optional()}).strict()
+  .refine(v=>baccaratWagerUnits(v)>0&&v.outcome===(v.playerTotal===v.bankerTotal?'tie':v.playerTotal>v.bankerTotal?'player':'banker')
+    &&(!v.initialTotals||Math.max(v.initialTotals.player,v.initialTotals.banker)<8||v.playerTotal===v.initialTotals.player&&v.bankerTotal===v.initialTotals.banker),'Invalid Baccarat result');
 /** Preserve the exact old command shape for durable retries and operation hashes. */
 export const baccaratRoundFactsSchema=z.union([legacyBaccaratRoundFactsSchema,baccaratSideRoundFactsSchema]);
 export type BaccaratWager=z.infer<typeof baccaratWagerSchema>;

@@ -1,0 +1,83 @@
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left));
+  background: #11251e;
+  color: #f4ecda;
+}
+.header {
+  width: min(100%, 1280px);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  padding-block: 8px;
+  border-bottom: 1px solid #4a5d4d;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font: clamp(18px, 4.5vw, 25px) Georgia, serif;
+  text-decoration: none;
+}
+.brand > span {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 29px;
+  height: 34px;
+  border: 1px solid #dac18a;
+  border-radius: 6px;
+  color: #dac18a;
+  transform: rotate(-8deg);
+}
+.main { flex: 1; display: grid; place-items: center; padding-block: 16px; }
+.panel {
+  width: min(100%, 520px);
+  padding: clamp(20px, 5vw, 36px);
+  background: #172b22;
+  border: 1px solid #536759;
+  border-radius: 16px;
+  box-shadow: 0 12px 36px #0b19144d;
+}
+.panel h1 {
+  margin: 0 0 10px;
+  font: clamp(28px, 5vw, 42px)/1.1 Georgia, serif;
+}
+.panel p {
+  margin: 0;
+  color: #c0cfc2;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.primary, .retry {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+.primary { background: #dac18a; color: #17271f; border-color: #dac18a; }
+.primary:hover { background: #ecd3a0; border-color: #ecd3a0; }
+.retry { background: #263d30; color: #f4ecda; border-color: #87977f; }
+@media (max-width: 480px) {
+  .header { min-height: 60px; }
+  .actions > * { width: 100%; }
+}
+@media (max-height: 500px) {
+  .header { min-height: 54px; padding-block: 4px; }
+  .panel { padding: 20px; }
+  .actions { margin-top: 16px; }
+}

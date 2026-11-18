@@ -38,10 +38,10 @@ it('saves exact Crash payouts, retries a committed result once, returns funds, a
   const details=detailedStatisticsSchema.parse(await rpc(f.accountId,'usual_table_detailed_statistics_v2'));
   expect(details.crash).toEqual({trackedRounds:'2',cashouts:'2',crashes:'0',highestCashoutCents:'500'});
   expect(details.summary.games.find(g=>g.gameId==='crash')).toMatchObject({roundsPlayed:'2',returnedUnits:'6500',wageredUnits:'2000',netUnits:'4500'});
-  expect(progressionSchema.parse(await rpc(f.accountId,'usual_table_progression'))).toMatchObject({xp:'20',readyRewardUnits:'45000'});
-  const claim=progressionSchema.parse(await rpc(f.accountId,'usual_table_claim_rewards'));expect(claim.claimedUnits).toBe(45000);expect(progressionSchema.parse(await rpc(f.accountId,'usual_table_claim_rewards')).claimedUnits).toBe(0);
+  expect(progressionSchema.parse(await rpc(f.accountId,'usual_table_progression'))).toMatchObject({xp:'20',readyRewardUnits:'95000'});
+  const claim=progressionSchema.parse(await rpc(f.accountId,'usual_table_claim_rewards'));expect(claim.claimedUnits).toBe(95000);expect(progressionSchema.parse(await rpc(f.accountId,'usual_table_claim_rewards')).claimedUnits).toBe(0);
   f.room=move(f.room,{type:'Leave'},next+40000);await f.persist();await f.flush();expect(f.room.engine.players).toEqual([]);
-  expect(await store.getWallet(f.accountId)).toMatchObject({availableUnits:1049500,atTablesUnits:0,pendingReturnUnits:0});
+  expect(await store.getWallet(f.accountId)).toMatchObject({availableUnits:1099500,atTablesUnits:0,pendingReturnUnits:0});
   await db.exec(setup);expect(progressionSchema.parse(await rpc(f.accountId,'usual_table_progression'))).toMatchObject({xp:'20',readyRewardUnits:'0'});
   const other=await funded();expect(progressionSchema.parse(await rpc(other.accountId,'usual_table_progression'))).toMatchObject({xp:'0',readyRewardUnits:'0'});
 });
