@@ -9,7 +9,7 @@
 .prompt button:disabled { opacity:.55;cursor:default; }
 .error { margin:0;color:#ffd0b8;font-size:12px;line-height:1.35; }
 
-@media(max-height:500px) and (min-width:641px) {
+@media(max-height:500px) and (min-width:600px) {
  .prompt { gap:6px;padding:10px 16px; }
  .prompt h2 { font-size:21px;line-height:1.1; }
  .prompt button { min-height:44px; }

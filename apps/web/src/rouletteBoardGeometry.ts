@@ -1,5 +1,6 @@
 import type { RouletteBet } from '@casual/protocol';
 export type RouletteBoardLayout='wide'|'portrait'|'landscape';
+export const SHORT_LANDSCAPE_QUERY='(max-height:500px) and (min-width:600px)';
 export const ROULETTE_NUMBER_RANGES=[1,10,19,25] as const;
 export interface NumberBounds {left:number;top:number;right:number;bottom:number}
 const center=(r:NumberBounds)=>({x:(r.left+r.right)/2,y:(r.top+r.bottom)/2});

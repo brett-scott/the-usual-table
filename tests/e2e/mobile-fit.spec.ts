@@ -1,5 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openTableEntry, expectOneScreen, rigShoe } from './fixtures';
+import { baccaratFixture } from './baccaratFixture';
+import { crashFixture } from './crashFixture';
+import { duckRaceFixture } from './duckRaceFixture';
+import { kenoFixture } from './kenoFixture';
+import { rouletteFixture } from './rouletteFixture';
 
 // Playwright runs these viewport cases in the dedicated iPhone 16 project.
 
@@ -51,4 +56,81 @@ test('safe areas, insurance and a long card fan fit on screen', async ({ page },
   const first = await cards.first().boundingBox(); const last = await cards.last().boundingBox();
   expect(first!.x).toBeGreaterThanOrEqual(0); expect(last!.x + last!.width).toBeLessThanOrEqual(393);
   await page.screenshot({ path: testInfo.outputPath('compact-long-hand.png'), fullPage: true });
+});
+
+async function openBetting(page: Page, game: string) {
+  await page.goto(`./#/games/${game}`);
+  await page.getByRole('button', { name: 'Create a table', exact: true }).click();
+  await page.getByLabel('What should we call you?').fill('Viewport player');
+  await page.getByRole('button', { name: 'Create table', exact: true }).click();
+  await page.getByRole('button', { name: game === 'blackjack' ? 'Open betting' : 'Start rounds', exact: true }).tap();
+}
+
+async function expectReachable(targets: Locator) {
+  await expect(targets.first()).toBeEnabled();
+  await expect.poll(() => targets.evaluateAll(elements => {
+    const blocked = [];
+    for (const element of elements) {
+      const box = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      if (box.left < 0 || box.right > innerWidth || box.top < 0 || box.bottom > innerHeight || !element.contains(hit)) {
+        blocked.push(element.getAttribute('aria-label') ?? element.textContent);
+      }
+    }
+    return blocked;
+  }), 'betting targets must fit and receive a pointer at their centers').toEqual([]);
+}
+
+const shortTables = [
+  { game: 'blackjack', selector: '[data-bet-tile]', bet: 'Bet on Blackjack' },
+  { game: 'baccarat', fixture: baccaratFixture, selector: '[data-bet-tile]', bet: 'Bet on Player' },
+  { game: 'roulette', fixture: rouletteFixture, selector: '[data-number], [aria-label="Number ranges"] button', bet: 'Bet on number 12' },
+  { game: 'keno', fixture: kenoFixture, selector: '[data-number]', bet: 'Number 40' },
+  { game: 'duck-race', fixture: duckRaceFixture, selector: 'button[aria-label^="Bet on "]', bet: /^Bet on / },
+  { game: 'crash', fixture: crashFixture, selector: '[aria-label="Game controls"] form button', bet: 'Place bet' },
+];
+
+for (const { game, fixture, selector, bet } of shortTables) {
+  test(`${game} betting stays reachable around 640 × 360`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 640, height: 360 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await fixture?.(page, { players: 8 });
+    await openBetting(page, game);
+    for (const width of [600, 639, 641, 640]) {
+      await page.setViewportSize({ width, height: 360 });
+      await expectOneScreen(page);
+      await expectReachable(page.locator(selector));
+      await expectReachable(page.getByRole('timer').first());
+    }
+    const target = page.getByRole('button', { name: bet, exact: typeof bet === 'string' }).first();
+    await target.tap();
+    if (game === 'keno') {
+      await expect(page.locator('[data-number="40"]')).toHaveAttribute('aria-pressed', 'true');
+      await page.getByRole('button', { name: 'Add 10 chips', exact: true }).tap();
+      await expect(page.getByRole('button', { name: 'Cancel bet', exact: true })).toBeEnabled();
+    } else if (game === 'crash') {
+      await expect(page.getByRole('button', { name: 'Cancel bet', exact: true })).toBeEnabled();
+    } else if (game === 'blackjack') {
+      await expect(target).toHaveAttribute('data-amount', '40');
+    } else {
+      await expect(target).toHaveAttribute('data-selected', 'true');
+    }
+    await page.screenshot({ path: testInfo.outputPath(`${game}-640x360.png`) });
+    await page.getByRole('button', { name: 'Leave table', exact: true }).click();
+  });
+}
+
+test('Roulette contains board scrolling on a 320 × 540 phone', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 540 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const room = await rouletteFixture(page);
+  await openBetting(page, 'roulette');
+  const number = page.getByRole('button', { name: 'Bet on number 12', exact: true });
+  await number.tap();
+  await expect.poll(() => room.state().players[0]!.wager).toEqual([{ betId: 'straight-12', amountUnits: 1000 }]);
+  await expectReachable(number);
+  await expect.poll(() => page.getByRole('tabpanel', { name: 'Number bets' }).evaluate(panel => panel.scrollTop)).toBeGreaterThan(0);
+  await expectReachable(page.getByRole('button', { name: 'Select 10 chips', exact: true }));
+  await expectOneScreen(page);
+  await page.screenshot({ path: testInfo.outputPath('roulette-320x540.png') });
 });

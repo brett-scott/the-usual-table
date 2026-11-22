@@ -1,9 +1,9 @@
 import { useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type ReactNode } from 'react';
 import { ROULETTE_BETS,rouletteBet,type RouletteWager } from '@casual/protocol';
 import { WagerChips } from './WagerChips';
-import { rouletteBoardSpot,ROULETTE_NUMBER_RANGES,type RouletteBoardLayout } from './rouletteBoardGeometry';
+import { rouletteBoardSpot,ROULETTE_NUMBER_RANGES,SHORT_LANDSCAPE_QUERY,type RouletteBoardLayout } from './rouletteBoardGeometry';
 import s from './RouletteNumberBoard.module.css';
-const layoutNow=():RouletteBoardLayout=>window.matchMedia('(max-height:500px) and (min-width:641px)').matches?'landscape':window.matchMedia('(max-width:1000px)').matches?'portrait':'wide';
+const layoutNow=():RouletteBoardLayout=>window.matchMedia(SHORT_LANDSCAPE_QUERY).matches?'landscape':window.matchMedia('(max-width:1000px)').matches?'portrait':'wide';
 const groupNames={split:'Split',street:'Street',corner:'Corner','six-line':'Six-line'};
 const chips=(units:number)=>new Intl.NumberFormat('en',{maximumFractionDigits:2}).format(units/100);
 interface Spot {id:string;x:number;y:number}

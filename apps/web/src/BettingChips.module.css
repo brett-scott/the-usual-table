@@ -42,7 +42,7 @@
   .edits { gap:5px; }
   .edits button { padding:7px 9px; font-size:11px; min-width:54px; }
 }
-@media(max-height:500px) and (min-width:641px) {
+@media(max-height:500px) and (min-width:600px) {
   .tray { gap:4px; }
   .denominations { --chip-size:44px; --chip-art-size:38px; --chip-padding:1px; --chip-gap:3px; }
   .selectedMark { width:14px; height:14px; bottom:0; font-size:9px; }
