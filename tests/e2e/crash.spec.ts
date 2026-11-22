@@ -131,26 +131,40 @@ test('confirmed flight values cannot overshoot a delayed crash while the graph s
   await fits(page);await page.screenshot({path:info.outputPath('crash-confirmed-result-reduced-motion.png')});
 });
 test('the flight curves smoothly and zooms out continuously as confirmed samples arrive',async({page},info)=>{
-  test.setTimeout(60000);const fixture=await crashFixture(page,{players:8});await page.clock.install();await page.emulateMedia({reducedMotion:'no-preference'});await open(page);
+  test.setTimeout(60000);const fixture=await crashFixture(page,{players:8});
+  const start=new Date();await page.clock.install({time:start});await page.clock.pauseAt(start);
+  await page.emulateMedia({reducedMotion:'no-preference'});await open(page);
   if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});
   await page.getByRole('button',{name:'Start rounds'}).click();await page.getByRole('button',{name:'Place bet',exact:true}).click();fixture.fly(20000);
   await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','running');
+  type Frame={x:number;y:number;width:number;height:number;elapsedMs:number;cents:number;maxTime:number;maxValue:number};
+  type Recording={active:boolean;frames:Frame[]};
   await page.evaluate(()=>{
-    const frames:{at:number;x:number;y:number;cents:number;maxTime:number;maxValue:number}[]=[];
-    const recording={active:true,frames};(window as unknown as {crashAnimation:typeof recording}).crashAnimation=recording;
-    const sample=()=>{const graph=document.querySelector('svg[data-rendered-cents]');const path=graph?.querySelector('[data-flight-line]') as SVGPathElement|null;
-      if(graph&&path){const tip=path.getPointAtLength(path.getTotalLength());frames.push({at:performance.now(),x:tip.x,y:tip.y,cents:Number(graph.getAttribute('data-rendered-cents')),maxTime:Number(graph.getAttribute('data-time-domain')),maxValue:Number(graph.getAttribute('data-multiplier-domain'))});}
+    const recording:Recording={active:true,frames:[]};(window as Window&{crashAnimation?:Recording}).crashAnimation=recording;
+    const sample=()=>{const graph=document.querySelector<SVGSVGElement>('svg[data-rendered-cents]');const path=graph?.querySelector<SVGPathElement>('[data-flight-line]');
+      if(graph&&path){
+        const tip=path.getPointAtLength(path.getTotalLength());
+        const {width,height}=graph.viewBox.baseVal;
+        recording.frames.push({x:tip.x,y:tip.y,width,height,elapsedMs:Number(graph.dataset.elapsedMs),cents:Number(graph.dataset.renderedCents),
+          maxTime:Number(graph.dataset.timeDomain),maxValue:Number(graph.dataset.multiplierDomain)});
+      }
       if(recording.active)requestAnimationFrame(sample);};requestAnimationFrame(sample);
   });
   for(let i=0;i<80;i++){await page.clock.runFor(250);fixture.advance(250);await expect(page.locator('[data-revision]')).toHaveAttribute('data-revision',String(fixture.state().revision));}
-  const frames=await page.evaluate(()=>{const recording=(window as unknown as {crashAnimation:{active:boolean;frames:{at:number;x:number;y:number;cents:number;maxTime:number;maxValue:number}[]}}).crashAnimation;recording.active=false;return recording.frames;});
+  const frames=await page.evaluate(()=>{const recording=(window as Window&{crashAnimation?:Recording}).crashAnimation!;recording.active=false;return recording.frames;});
   expect(frames.length).toBeGreaterThan(500);expect(new Set(frames.map(f=>f.cents.toFixed(4))).size).toBeGreaterThan(240);expect(frames.some(f=>!Number.isInteger(f.cents))).toBe(true);
   const ceiling=fixture.state().progress!.multiplierCents;
   for(let i=1;i<frames.length;i++){
-    const before=frames[i-1]!;const after=frames[i]!;const dt=after.at-before.at;
+    const before=frames[i-1]!;const after=frames[i]!;
     expect(after.cents).toBeGreaterThanOrEqual(before.cents);expect(after.cents).toBeLessThanOrEqual(ceiling);
+    expect(after.elapsedMs).toBeGreaterThanOrEqual(before.elapsedMs);
     expect(after.maxTime).toBeGreaterThanOrEqual(before.maxTime);expect(after.maxValue).toBeGreaterThanOrEqual(before.maxValue);
-    expect(Math.hypot(after.x-before.x,after.y-before.y),`curve endpoint must not jump when the camera scale expands: ${JSON.stringify({before,after})}`).toBeLessThanOrEqual(Math.max(3,dt*.15));
+    // A paint can include several animation ticks. Compare its movement with the progress it
+    // actually rendered on each axis, whose minimum ranges are 10 seconds and 1×.
+    const maxX=after.width*(after.elapsedMs-before.elapsedMs)/10_000;
+    const maxY=after.height*(after.cents-before.cents)/100;
+    expect(Math.abs(after.x-before.x),'time scale changes smoothly').toBeLessThanOrEqual(maxX+.02);
+    expect(Math.abs(after.y-before.y),'multiplier scale changes smoothly').toBeLessThanOrEqual(maxY+.02);
   }
   await fits(page);await page.screenshot({path:info.outputPath('crash-smooth-zoom.png')});
   fixture.holdUpdates();await page.clock.runFor(1000);const graph=page.getByRole('img',{name:'Crash flight graph'});const stopped=await graph.getAttribute('data-rendered-cents');await page.clock.runFor(3000);await expect(graph).toHaveAttribute('data-rendered-cents',stopped!);

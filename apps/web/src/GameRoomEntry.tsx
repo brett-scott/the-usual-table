@@ -18,10 +18,10 @@ function SeatedGameRoom<S,A extends {type:string}>({client,adapter,gameName,onLe
   const snapshot=useSyncExternalStore(client.subscribe,client.getSnapshot);
   const connection=useSyncExternalStore(client.subscribe,client.getConnection);
   const actions=useTableActions(client,onLeave);
-  const round=adapter.roundStart(snapshot);
+  const round=connection.status==='connected'?adapter.roundStart(snapshot):null;
   const start=round?.isHost?{
     label:round.label,
-    disabled:!round.allowed||connection.status!=='connected'||actions.busy,
+    disabled:!round.allowed||actions.busy,
     error:actions.startError,
     onStart:()=>void actions.send(round.action,'start'),
   }:undefined;
