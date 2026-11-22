@@ -1,6 +1,7 @@
 import { expect,test,type Page } from '@playwright/test';
 import { crashFixture } from './crashFixture';
 import { accountId,openOwnProfile,providerFixture } from './authFixture';
+import { startSharedRounds } from './fixtures';
 
 async function open(page:Page,saved=false){
   await page.goto('./#/games/crash');
@@ -57,6 +58,7 @@ test('real public Crash lobbies invite, share chat, resume and disappear after t
     await expect(peer.getByRole('note',{name:'Message from Crash host'})).toContainText('Ready for this flight');
     if(await page.getByRole('button',{name:'Close table chat'}).isVisible())await page.getByRole('button',{name:'Close table chat'}).click();
     await peer.reload();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await fits(page);await fits(peer);
+    await startSharedRounds(page,peer,'Crash','Crash game');
     await peer.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('region',{name:'Crash players'}).getByRole('article')).toHaveCount(1);
     await page.getByRole('button',{name:'Leave table',exact:true}).click();await peer.goto(invite);await expect(peer.getByRole('heading',{name:'Table expired'})).toBeVisible();
   }finally{await context.close();}

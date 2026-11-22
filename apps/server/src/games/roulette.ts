@@ -2,11 +2,11 @@ import { profileMemberFields } from '../profileMembership';
 import { z } from 'zod';
 import { GameError } from '@casual/engine';
 import { newRoulette,beginRouletteBetting,setRouletteBet,advanceRoulette,clearRouletteRound,emptyRouletteWager,rouletteStake,validRouletteState,rouletteStateSchema,RouletteError,type RouletteState } from '@casual/roulette';
-import { ROULETTE_RULES,rouletteCommandSchema,type RouletteSnapshot,type RouletteAction } from '@casual/protocol';
+import { ROULETTE_RULES,ROULETTE_REPLAY_CAPABILITY,ROULETTE_RESULT_TIMING_CAPABILITY,ROULETTE_LANDING_BUDGET_MS,ROULETTE_LEGACY_RESULT_HOLD_MS,rouletteCommandSchema,type RouletteSnapshot,type RouletteAction } from '@casual/protocol';
 import { newMember,disconnectMember } from '../roomMembership';
 import { fundedSeat,roomWalletSchema,walletHasFunds } from '../tableWallet';
 import { rouletteFunding,rouletteWalletReady,recordRouletteResult,sealRouletteSeat,flushRouletteWallet,validRouletteWallet } from './rouletteWallet';
-import type { GameRoomAdapter,HostedRoom,SeatIdentity } from './contracts';
+import type { GameRoomAdapter,HostedRoom,SeatIdentity,SnapshotContext } from './contracts';
 export interface RouletteRoom extends HostedRoom{schema:1;gameId:'roulette';adapterVersion:1;engine:RouletteState}
 function requireRule(value:unknown,code:string,message:string):asserts value{if(!value)throw new GameError(code,message);}
 function player(identity:SeatIdentity){return{...identity,balanceUnits:ROULETTE_RULES.guestStartingChips*100,wager:emptyRouletteWager(),returnedUnits:0};}
@@ -19,12 +19,19 @@ export function rouletteActions(room:RouletteRoom,id:string):RouletteAction['typ
   if(!fundedSeat(room,id)&&p.balanceUnits<1000&&!rouletteStake(p))actions.push('Refill');
  }return actions;
 }
-export function rouletteSnapshot(room:RouletteRoom,id:string):RouletteSnapshot{
+export function rouletteSnapshot(room:RouletteRoom,id:string,context?:SnapshotContext):RouletteSnapshot{
  requireRule(room.members[id],'SESSION_INVALID','Your seat is no longer available.');const e=room.engine;const seat=fundedSeat(room,id);
+ const supportsReplay=context?.capabilities.includes(ROULETTE_REPLAY_CAPABILITY);
+ const resultsDeadline=e.phase==='results'?e.deadline:null;
+ const landAt=resultsDeadline===null?null:e.settledAt===undefined
+  ? resultsDeadline-ROULETTE_LEGACY_RESULT_HOLD_MS
+  : e.settledAt+ROULETTE_LANDING_BUDGET_MS;
  return{gameId:'roulette',roomId:room.id,you:id,revision:room.revision,claimVersion:room.members[id]!.claimVersion,managerId:room.managerId,roundId:e.roundId,phase:e.phase,
- bettingDeadline:e.phase==='betting'?e.deadline:null,startedAt:e.startedAt,resultsDeadline:e.phase==='results'?e.deadline:null,
+ bettingDeadline:e.phase==='betting'?e.deadline:null,startedAt:e.startedAt,resultsDeadline,
+ ...(landAt!==null&&context?.capabilities.includes(ROULETTE_RESULT_TIMING_CAPABILITY)?{landAt}:{}),
  counts:e.counts,winner:e.phase==='results'?e.winner:null,history:e.history,
- players:e.players.map(p=>({...p,connected:room.members[p.id]!.connected,leaving:room.members[p.id]!.leaveAfterRound})),legalActions:rouletteActions(room,id),...(seat?{wallet:{status:seat.status,error:room.wallet?.error??null}}:{})};
+ players:e.players.map(({previousWager,...p})=>({...p,connected:room.members[p.id]!.connected,leaving:room.members[p.id]!.leaveAfterRound,
+  ...(supportsReplay&&p.id===id&&previousWager?.length?{previousWager}:{})})),legalActions:rouletteActions(room,id),...(seat?{wallet:{status:seat.status,error:room.wallet?.error??null}}:{})};
 }
 export function collectRouletteSeats(room:RouletteRoom,now:number){
  let changed=false;

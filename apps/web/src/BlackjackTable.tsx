@@ -6,13 +6,14 @@ import {useTablePresentation} from './useTablePresentation';
 import {displayedDealerTotal} from './dealerScore';
 import {useCompactLayout} from './useCompactLayout';
 import {TableHeader,TableToolbar} from './TableChrome';
+import {useTableActions,type TableActions} from './useTableActions';
 import {CardAppearance} from './cardAppearance';
 import {useTableLook} from './Collection';
 import {TableOptions} from './TableOptions';
 import {ChatBubble} from './ChatBubble';
 import {WagerChips} from './WagerChips';
 import { PlayerIdentityButton } from './PlayerProfiles';
-import {BaccaratChipTray} from './BaccaratBetting';
+import {ChipTray} from './BettingChips';
 import {BlackjackBettingController,type BlackjackChip} from './blackjackBettingController';
 import c from './App.module.css';
 import s from './BlackjackTable.module.css';
@@ -39,7 +40,7 @@ function Hand({ hand, active, deadline, presentation, shoeRef, selected = true }
   </div>;
 }
 
-export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeave: (endSession?: boolean) => void }) {
+export function BlackjackTable({ client, onLeave, actions }: { client: GameClient; onLeave: (endSession?: boolean) => void; actions?: TableActions<Action> }) {
   const state = useSyncExternalStore(client.subscribe, client.getSnapshot);
   const connection = useSyncExternalStore(client.subscribe, client.getConnection);
   const presentation = useTablePresentation(state);
@@ -60,24 +61,19 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
     if (handView.active !== ownActive || handView.selected !== selectedHand) setHandView({ active: ownActive, selected: selectedHand });
   }
   const manager = state.room?.managerPlayerId === player.id;
+  const waitingForBetting = state.phase === 'BETTING' && !!state.room && !state.room.bettingOpen;
   const localDeadline = state.decisionDeadline === null ? null : state.decisionDeadline - (connection.clockOffsetMs ?? 0);
-  const [error, setError] = useState('');
-  const [pending, setPending] = useState(false);
-  const inFlight = useRef(false);
+  const practiceActions = useTableActions(client,onLeave);
+  const {send,busy:pending,error} = actions ?? practiceActions;
+  const tableError = error || betting.error;
   const {theme,appearance,setTheme,setAppearance}=useTableLook();
   const viewingOtherHand = compact && ownTurn && selectedHand !== ownActive;
   const bettingDeadline = state.room?.bettingDeadline;
   const bettingTimeLeft = bettingDeadline == null || now + (connection.clockOffsetMs ?? 0) < bettingDeadline;
   const can = (type: Action['type']) => state.legalActions.includes(type) && connection.status === 'connected' && !pending
-    && (!presenting || type === 'NextRound') && (!betting.pending || !['Ready','SitOut','StartBetting','Leave'].includes(type))
+    && (!presenting || type === 'NextRound') && (!betting.pending || !['Ready','SitOut','Leave'].includes(type))
     && (bettingTimeLeft || !['PlaceBet', 'Ready', 'Unready', 'SitOut'].includes(type))
     && (localDeadline === null || localDeadline > now) && (!viewingOtherHand || !['Hit', 'Stand', 'Double', 'Split'].includes(type));
-  async function send(action: Action) {
-    if (inFlight.current) return;
-    inFlight.current = true; setPending(true); setError('');
-    try { await client.send(action); if (action.type === 'Leave') onLeave(true); } catch (e) { setError(e instanceof Error ? e.message : 'That action failed. Please try again.'); }
-    finally { inFlight.current = false; setPending(false); }
-  }
   const profit = player.roundResult?.net??0;
   const complete = state.phase === 'ROUND_COMPLETE';
   const maxBet = Math.min(2000, Math.floor((player.balance-betting.wager.perfectPairsAmount) / 20) * 20);
@@ -103,7 +99,7 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
   if (connection.status !== 'connected') message = connection.message;
   else if (presenting) message = complete ? 'Revealing the dealer’s cards…' : 'Dealing the cards…';
   else if (state.phase === 'BETTING') {
-    if (state.room && !state.room.bettingOpen) message = manager ? 'Open betting when you’re ready. Play alone or invite friends.' : 'Waiting for the table host to open betting.';
+    if (waitingForBetting) message = '';
     else message = player.ready ? `✓ You’re ready. ${waiting} ${waiting === 1 ? 'player' : 'players'} still to bet.` : player.sittingOut ? 'You’re sitting out this round.' : 'Place your bet, then select Ready.';
   } else if (!player.hands.length && !complete) message = 'This round is in progress. You’ll join the next betting window.';
   else if (state.phase === 'INSURANCE') message = 'Dealer shows an ace. Take insurance?';
@@ -153,7 +149,7 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
         <div className={s.summary}><span>Table stack <strong>{money(player.balance)} <small>chips</small></strong></span><span>On table <strong>{money(wager.amount+wager.perfectPairsAmount)}</strong></span></div>
         <p className={s.status} role="status">{state.blackjackBettingVersion!==2?'Chip betting is unavailable for this table. Refresh and try again.':state.wallet?.error?'Saving your chips… Actions resume when the wallet reconnects.':message}</p>
         {phaseSeconds!==null&&<p className={s.phaseNote} role="timer" aria-label={complete?'Next round countdown':state.phase==='INSURANCE'?'Insurance time remaining':'Betting time remaining'} aria-live="off">{complete?`Next round in ${phaseSeconds}s`:`${phaseSeconds}s remaining`}</p>}
-        {state.phase==='BETTING'&&(!state.room||state.room.bettingOpen)&&<BaccaratChipTray denomination={denomination} enabled={editable} pending={betting.pending} canUndo={betting.canUndo} canClear={betting.canClear} onSelect={setDenomination} onUndo={()=>controller.undo()} onClear={()=>controller.clear()}/>}
+        {state.phase==='BETTING'&&(!state.room||state.room.bettingOpen)&&<ChipTray denomination={denomination} enabled={editable} pending={betting.pending} canUndo={betting.canUndo} canClear={betting.canClear} onSelect={setDenomination} onUndo={()=>controller.undo()} onClear={()=>controller.clear()}/>}
         <div className={s.buttons}>
           {connection.status==='connected'&&<>
             {state.phase==='BETTING'&&(!state.room||state.room.bettingOpen)&&<>
@@ -163,7 +159,6 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
                 : <button className={s.primary} disabled={!can('Ready')} onClick={()=>void send({type:'Ready'})}>{state.room?player.ready?'Ready ✓':'Ready':'Deal me in'}</button>}
               {state.room&&<button disabled={!can('SitOut')} onClick={()=>void send({type:'SitOut'})}>Sit out</button>}
             </>}
-            {state.phase==='BETTING'&&state.room&&!state.room.bettingOpen&&manager&&<button className={s.primary} disabled={!can('StartBetting')} onClick={()=>void send({type:'StartBetting'})}>Open betting</button>}
             {state.phase==='PLAYER_TURNS'&&<><button className={s.primary} disabled={!can('Hit')} onClick={()=>void send({type:'Hit'})}>Hit</button><button disabled={!can('Stand')} onClick={()=>void send({type:'Stand'})}>Stand</button><button disabled={!can('Double')} onClick={()=>void send({type:'Double'})}>Double</button><button disabled={!can('Split')} onClick={()=>void send({type:'Split'})}>Split</button></>}
             {state.phase==='INSURANCE'&&<><button className={s.primary} disabled={!can('InsuranceDecision')} onClick={()=>void send({type:'InsuranceDecision',amount:0})}>No insurance</button><button disabled={!can('InsuranceDecision')||player.balance<player.bet/2} onClick={()=>void send({type:'InsuranceDecision',amount:player.bet/2})}>Insure for {money(player.bet/2)}</button></>}
             {complete&&(!state.room||manager)&&<button className={s.primary} disabled={!can('NextRound')} onClick={()=>void send({type:'NextRound'})}>Next round</button>}
@@ -172,7 +167,7 @@ export function BlackjackTable({ client, onLeave }: { client: GameClient; onLeav
           {state.room&&connection.status==='offline'&&<button onClick={()=>client.reconnect?.()}>Try reconnecting</button>}
           {state.room&&connection.status!=='connected'&&<button onClick={()=>onLeave()}>Create another table</button>}
         </div>
-        {(error||betting.error)&&<p className={s.error} role="alert">{error||betting.error}</p>}
+        {tableError&&<p className={s.error} role="alert">{tableError}</p>}
       </section>
       </div>
     </main>

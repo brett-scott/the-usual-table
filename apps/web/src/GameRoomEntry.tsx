@@ -1,15 +1,40 @@
-import { useEffect,useState,type FormEvent,type ReactNode } from 'react';
-import type { GameClientAdapter,TableClient,TableInfo } from '@casual/protocol';
+import { useEffect,useState,useSyncExternalStore,type FormEvent,type ReactNode } from 'react';
+import type { TableClient,TableInfo } from '@casual/protocol';
 import { ApiError,createTableClient,forgetSession,joinGameTable,resumeTableSession,savedSession } from './onlineClient';
 import { AccountControls } from './AccountControls';
 import { TableRecovery } from './TableRecovery';
 import { BuyInFields,GuestIdentityFields,useTableFunding,useTableIdentity } from './TableIdentity';
+import type { RoomGameClientAdapter } from './gameClientAdapters';
+import { TableWaitingContext } from './TableChrome';
+import { useTableActions,type TableActions } from './useTableActions';
 import s from './App.module.css';
 
+type RoomView<S,A> = (client:TableClient<S,A>,onLeave:(endSession?:boolean)=>void,actions:TableActions<A>)=>ReactNode;
+
+function SeatedGameRoom<S,A extends {type:string}>({client,adapter,gameName,onLeave,children}:{
+  client:TableClient<S,A>;adapter:RoomGameClientAdapter<S,A>;gameName:string;onLeave:(endSession?:boolean)=>void;
+  children:RoomView<S,A>;
+}){
+  const snapshot=useSyncExternalStore(client.subscribe,client.getSnapshot);
+  const connection=useSyncExternalStore(client.subscribe,client.getConnection);
+  const actions=useTableActions(client,onLeave);
+  const round=adapter.roundStart(snapshot);
+  const start=round?.isHost?{
+    label:round.label,
+    disabled:!round.allowed||connection.status!=='connected'||actions.busy,
+    error:actions.startError,
+    onStart:()=>void actions.send(round.action,'start'),
+  }:undefined;
+  const tableActions={...actions,error:actions.error||(!start?actions.startError:'')};
+  return <TableWaitingContext.Provider value={round?{gameName,start}:null}>
+    {children(client,onLeave,tableActions)}
+  </TableWaitingContext.Provider>;
+}
+
 /** One invitation, guest/account entry, resume and exit flow for all game views. */
-export function GameRoomEntry<S,A>({invite,info,adapter,gameName,art,intro,footer,seatHint,children}:{
-  invite:string;info:TableInfo;adapter:GameClientAdapter<S,A>;gameName:string;art?:ReactNode;intro?:string;footer?:ReactNode;seatHint?:string;
-  children(client:TableClient<S,A>,onLeave:(endSession?:boolean)=>void):ReactNode;
+export function GameRoomEntry<S,A extends {type:string}>({invite,info,adapter,gameName,art,intro,footer,seatHint,children}:{
+  invite:string;info:TableInfo;adapter:RoomGameClientAdapter<S,A>;gameName:string;art?:ReactNode;intro?:string;footer?:ReactNode;seatHint?:string;
+  children:RoomView<S,A>;
 }){
   const identity=useTableIdentity();const funding=useTableFunding(info);const [client,setClient]=useState<TableClient<S,A>|null>(null);
   const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [entryErrorCode,setEntryErrorCode]=useState('');
@@ -36,7 +61,7 @@ export function GameRoomEntry<S,A>({invite,info,adapter,gameName,art,intro,foote
   }
   function leave(endSession=false){if(endSession)forgetSession(invite);client?.dispose();location.hash=endSession?'/games':`/games/${info.gameId}`;}
   if (entryErrorCode === 'ROOM_EXPIRED') return <TableRecovery state="expired" browseHref={`#/games/${info.gameId}`} />;
-  return client?children(client,leave):<div className={s.welcome}>
+  return client?<SeatedGameRoom client={client} adapter={adapter} gameName={gameName} onLeave={leave}>{children}</SeatedGameRoom>:<div className={s.welcome}>
     <div className={s.welcomeNav}><div className={s.welcomeBrand}><span className={s.brandMark}>♣</span><span>The Usual Table</span></div><a href="#/games">All games ↗</a><AccountControls beforeSignIn={identity.saveDraft}/></div>
     <main className={s.welcomeMain}>
       {art&&<div className={s.welcomeArt} aria-hidden="true">{art}</div>}

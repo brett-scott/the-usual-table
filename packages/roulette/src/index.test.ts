@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { MAX_WALLET_UNITS,ROULETTE_BETS,ROULETTE_WHEEL,rouletteBet,rouletteColor,rouletteWagerSchema,rouletteReturned } from '@casual/protocol';
+import { MAX_WALLET_UNITS,ROULETTE_BETS,ROULETTE_RESULTS_MS,ROULETTE_WHEEL,rouletteBet,rouletteColor,rouletteWagerSchema,rouletteReturned } from '@casual/protocol';
 import { newRoulette,beginRouletteBetting,setRouletteBet,advanceRoulette,validRouletteState,rouletteStateSchema } from './index';
 function table(){const s=newRoulette();s.players.push({id:'one',name:'One',seat:0,balanceUnits:1000000,wager:[],returnedUnits:0});beginRouletteBetting(s,100);return s;}
 it('enumerates exactly the legal single-zero bets, colours and wheel order',()=>{
@@ -24,11 +24,18 @@ it('replaces and cancels wagers exactly, without a combined 1,000-chip cap; reje
  for(const amountUnits of [0,999,1500,101000])expect(rouletteWagerSchema.safeParse([{betId:'red',amountUnits}]).success).toBe(false);expect(rouletteWagerSchema.safeParse([{betId:'red',amountUnits:1000},{betId:'red',amountUnits:1000}]).success).toBe(false);
  p.balanceUnits=1000;expect(()=>setRouletteBet(s,p,[{betId:'red',amountUnits:2000}],104)).toThrow('enough');expect(()=>setRouletteBet(s,p,[{betId:'red',amountUnits:1000}],15100)).toThrow('closed');p.balanceUnits=MAX_WALLET_UNITS;expect(()=>setRouletteBet(s,p,[{betId:'straight-0',amountUnits:1000}],105)).toThrow('limit');
 });
-it.each([0,1,18,19,36])('uses one uniform draw and exact 15/8/5-second boundaries, then settles only once: %s',winner=>{
- const s=table();setRouletteBet(s,s.players[0]!,[{betId:`straight-${winner}`,amountUnits:1000}],101);expect(advanceRoulette(s,15099,()=>{throw new Error('Early draw');})).toBe(s);const draws:number[]=[];const spin=advanceRoulette(s,15100,max=>{draws.push(max);return winner;});expect(draws).toEqual([37]);expect(spin.phase).toBe('spinning');expect(spin.deadline).toBe(23100);expect(advanceRoulette(spin,23099,()=>0)).toBe(spin);const result=advanceRoulette(spin,23100,()=>{throw new Error('Duplicate draw');});expect(result.players[0]!.returnedUnits).toBe(36000);expect(result.deadline).toBe(28100);expect(advanceRoulette(result,99999,()=>0)).toBe(result);expect(validRouletteState(result)).toBe(true);
+it.each([0,1,18,19,36])('uses one uniform draw, reserves time to land and show the result, and settles only once: %s',winner=>{
+ const s=table();setRouletteBet(s,s.players[0]!,[{betId:`straight-${winner}`,amountUnits:1000}],101);expect(advanceRoulette(s,15099,()=>{throw new Error('Early draw');})).toBe(s);const draws:number[]=[];const spin=advanceRoulette(s,15100,max=>{draws.push(max);return winner;});expect(draws).toEqual([37]);expect(spin.phase).toBe('spinning');expect(spin.deadline).toBe(23100);expect(advanceRoulette(spin,23099,()=>0)).toBe(spin);const result=advanceRoulette(spin,23100,()=>{throw new Error('Duplicate draw');});expect(result.players[0]!.returnedUnits).toBe(36000);expect(result.deadline).toBe(23100+ROULETTE_RESULTS_MS);expect(advanceRoulette(result,99999,()=>0)).toBe(result);expect(validRouletteState(result)).toBe(true);
 });
 it('pauses without drawing empty rounds and catches up delayed alarms with exactly one result',()=>{
  const s=table();expect(advanceRoulette(s,99999,()=>{throw new Error('Empty draw');}).phase).toBe('waiting');setRouletteBet(s,s.players[0]!,[{betId:'red',amountUnits:1000}],101);const result=advanceRoulette(s,99999,()=>0);expect(result.phase).toBe('results');expect(result.counts).toEqual({spins:1,red:0,black:0,zero:1,odd:0,even:0});
+ expect(result.deadline).toBe(99999+ROULETTE_RESULTS_MS);
+ expect(validRouletteState(result)).toBe(true);
+ const legacyResult={...result,deadline:28100};delete legacyResult.settledAt;
+ expect(validRouletteState(rouletteStateSchema.parse(legacyResult))).toBe(true);
+ const previousResult={...result,deadline:99999+10500};
+ expect(validRouletteState(rouletteStateSchema.parse(previousResult))).toBe(true);
+ expect(validRouletteState({...previousResult,deadline:previousResult.deadline+1})).toBe(false);
 });
 it('retains twenty results and cumulative counts; rejects inconsistent history, payouts, counts and restored bankrolls',()=>{
  let s=table();for(let i=0;i<22;i++){setRouletteBet(s,s.players[0]!,[{betId:'red',amountUnits:1000}],s.deadline!-1);s=advanceRoulette(s,s.deadline!+8000,()=>i%2?0:1);if(i<21)beginRouletteBetting(s,s.deadline!);}

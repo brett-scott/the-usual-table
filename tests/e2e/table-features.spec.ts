@@ -65,7 +65,15 @@ test('guests see ready and waiting states, shared results and the host skipping 
     await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
     await guest.goto(page.url()); await guest.getByLabel('What should we call you?').fill('Guest'); await guest.getByRole('button', { name: 'Join table', exact: true }).click();
     await expect(guest.locator('[data-connection]')).toHaveAttribute('data-connection', 'connected');
-    await page.getByRole('button', { name: 'Open betting' }).click();
+    const hostPrompt = page.getByRole('region', { name: 'Blackjack round status' });
+    const guestPrompt = guest.getByRole('region', { name: 'Blackjack round status' });
+    await expect(guestPrompt.getByRole('heading', { name: 'Waiting for Host', exact: true })).toBeVisible();
+    await expect(guestPrompt.getByRole('button')).toHaveCount(0);
+    await expect(guest.getByRole('region', { name: 'Blackjack table' })).not.toHaveCSS('filter', 'none');
+    await hostPrompt.getByRole('button', { name: 'Open betting', exact: true }).click();
+    await expect(hostPrompt).toHaveCount(0);
+    await expect(guestPrompt).toHaveCount(0);
+    await expect(guest.getByRole('region', { name: 'Blackjack table' })).toHaveCSS('filter', 'none');
   await page.getByRole('button', { name: 'Clear bets', exact: true }).click();
   await page.getByRole('button', { name: 'Select 100 chips', exact: true }).click();
   await page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();

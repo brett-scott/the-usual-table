@@ -67,6 +67,25 @@ export async function rigShoe(page: Page, ranks: string[]) {
   }, indices);
 }
 
+export async function startSharedRounds(host: Page, guest: Page, game: string, surface: string) {
+  const prompt = (page: Page) => page.getByRole('region', { name: `${game} round status`, exact: true });
+  const guestPrompt = prompt(guest);
+  await expect(guestPrompt.getByRole('heading', { name: 'Waiting for Host', exact: true })).toBeVisible();
+  await expect(guestPrompt.getByRole('button')).toHaveCount(0);
+  for (const page of [host, guest]) {
+    const box = (await prompt(page).boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThan(1);
+    expect(Math.abs(box.y + box.height / 2 - viewport.height / 2)).toBeLessThan(1);
+    await expect(page.getByRole('region', { name: surface, exact: true })).not.toHaveCSS('filter', 'none');
+  }
+  await prompt(host).getByRole('button', { name: 'Start rounds', exact: true }).click();
+  for (const page of [host, guest]) {
+    await expect(prompt(page)).toHaveCount(0);
+    await expect(page.getByRole('region', { name: surface, exact: true })).toHaveCSS('filter', 'none');
+  }
+}
+
 export async function expectOneScreen(page: Page) {
   const size = await page.evaluate(() => ({ height: innerHeight, width: innerWidth, scrollHeight: document.documentElement.scrollHeight, scrollWidth: document.documentElement.scrollWidth, y: scrollY }));
   expect(size.scrollHeight, 'document must not scroll vertically').toBeLessThanOrEqual(size.height + 1);

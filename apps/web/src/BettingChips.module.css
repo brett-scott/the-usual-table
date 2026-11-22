@@ -1,0 +1,65 @@
+.tray { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; container:betting-tray / inline-size; }
+.denominations { display:flex; align-items:center; gap:var(--chip-gap,8px); }
+.chipButton {
+  position:relative;
+  display:grid;
+  place-items:center;
+  flex:0 0 auto;
+  width:var(--chip-size,62px);
+  height:var(--chip-size,62px);
+  padding:var(--chip-padding,3px);
+  border:2px solid transparent;
+  border-radius:50%;
+  background:transparent;
+  cursor:pointer;
+  touch-action:manipulation;
+  transition:background 140ms ease,border-color 140ms ease;
+}
+.chipButton[aria-pressed='true'] { border-color:var(--collection-accent,#f4d58e); background:var(--collection-glow,#e3c47e15); box-shadow:0 0 0 2px #0f2117,inset 0 0 0 1px #f4d58e48; }
+.chipButton:hover:not(:disabled) { background:var(--collection-glow,#e3c47e15); }
+.chipButton:active:not(:disabled) { background:var(--collection-glow,#e3c47e30); }
+.chipButton:disabled { cursor:default; opacity:.58; }
+.chipArt { display:block; width:var(--chip-art-size,52px); height:var(--chip-art-size,52px); --chip-color:#346486; --chip-inner:#264c68; }
+.chipArt[data-value='100'] { --chip-color:#495762; --chip-inner:#303e48; }
+.chipArt[data-value='1000'] { --chip-color:#855576; --chip-inner:#5f3954; }
+.chipArt svg { display:block; width:100%; height:100%; filter:drop-shadow(0 2px 1px #0006); }
+.chipEdge { fill:var(--chip-color); stroke:#111e17; stroke-width:2; }
+.chipMarks { fill:none; stroke:#f2e5bd; stroke-width:4; stroke-dasharray:6 5; }
+.chipFace { fill:var(--chip-inner); stroke:#efe4c4; stroke-width:.8; }
+.chipArt text { fill:#fff6dd; font:700 12px 'Segoe UI',sans-serif; font-variant-numeric:tabular-nums; }
+.selectedMark { position:absolute; right:-1px; bottom:1px; display:grid; place-items:center; width:17px; height:17px; border:1px solid #e9c97b; border-radius:50%; color:var(--collection-on-accent,#17291d); background:var(--collection-accent,#f4d58e); font-size:10px; font-weight:800; }
+.chipButton:focus-visible,.edits button:focus-visible { outline:3px solid #ffe4a4; outline-offset:3px; z-index:1; }
+.edits { display:flex; gap:7px; }
+.edits button { min-height:44px; min-width:56px; border:1px solid var(--collection-border,#7f90726b); border-radius:7px; padding:8px 11px; color:var(--collection-ink,#e7dfc7); background:var(--collection-control,#10231a); font-size:12px; cursor:pointer; touch-action:manipulation; }
+.edits button:first-child > span { font-size:18px; vertical-align:-1px; }
+.edits button:hover:not(:disabled) { border-color:var(--collection-accent,#d9c38a); background:var(--collection-current,#263f2d); }
+.edits button:disabled { opacity:.4; cursor:default; }
+
+@media(max-width:640px) {
+  .tray { gap:8px; }
+  .denominations { --chip-size:48px; --chip-art-size:42px; --chip-padding:1px; --chip-gap:6px; }
+  .selectedMark { width:14px; height:14px; bottom:0; font-size:9px; }
+  .edits { gap:5px; }
+  .edits button { padding:7px 9px; font-size:11px; min-width:54px; }
+}
+@media(max-height:500px) and (min-width:641px) {
+  .tray { gap:4px; }
+  .denominations { --chip-size:44px; --chip-art-size:38px; --chip-padding:1px; --chip-gap:3px; }
+  .selectedMark { width:14px; height:14px; bottom:0; font-size:9px; }
+  .edits { gap:4px; }
+  .edits button { flex:0 0 44px; min-width:44px; padding:3px; font-size:10px; }
+  .edits button:first-child > span,.clearSuffix { display:none; }
+}
+@container betting-tray (max-width:400px) {
+  .denominations { --chip-size:48px; --chip-art-size:42px; --chip-padding:1px; --chip-gap:6px; }
+  .selectedMark { width:14px; height:14px; bottom:0; font-size:9px; }
+  .edits { gap:5px; }
+  .edits button { min-width:54px; padding:7px 9px; font-size:11px; }
+}
+@container betting-tray (max-width:300px) {
+  .denominations { --chip-size:44px; --chip-art-size:38px; --chip-gap:3px; }
+  .edits { gap:4px; }
+  .edits button { min-width:44px; width:44px; padding:3px; font-size:10px; }
+  .edits button:first-child > span,.clearSuffix { display:none; }
+}
+@media(prefers-reduced-motion:reduce) { .chipButton { transition:none; } }

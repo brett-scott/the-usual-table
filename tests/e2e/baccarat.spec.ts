@@ -65,7 +65,18 @@ test('real Baccarat public lobbies share chat, short invitations and reload, the
  try{await page.goto('./#/games');await page.getByRole('article',{name:'Baccarat',exact:true}).getByRole('link',{name:'Find a Table',exact:true}).click();await page.getByRole('radio',{name:'Public',exact:true}).check();await page.getByRole('button',{name:'Create a table',exact:true}).click();await page.getByLabel('What should we call you?').fill('Baccarat host');await page.getByRole('button',{name:'Create table',exact:true}).click();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');const invitation=new URL(page.url());invitation.hash=shortRoomHash(roomIdFromHash(invitation.hash)!);const invite=invitation.href;expect(invite).toContain('#/t/');
   await peer.goto(invite);await peer.getByLabel('What should we call you?').fill('Baccarat peer');await peer.getByRole('button',{name:'Join table',exact:true}).click();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await expect(page.getByRole('region',{name:'Baccarat players'}).getByRole('article')).toHaveCount(2);
   if(await page.getByRole('button',{name:/^Table chat/}).isVisible())await page.getByRole('button',{name:/^Table chat/}).click();const sender=page.getByRole('region',{name:'Table chat'}).or(page.getByRole('dialog',{name:'Table chat'}));await sender.getByRole('textbox').fill('Good luck at the table');await sender.getByRole('button',{name:'Send',exact:true}).click();await expect(peer.getByRole('note',{name:'Message from Baccarat host'})).toContainText('Good luck at the table');if(await page.getByRole('button',{name:'Close table chat'}).isVisible())await page.getByRole('button',{name:'Close table chat'}).click();
-  await peer.reload();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await fits(page);await fits(peer);await peer.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('region',{name:'Baccarat players'}).getByRole('article')).toHaveCount(1);await page.getByRole('button',{name:'Leave table',exact:true}).click();await peer.goto(invite);await expect(peer.getByRole('heading',{name:'Table expired'})).toBeVisible();
+  await peer.reload();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await fits(page);await fits(peer);
+  const hostPrompt=page.getByRole('region',{name:'Baccarat round status'});
+  const guestPrompt=peer.getByRole('region',{name:'Baccarat round status'});
+  await expect(guestPrompt.getByRole('heading',{name:'Waiting for Host',exact:true})).toBeVisible();
+  await expect(guestPrompt.getByRole('button')).toHaveCount(0);
+  const bettingBoard=peer.getByLabel('Your table wagers',{exact:true});
+  await expect(bettingBoard).not.toHaveCSS('filter','none');
+  await hostPrompt.getByRole('button',{name:'Start rounds',exact:true}).click();
+  await expect(hostPrompt).toHaveCount(0);
+  await expect(guestPrompt).toHaveCount(0);
+  await expect(bettingBoard).toHaveCSS('filter','none');
+  await peer.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('region',{name:'Baccarat players'}).getByRole('article')).toHaveCount(1);await page.getByRole('button',{name:'Leave table',exact:true}).click();await peer.goto(invite);await expect(peer.getByRole('heading',{name:'Table expired'})).toBeVisible();
  }finally{await context.close();}
 });
 test('chip tiles allow combined main, Tie and side bets with exact results and saved-chip returns',async({page},info)=>{

@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef } from 'react';
 import { ROULETTE_SPIN_MS, ROULETTE_WHEEL, rouletteColor, type RouletteSnapshot } from '@casual/protocol';
-import { landingFrame, POCKET_STEP, ROULETTE_LANDING_MS, spinFrame, type WheelFrame } from './rouletteWheelMotion';
+import { landingFrame, planRouletteLanding, POCKET_STEP, scheduleRouletteLanding, spinFrame, type WheelFrame } from './rouletteWheelMotion';
 import s from './RouletteTable.module.css';
 
 function point(radius: number, degrees: number) {
@@ -27,13 +27,14 @@ interface Playback {
   roundId: number;
   elapsed: number;
   frame: WheelFrame;
-  landingAt?: number;
+  landing?: { plan: ReturnType<typeof scheduleRouletteLanding>; elapsed: number };
 }
 
-export function RouletteWheel({state, offset, reduced, onLanded, landed, highlight}: {
+export function RouletteWheel({state, offset, reduced, landAt, onLanded, landed, highlight}: {
   state: RouletteSnapshot;
-  offset: number;
+  offset: number | undefined;
   reduced: boolean;
+  landAt: number | null;
   onLanded(roundId: number): void;
   landed: boolean;
   highlight: boolean;
@@ -50,7 +51,9 @@ export function RouletteWheel({state, offset, reduced, onLanded, landed, highlig
 
   useLayoutEffect(() => {
     let animation: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const priorSpin = playback.current?.roundId === roundId ? playback.current : null;
+    const serverTime = () => Date.now() + (offset ?? 0);
     const paint = (frame: WheelFrame) => {
       const position = point(frame.radius, frame.ball);
       rotor.current?.setAttribute('transform', `rotate(${frame.rotor} 100 100)`);
@@ -62,38 +65,54 @@ export function RouletteWheel({state, offset, reduced, onLanded, landed, highlig
       svg.current?.setAttribute('data-ball-radius', String(frame.radius));
     };
 
-    if (phase === 'spinning' && startedAt !== null) {
+    if (phase === 'spinning' && startedAt !== null && offset !== undefined) {
       const spinStart = startedAt;
       function orbit() {
-        const elapsed = Math.max(playback.current?.roundId === roundId ? playback.current.elapsed : 0, Date.now() + offset - spinStart);
+        const elapsed = Math.max(playback.current?.roundId === roundId ? playback.current.elapsed : 0, serverTime() - spinStart);
         const frame = spinFrame(roundId, reduced ? 0 : elapsed);
         playback.current = { roundId, elapsed, frame };
         paint(frame);
-        if (!reduced && elapsed < ROULETTE_SPIN_MS + 8000) animation = requestAnimationFrame(orbit);
+        if (!reduced) animation = requestAnimationFrame(orbit);
       }
       orbit();
-    } else if (phase === 'results' && winner !== null) {
-      const confirmedPocket = winner;
-      const from = priorSpin?.frame ?? spinFrame(roundId, ROULETTE_SPIN_MS);
-      const landingAt = priorSpin ? (priorSpin.landingAt ??= performance.now()) : 0;
-      function settle() {
-        const progress = reduced || !priorSpin || announcedRound.current === roundId ? 1
-          : Math.min(1, (performance.now() - landingAt) / ROULETTE_LANDING_MS);
-        paint(landingFrame(from, confirmedPocket, progress));
-        if (progress < 1) animation = requestAnimationFrame(settle);
-        else if (announcedRound.current !== roundId) {
+    } else if (phase === 'results' && winner !== null && landAt !== null && offset !== undefined) {
+      const deadline = landAt;
+      const serverNow = serverTime();
+      const from = priorSpin?.frame ?? spinFrame(roundId, startedAt === null ? ROULETTE_SPIN_MS : serverNow - startedAt);
+      const remaining = deadline - serverNow;
+      const current = priorSpin ?? { roundId, elapsed: 0, frame: from };
+      const landing = current.landing ??= { plan: scheduleRouletteLanding(from, winner, remaining), elapsed: 0 };
+      playback.current = current;
+      const plan = landing.plan;
+      const finish = () => {
+        const finalPlan = plan ?? planRouletteLanding(from, winner);
+        paint(landingFrame(finalPlan, finalPlan.durationMs));
+        if (announcedRound.current !== roundId) {
           announcedRound.current = roundId;
           onLanded(roundId);
         }
+      };
+      if (remaining <= 0 || announcedRound.current === roundId) finish();
+      else if (reduced || !plan) {
+        paint(plan ? landingFrame(plan, landing.elapsed) : from);
+        timer = setTimeout(finish, remaining);
+      } else {
+        const settle = () => {
+          const timeLeft = deadline - serverTime();
+          if (timeLeft <= 0) { finish(); return; }
+          landing.elapsed = Math.max(landing.elapsed, plan.durationMs - timeLeft);
+          paint(landingFrame(plan, landing.elapsed));
+          animation = requestAnimationFrame(settle);
+        };
+        settle();
       }
-      settle();
     } else {
       playback.current = null;
       paint(spinFrame(roundId, 0));
     }
 
-    return () => { if (animation !== undefined) cancelAnimationFrame(animation); };
-  }, [phase, roundId, startedAt, winner, offset, reduced, onLanded]);
+    return () => { if (animation !== undefined) cancelAnimationFrame(animation); clearTimeout(timer); };
+  }, [phase, roundId, startedAt, winner, landAt, offset, reduced, onLanded]);
 
   const label = landed ? `Roulette wheel, winning number ${winner}`
     : phase === 'results' ? 'Roulette wheel, ball settling'

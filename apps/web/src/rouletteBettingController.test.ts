@@ -28,3 +28,11 @@ it('discards failed or disconnected intentions without replaying unconfirmed chi
 it('fences late receipts across betting deadlines, new rounds and disposal',async()=>{
  const f=fixture();f.controller.add('red',100);f.update({phase:'spinning',bettingDeadline:null,startedAt:Date.now(),legalActions:['Leave']});expect(f.controller.getSnapshot()).toMatchObject({pending:false,wager:[]});f.calls[0]!.resolve();await tick();f.update({phase:'betting',roundId:2,bettingDeadline:Date.now()+15000,legalActions:['PlaceBet','Leave']});expect(f.controller.getSnapshot().wager).toEqual([]);expect(f.calls).toHaveLength(1);f.controller.add('straight-0',10);f.stop();f.calls[1]!.resolve();await tick();expect(f.calls).toHaveLength(2);
 });
+it('rejects replay atomically when the previous wager exceeds the current table balance',()=>{
+ const f=fixture();const previousWager=[{betId:'red',amountUnits:10000},{betId:'straight-0',amountUnits:1000}];
+ f.update({players:[{...f.state().players[0]!,previousWager,balanceUnits:10000}]});
+ f.controller.replay();
+ expect(f.controller.getSnapshot()).toMatchObject({wager:[],pending:false,canUndo:false,error:'Not enough table chips to replay that bet.'});
+ expect(f.calls).toHaveLength(0);
+ f.stop();
+});

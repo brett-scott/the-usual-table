@@ -1,0 +1,16 @@
+:global([data-game-table]):has(> .overlay) :is(:global([data-collection-surface]:not([data-collection-surface] *)), :global([data-waiting-surface])) { filter:brightness(.38); }
+
+.overlay { position:fixed;inset:0;z-index:3;display:grid;place-items:center;padding:16px;pointer-events:none; }
+.prompt { width:min(100%,300px);display:grid;gap:14px;padding:20px;border:1px solid var(--accent);border-radius:14px;background:linear-gradient(155deg,#294337,var(--panel) 70%);box-shadow:0 12px 40px #07120ecc;text-align:center; }
+.prompt h2 { margin:0;font:clamp(22px,3vw,27px) Georgia,serif; }
+.prompt button { min-height:48px;padding:8px 16px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:var(--collection-on-accent,#172c20);font-size:16px;font-weight:700;cursor:pointer;pointer-events:auto; }
+.prompt button:hover:not(:disabled) { filter:brightness(1.1); }
+.prompt button:focus-visible { outline:2px solid var(--accent);outline-offset:3px; }
+.prompt button:disabled { opacity:.55;cursor:default; }
+.error { margin:0;color:#ffd0b8;font-size:12px;line-height:1.35; }
+
+@media(max-height:500px) and (min-width:641px) {
+ .prompt { gap:6px;padding:10px 16px; }
+ .prompt h2 { font-size:21px;line-height:1.1; }
+ .prompt button { min-height:44px; }
+}

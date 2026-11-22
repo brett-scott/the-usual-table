@@ -68,6 +68,6 @@ function BlackjackRoom({invite,info}:{invite:string;info:TableInfo}) {
     intro="Join your friends for a little blackjack. No account required, no real money." seatHint="Up to four friends"
     art={<><PlayingCard card={{id:'intro-a',rank:'A',suit:'spades'}}/><PlayingCard card={{id:'intro-k',rank:'K',suit:'hearts'}}/><span className={s.artChip}>21</span></>}
     footer={<><span>BLACKJACK, WITHOUT THE STAKES.</span><span>Six decks. Classic rules. Your pace.</span></>}
-  >{(client,onLeave)=><Table client={client} onLeave={onLeave}/>}</GameRoomEntry>;
+  >{(client,onLeave,actions)=><Table client={client} onLeave={onLeave} actions={actions}/>}</GameRoomEntry>;
 }
 

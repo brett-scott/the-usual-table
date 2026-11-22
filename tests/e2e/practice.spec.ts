@@ -9,6 +9,7 @@ test('guest plays repeated complete rounds; themes preserve the hand', async ({ 
   await page.getByLabel('What should we call you?').fill('River');
   await page.getByRole('button', { name: 'Take a practice seat' }).click();
   await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Blackjack round status' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: /Seat \d empty/ })).toHaveCount(3);
   await page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();
   for (let round = 0; round < 3; round++) {

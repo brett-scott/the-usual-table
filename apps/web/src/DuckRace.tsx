@@ -3,9 +3,11 @@ import type { DuckRaceAction,DuckRaceSnapshot,TableClient,TableInfo } from '@cas
 import { duckRaceClientAdapter } from './gameClientAdapters';
 import { GameRoomEntry } from './GameRoomEntry';
 import { TableHeader,TableToolbar } from './TableChrome';
+import type { TableActions } from './useTableActions';
 import { PlayerIdentityButton } from './PlayerProfiles';
 import { ChatBubble } from './ChatBubble';
 import { DuckArtwork } from './DuckArtwork';
+import { ChipButtons,type ChipDenomination } from './BettingChips';
 import s from './DuckRace.module.css';
 
 const chips=(units:number)=>new Intl.NumberFormat('en',{maximumFractionDigits:2}).format(units/100);
@@ -14,23 +16,19 @@ const wings=['#b98134','#428c93','#876099','#af6656'];
 const duckStyle=(id:number)=>({'--duck-color':colors[id],'--duck-wing':wings[id]} as CSSProperties);
 export function DuckRaceRoom({invite,info}:{invite:string;info:TableInfo}){
  return <GameRoomEntry invite={invite} info={info} adapter={duckRaceClientAdapter} gameName="Duck Race" intro="Pick your duck. Share the race. Four contenders, one winner.">
-  {(client,onLeave)=><DuckRaceTable client={client} onLeave={onLeave}/>}</GameRoomEntry>;
+  {(client,_onLeave,actions)=><DuckRaceTable client={client} actions={actions}/>}</GameRoomEntry>;
 }
-export function DuckRaceTable({client,onLeave}:{client:TableClient<DuckRaceSnapshot,DuckRaceAction>;onLeave(endSession?:boolean):void}){
+export function DuckRaceTable({client,actions:{send,busy,error}}:{client:TableClient<DuckRaceSnapshot,DuckRaceAction>;actions:TableActions<DuckRaceAction>}){
  const state=useSyncExternalStore(client.subscribe,client.getSnapshot);const connection=useSyncExternalStore(client.subscribe,client.getConnection);
- const [now,setNow]=useState(Date.now());const [denomination,setDenomination]=useState(10);const [error,setError]=useState('');const [busy,setBusy]=useState(false);
- const inFlight=useRef(false);const rules=useRef<HTMLDialogElement>(null);
+ const [now,setNow]=useState(Date.now());const [denomination,setDenomination]=useState<ChipDenomination>(10);
+ const rules=useRef<HTMLDialogElement>(null);
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),100);return()=>clearInterval(timer);},[]);
  const p=state.players.find(p=>p.id===state.you)!;const betting=state.phase==='betting';const results=state.phase==='results';const connected=connection.status==='connected';
  const serverNow=now+(connection.clockOffsetMs??0);const deadline=state.bettingDeadline??state.resultsDeadline??(state.startedAt===null?null:state.startedAt+10000);
  const seconds=deadline===null?null:Math.max(0,Math.ceil((deadline-serverNow)/1000));
  const can=(action:DuckRaceAction['type'])=>connected&&!busy&&state.legalActions.includes(action)&&(action!=='PlaceBet'||seconds!==0);
- async function send(action:DuckRaceAction){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');
-  try{await client.send(action);if(action.type==='Leave')onLeave(true);}catch(problem){setError(problem instanceof Error?problem.message:'Your action could not be completed.');}
-  finally{inFlight.current=false;setBusy(false);}
- }
  const net=p.returnedUnits-p.wager.amountUnits;
- const note=results&&p.wager.amountUnits?`${net>0?'Won':'Lost'} · ${net>0?'+':''}${chips(net)} chips`:state.phase==='racing'?p.wager.amountUnits?'Your wager is racing':'Watching · Bet next round':betting?'Choose a chip, then tap a duck. Tap again to add.':state.managerId===p.id?'Start rounds when you are ready.':'Waiting for the host to start.';
+ const note=results&&p.wager.amountUnits?`${net>0?'Won':'Lost'} · ${net>0?'+':''}${chips(net)} chips`:state.phase==='racing'?p.wager.amountUnits?'Your wager is racing':'Watching · Bet next round':betting?'Choose a chip, then tap a duck. Tap again to add.':'';
  return <div data-game-table="duck-race" className={s.app} data-connection={connection.status} data-phase={state.phase} data-revision={state.revision}>
   <TableHeader client={client} playerId={p.id} online ownTurn={betting} seconds={seconds} decisionLabel="betting" showAccountSignIn={!!state.wallet}><button onClick={()=>rules.current?.showModal()}>Rules</button></TableHeader>
   <main className={s.main} style={{'--seat-rows':Math.ceil(state.players.length/4),'--phone-seat-rows':Math.ceil(state.players.length/2)} as CSSProperties}>
@@ -49,11 +47,11 @@ export function DuckRaceTable({client,onLeave}:{client:TableClient<DuckRaceSnaps
    })}</section>
    <section className={s.controls} aria-label="Game controls" aria-busy={busy}>
     <div className={s.balance}><span>Your table chips</span><strong>{chips(p.balanceUnits)}</strong><small>chips</small></div>
-    <div className={s.chips} role="group" aria-label="Choose your betting chip">{[10,100,1000].map(value=><button key={value} aria-label={`Select ${value.toLocaleString('en')} chips`} aria-pressed={denomination===value} disabled={!betting||!connected||busy} onClick={()=>setDenomination(value)}>{value.toLocaleString('en')}</button>)}</div>
-    <div className={s.betTiles} role="group" aria-label="Choose your duck">{state.ducks.map(duck=>{const amount=(p.wager.duckIndex===duck.id?p.wager.amountUnits:0)+denomination*100;const valid=amount<=100000&&amount<=p.balanceUnits+p.wager.amountUnits;
+    <ChipButtons className={s.chips} label="Choose your betting chip" selected={denomination} isDisabled={()=>!betting||!connected||busy} onChip={setDenomination}/>
+    <div className={s.betTiles} role="group" aria-label="Choose your duck" data-waiting-surface>{state.ducks.map(duck=>{const amount=(p.wager.duckIndex===duck.id?p.wager.amountUnits:0)+denomination*100;const valid=amount<=100000&&amount<=p.balanceUnits+p.wager.amountUnits;
      return <button key={duck.id} style={duckStyle(duck.id)} data-selected={p.wager.duckIndex===duck.id} aria-label={`Bet on ${duck.name}`} disabled={!can('PlaceBet')||!valid} onClick={()=>void send({type:'PlaceBet',wager:{duckIndex:duck.id,amountUnits:amount}})}><span>{duck.id+1} · {duck.name}</span><strong>{p.wager.duckIndex===duck.id?`${chips(p.wager.amountUnits)} chips`:'Pays 4×'}</strong></button>;
     })}</div>
-    <div className={s.actions}>{state.phase==='waiting'&&<button className={s.primary} disabled={!can('StartBetting')} onClick={()=>void send({type:'StartBetting'})}>{state.managerId===p.id?'Start rounds':'Waiting for host'}</button>}
+    <div className={s.actions}>
      {betting&&p.wager.amountUnits>0&&<button disabled={!can('PlaceBet')} onClick={()=>void send({type:'PlaceBet',wager:{duckIndex:null,amountUnits:0}})}>Cancel bet</button>}
      {results&&state.managerId===p.id&&<button className={s.primary} disabled={!can('NextRound')} onClick={()=>void send({type:'NextRound'})}>Next round</button>}
      {can('Refill')&&<button onClick={()=>void send({type:'Refill'})}>Refill temporary chips</button>}

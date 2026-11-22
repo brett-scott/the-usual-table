@@ -3,6 +3,7 @@ import type { CrashAction,CrashSnapshot,TableClient,TableInfo } from '@casual/pr
 import { crashClientAdapter } from './gameClientAdapters';
 import { GameRoomEntry } from './GameRoomEntry';
 import { TableHeader,TableToolbar } from './TableChrome';
+import type { TableActions } from './useTableActions';
 import { PlayerIdentityButton } from './PlayerProfiles';
 import { ChatBubble } from './ChatBubble';
 import { CrashFlight } from './CrashFlight';
@@ -13,12 +14,12 @@ export const crashChips=(units:number)=>new Intl.NumberFormat('en',{maximumFract
 export const crashMultiplier=(cents:number)=>(cents/100).toFixed(2)+'×';
 export function CrashRoom({invite,info}:{invite:string;info:TableInfo}){
   return <GameRoomEntry invite={invite} info={info} adapter={crashClientAdapter} gameName="Crash" intro="One flight. A table of friends. Cash out before the crash.">
-    {(client,onLeave)=><CrashTable client={client} onLeave={onLeave}/>}</GameRoomEntry>;
+    {(client,onLeave,actions)=><CrashTable client={client} onLeave={onLeave} actions={actions}/>}</GameRoomEntry>;
 }
-export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,CrashAction>;onLeave(endSession?:boolean):void}){
+export function CrashTable({client,onLeave,actions:{send,busy,error}}:{client:TableClient<CrashSnapshot,CrashAction>;onLeave(endSession?:boolean):void;actions:TableActions<CrashAction>}){
   const state=useSyncExternalStore(client.subscribe,client.getSnapshot);const connection=useSyncExternalStore(client.subscribe,client.getConnection);
-  const [now,setNow]=useState(Date.now());const [amount,setAmount]=useState('10');const [auto,setAuto]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);
-  const inFlight=useRef(false);const rules=useRef<HTMLDialogElement>(null);
+  const [now,setNow]=useState(Date.now());const [amount,setAmount]=useState('10');const [auto,setAuto]=useState('');
+  const rules=useRef<HTMLDialogElement>(null);
   useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),100);return()=>clearInterval(timer);},[]);
   const serverNow=now+(connection.clockOffsetMs??0);const p=state.players.find(p=>p.id===state.you)!;
   const live=state.phase==='running';const betting=state.phase==='betting';const committed=p.betUnits>0&&(betting||live);
@@ -30,11 +31,6 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
   const units=Number(amount)*100;const target=auto.trim()===''?null:Math.round(Number(auto)*100);
   const valid=amount.trim()!==''&&Number.isSafeInteger(units)&&units>=1000&&units<=100000&&units%1000===0&&units<=p.balanceUnits
     &&(target===null||/^\d+(\.\d{1,2})?$/.test(auto)&&target>=101&&target<=10000);
-  async function send(action:CrashAction){
-    if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');
-    try{await client.send(action);if(action.type==='Leave')onLeave(true);}catch(problem){setError(problem instanceof Error?problem.message:'Your action could not be completed.');}
-    finally{inFlight.current=false;setBusy(false);}
-  }
   function bet(event:FormEvent){event.preventDefault();if(bettingOpen&&can('PlaceBet')&&valid)void send({type:'PlaceBet',amountUnits:units,autoCashoutCents:target});}
   function cancelWager() {
     setAmount(String(p.betUnits / 100));
@@ -43,7 +39,7 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
   }
   const note=committed?(p.cashedOutCents!==null?`Cashed out at ${crashMultiplier(p.cashedOutCents)} · ${crashChips(p.returnedUnits)} chips returned`:betting?`${crashChips(p.betUnits)} chips wagered`:'Cash out before the crash')
     :state.phase==='results'&&p.betUnits>0?(p.cashedOutCents===null?`Lost ${crashChips(p.betUnits)} chips`:`Returned ${crashChips(p.returnedUnits)} chips at ${crashMultiplier(p.cashedOutCents)}`)
-    :live?'Watching this flight · Bet next round':state.phase==='waiting'?'The host can start the next betting window':'Choose your wager for the next flight';
+    :live?'Watching this flight · Bet next round':state.phase==='waiting'?'':'Choose your wager for the next flight';
   return <div data-game-table="crash" className={s.app} data-connection={connection.status} data-phase={state.phase} data-revision={state.revision}>
     <TableHeader client={client} playerId={p.id} online ownTurn={live&&p.betUnits>0&&p.cashedOutCents===null} seconds={null} showAccountSignIn={!!state.wallet}>
       <button onClick={()=>rules.current?.showModal()}>Rules</button>
@@ -61,12 +57,11 @@ export function CrashTable({client,onLeave}:{client:TableClient<CrashSnapshot,Cr
         <form className={s.betForm} onSubmit={bet}>
           <label>Wager (chips)<input aria-label="Wager (chips)" type="number" min="10" max="1000" step="10" value={committed?p.betUnits/100:amount} disabled={committed||busy} onChange={e=>setAmount(e.target.value)}/></label>
           <label>Auto cash-out (×)<input aria-label="Auto cash-out multiplier" inputMode="decimal" type="number" min="1.01" max="100" step="0.01" placeholder="Optional" value={committed?p.autoCashoutCents===null?'':p.autoCashoutCents/100:auto} disabled={committed||busy} onChange={e=>setAuto(e.target.value)}/></label>
-          {state.phase==='waiting'?<button type="button" className={s.primary} disabled={!can('StartBetting')} onClick={()=>void send({type:'StartBetting'})}>{state.managerId===p.id?'Start rounds':'Waiting for host'}</button>
-            :betting?committed
+          {betting?committed
               ? <button type="button" className={s.primary} disabled={!bettingOpen||!can('CancelBet')} onClick={cancelWager}>{canCancel?'Cancel bet':'Wager locked'}</button>
               : <button className={s.primary} disabled={!bettingOpen||!can('PlaceBet')||!valid}>{busy?'Placing wager…':'Place bet'}</button>
             :live?<button type="button" className={s.primary} disabled={!can('CashOut')} onClick={()=>void send({type:'CashOut'})}>{p.cashedOutCents!==null?'Cashed out':p.betUnits>0?`Cash out · ${crashChips(Math.floor(p.betUnits*cents/100))} chips`:'Watching this flight'}</button>
-            :<button className={s.primary} type="button" disabled>Next flight in {seconds}s</button>}
+            :state.phase==='results'&&<button className={s.primary} type="button" disabled>Next flight in {seconds}s</button>}
         </form>
         <div className={s.feedback}>{error&&<p role="alert">{error}</p>}{state.wallet&&state.wallet.status!=='active'&&<p role="status">{state.wallet.status==='funding'?'Confirming your saved-chip buy-in…':`Wallet: ${state.wallet.status}`}</p>}
           {state.wallet?.error&&<p role="status">Your wallet is syncing. Please wait before placing another wager.</p>}

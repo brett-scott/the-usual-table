@@ -1,6 +1,6 @@
 import { SELF,evictDurableObject,runInDurableObject,runDurableObjectAlarm } from 'cloudflare:test';
 import { expect,it } from 'vitest';
-import { GAME_ADAPTER_CAPABILITY,rouletteSnapshotSchema,type RouletteAction,type RouletteSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
+import { GAME_ADAPTER_CAPABILITY,ROULETTE_REPLAY_CAPABILITY,ROULETTE_RESULT_TIMING_CAPABILITY,rouletteSnapshotSchema,type RouletteAction,type RouletteSnapshot,type GuestSession,type TableSessionResponse } from '@casual/protocol';
 import { advanceRoulette } from '@casual/roulette';
 import { rouletteRoomAdapter,restoreRouletteRoom,type RouletteRoom } from '../src/games/roulette';
 import { bindings,http,origin } from './helpers';
@@ -9,7 +9,7 @@ async function create(visibility='private'){
   const result=await SELF.fetch('https://example.test/api/v1/games/roulette/rooms',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'Pilot',visibility})});
   expect(result.status).toBe(201);return result.json<TableSessionResponse<RouletteSnapshot>>();
 }
-async function view(session:GuestSession){const response=await http(`/${session.inviteId}/snapshot`,session,undefined,'GET');expect(response.status).toBe(200);return(await response.json<{snapshot:RouletteSnapshot}>()).snapshot;}
+async function view(session:GuestSession,capability?:string){const response=await http(`/${session.inviteId}/snapshot${capability?`?capabilities=${capability}`:''}`,session,undefined,'GET');expect(response.status).toBe(200);return(await response.json<{snapshot:RouletteSnapshot}>()).snapshot;}
 async function edit(invite:string,change:(r:RouletteRoom)=>void){return runInDurableObject(bindings.ROOMS.getByName(invite),async(_instance,state)=>{const room=(await state.storage.get<RouletteRoom>('room'))!;change(room);await state.storage.put('room',room);});}
 async function connect(session:GuestSession){
   const initial=await view(session);const ticket=await http(`/${session.inviteId}/ticket`,session,{claimId:crypto.randomUUID(),claimVersion:initial.claimVersion});
@@ -30,8 +30,17 @@ it('uses shared eight-seat lobbies, own-seat commands and chat, and hides the fu
    const chatId=crypto.randomUUID();a.ws.send(JSON.stringify({type:'chat',protocol:1,id:chatId,text:'Go duck!'}));await expect.poll(()=>b.events.some(e=>e.type==='chat'&&JSON.stringify(e).includes('Go duck!'))).toBe(true);
    for(let i=2;i<8;i++){const joined=await http(`/${initial.session.inviteId}/join`,undefined,{name:`Guest ${i}`});expect(joined.status).toBe(201);await joined.json();}const full=await http(`/${initial.session.inviteId}/join`,undefined,{name:'Ninth'});expect(full.status).toBe(409);await full.json();
    await edit(initial.session.inviteId,r=>{r.engine.deadline=Date.now();r.engine=advanceRoulette(r.engine,Date.now(),()=>0);});const running=await view(initial.session);expect(running.phase).toBe('spinning');expect(running.winner).toBeNull();expect(running).not.toHaveProperty('seeds');expect(running).not.toHaveProperty('engine');expect(rouletteSnapshotSchema.safeParse(running).success).toBe(true);
-   await evictDurableObject(bindings.ROOMS.getByName(initial.session.inviteId));const resumed=await view(peer.session);expect(resumed.counts).toEqual(running.counts);expect(resumed.roundId).toBe(running.roundId);expect(resumed.winner).toBeNull();
+   await evictDurableObject(bindings.ROOMS.getByName(initial.session.inviteId));const resumed=await view(peer.session,ROULETTE_RESULT_TIMING_CAPABILITY);expect(resumed.counts).toEqual(running.counts);expect(resumed.roundId).toBe(running.roundId);expect(resumed.winner).toBeNull();expect(resumed).not.toHaveProperty('landAt');
    await edit(initial.session.inviteId,r=>{r.engine.startedAt!-=8000;r.engine.deadline!-=8000;});const final=await view(initial.session);const shared=await view(peer.session);expect(final.phase).toBe('results');expect(final.winner).toBe(0);expect(shared.winner).toBe(final.winner);expect(shared.history).toEqual(final.history);expect(final.players[0]!.balanceUnits).toBe(135000);
+   expect(final).not.toHaveProperty('landAt');
+   const timed=rouletteSnapshotSchema.parse(await view(initial.session,ROULETTE_RESULT_TIMING_CAPABILITY));
+   expect(timed.landAt).toBe(final.resultsDeadline!-10000);
+   expect(await a.send({type:'NextRound'})).toMatchObject({type:'ack'});
+   await evictDurableObject(bindings.ROOMS.getByName(initial.session.inviteId));
+   const replay=await view(initial.session,ROULETTE_REPLAY_CAPABILITY);
+   expect(replay.players[0]).toMatchObject({wager:[],previousWager:bet.wager});
+   expect((await view(initial.session)).players[0]).not.toHaveProperty('previousWager');
+   expect((await view(peer.session,ROULETTE_REPLAY_CAPABILITY)).players.every(p=>p.previousWager===undefined)).toBe(true);
   }finally{b.ws.close();}
  }finally{a.ws.close();}
 });

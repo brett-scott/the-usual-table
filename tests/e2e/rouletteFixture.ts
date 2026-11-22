@@ -1,5 +1,5 @@
 import { expect,type Page,type WebSocketRoute } from '@playwright/test';
-import { ROULETTE_RULES,rouletteWagerUnits,type WalletSummary } from '@casual/protocol';
+import { ROULETTE_REPLAY_CAPABILITY,ROULETTE_RESULT_TIMING_CAPABILITY,ROULETTE_RESULT_HOLD_MS,ROULETTE_RULES,rouletteWagerUnits,type WalletSummary } from '@casual/protocol';
 import { rouletteRoomAdapter,rouletteSnapshot,type RouletteRoom } from '../../apps/server/src/games/roulette';
 import { newMember } from '../../apps/server/src/roomMembership';
 import { accountId,providerFixture } from './authFixture';
@@ -16,7 +16,7 @@ export async function rouletteFixture(page:Page,{saved=false,players=1}:{saved?:
   for(const m of Object.values(room.members)){m.connected=true;m.controllerId='controller';m.presenceDeadline=time+3600000;m.reservationDeadline=null;}
   const wallet=():WalletSummary=>({contract:1,currency:'virtual-chips',unitsPerChip:100,accountId,status:'active',version:room.revision+1,availableUnits:available,
     atTablesUnits:created?room.engine.players[0]!.balanceUnits+(['betting','spinning'].includes(room.engine.phase)?rouletteWagerUnits(room.engine.players[0]!.wager)-room.engine.players[0]!.returnedUnits:0):0,pendingReturnUnits:0});
-  function snapshot(){const value=rouletteSnapshot(room,playerId);if(saved){value.wallet={status:'active',error:null};value.legalActions=value.legalActions.filter(a=>a!=='Refill');}return value;}
+  function snapshot(){const value=rouletteSnapshot(room,playerId,{now:time,capabilities:[ROULETTE_REPLAY_CAPABILITY,ROULETTE_RESULT_TIMING_CAPABILITY]});if(saved){value.wallet={status:'active',error:null};value.legalActions=value.legalActions.filter(a=>a!=='Refill');}return value;}
   const session={inviteId:roomId,playerId,credential:'d'.repeat(64),...(saved?{funding:'account' as const}:{})};
   function broadcast(){if(holdingUpdates)return;for(const socket of sockets)socket.send(JSON.stringify({type:'game-snapshot',protocol:1,gameId:'roulette',adapterVersion:1,snapshot:snapshot(),serverTime:time}));}
   function commandMessage(socket:WebSocketRoute,raw:string){
@@ -57,6 +57,10 @@ export async function rouletteFixture(page:Page,{saved=false,players=1}:{saved?:
     holdUpdates(){holdingUpdates=true;},resumeUpdates(){holdingUpdates=false;broadcast();},
     arrange(winner:number){chosen=winner;},
     advance(ms:number){time+=ms;room=rouletteRoomAdapter.expire(room,()=>chosen,time);broadcast();},
-    finish(){for(let i=0;i<8&&(room.engine.phase==='betting'||room.engine.phase==='spinning');i++){time=room.engine.deadline!;room=rouletteRoomAdapter.expire(room,()=>chosen,time);}broadcast();},
+    finish(){
+      for(let i=0;i<8&&(room.engine.phase==='betting'||room.engine.phase==='spinning');i++){time=room.engine.deadline!;room=rouletteRoomAdapter.expire(room,()=>chosen,time);}
+      if(room.engine.phase==='results')time=Math.max(time,room.engine.deadline!-ROULETTE_RESULT_HOLD_MS);
+      broadcast();
+    },
   };
 }

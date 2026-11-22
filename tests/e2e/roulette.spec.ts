@@ -1,9 +1,10 @@
 import { expect,test,type Page } from '@playwright/test';
-import { roomIdFromHash,shortRoomHash } from '@casual/protocol';
+import { ROULETTE_LANDING_BUDGET_MS,ROULETTE_RESULTS_MS,ROULETTE_WHEEL_RESULT_MS,roomIdFromHash,shortRoomHash } from '@casual/protocol';
 import { accountId,openOwnProfile,providerFixture } from './authFixture';
 import { rouletteFixture } from './rouletteFixture';
 import {waitForPublicTable} from './fixtures';
-test('Roulette enlarges the wheel through the result hold then restores the betting view',async({page},info)=>{
+test('the next spin countdown starts at landing and shows the winning tiles for seven seconds',async({page},info)=>{
+ test.setTimeout(45_000);
  const f=await rouletteFixture(page);await open(page);if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});await page.getByRole('button',{name:'Start rounds'}).click();await page.getByRole('tab',{name:'Outside',exact:true}).click();await placed(page,'red',1000);
  const initial=(await page.getByRole('img',{name:'European single-zero Roulette wheel'}).boundingBox())!;
  f.arrange(1);f.advance(15000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','spinning');
@@ -34,17 +35,73 @@ test('Roulette enlarges the wheel through the result hold then restores the bett
   });
   holdObserver.observe(document.querySelector('[data-phase]')!,{attributes:true,attributeFilter:['data-result-hold']});
  });
- f.advance(400);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');await expect(page.locator('[data-phase]')).toHaveAttribute('data-result-hold','true');
+ const nextSpin=page.getByRole('timer',{name:'Next spin countdown'});
+ f.advance(400);
+ await expect(page.getByRole('heading',{name:'Ball settling'})).toBeVisible();
+ await expect(nextSpin).toHaveCount(0);
+ await expect(page.locator('[data-phase]')).toHaveAttribute('data-result-hold','true',{timeout:ROULETTE_LANDING_BUDGET_MS+1500});
+ await expect(nextSpin.getByText('10s',{exact:true})).toBeVisible();
  await expect(page.getByRole('group',{name:'Winning number 1 red',exact:true})).toBeVisible();await expect(page.locator('[data-winning-pocket="true"]')).toHaveCount(1);await expect(board(page)).toBeHidden();
+ await expect(spinOutcome(page)).toContainText('You won');await expect(spinOutcome(page)).toContainText('+10 chips');
  await expect(page.getByRole('img',{name:'Roulette wheel, winning number 1'})).toHaveAttribute('data-ball-radius','51');
  const angles=await page.evaluate(()=>(window as Window&{rouletteBallAngles?:number[]}).rouletteBallAngles!);
  expect(angles.length).toBeGreaterThan(2);
  expect(angles.at(-1)!).toBeLessThan(angles[0]!);
  expect(angles.every((angle,index)=>index===0||angle<=angles[index-1]!+1e-8)).toBe(true);
  await page.screenshot({path:info.outputPath('roulette-winner-hold.png')});await fit(page);
- await expect(page.locator('[data-phase]')).toHaveAttribute('data-wheel-focus','false');const holdTimes=await page.evaluate(()=>(window as Window&{rouletteHoldTimes?:number[]}).rouletteHoldTimes!);expect(holdTimes).toHaveLength(2);expect(holdTimes[1]!-holdTimes[0]!).toBeGreaterThanOrEqual(2990);await expect(page.locator('[data-phase]')).toHaveAttribute('data-result-hold','false');await expect(board(page)).toBeVisible();await expect(page.getByRole('img',{name:'Roulette wheel, winning number 1'})).toBeVisible();await fit(page);await page.screenshot({path:info.outputPath('roulette-restored-table.png')});
+ await expect(page.locator('[data-phase]')).toHaveAttribute('data-wheel-focus','false',{timeout:ROULETTE_WHEEL_RESULT_MS+1000});
+ await expect(nextSpin.getByText('7s',{exact:true})).toBeVisible();
+ const holdTimes=await page.evaluate(()=>(window as Window&{rouletteHoldTimes?:number[]}).rouletteHoldTimes!);
+ expect(holdTimes).toHaveLength(2);
+ expect(holdTimes[1]!-holdTimes[0]!).toBeGreaterThanOrEqual(ROULETTE_WHEEL_RESULT_MS-80);
+ await expect(board(page)).toBeVisible();
+ await expect(tile(page,'straight-1')).toHaveAttribute('data-winning','true');
+ await expect(tile(page,'straight-2')).toHaveAttribute('data-winning','false');
+ await expect(tile(page,'straight-1')).toBeDisabled();
+ await expect(page.getByRole('img',{name:'Roulette wheel, winning number 1'})).toBeVisible();await fit(page);await page.screenshot({path:info.outputPath('roulette-restored-table.png')});
+ // Reopening a table during the board result keeps the shared countdown and highlights.
+ f.advance(ROULETTE_RESULTS_MS-1000);await page.reload();
+ await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');
+ await expect(board(page)).toBeVisible();
+ await expect(nextSpin).toContainText(/^[01]s/);
+ await expect(tile(page,'straight-1')).toHaveAttribute('data-winning','true');
  // Reduced motion keeps the same readable hold; host override cancels the old round's hold.
- await page.getByRole('button',{name:'Next round',exact:true}).click();await page.getByRole('tab',{name:'Outside',exact:true}).click();await placed(page,'red',1000);await page.emulateMedia({reducedMotion:'reduce'});f.arrange(0);f.advance(15000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','spinning');await expect(board(page)).toBeHidden();f.advance(8000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-result-hold','true');await expect(page.getByRole('group',{name:'Winning number 0 green',exact:true})).toBeVisible();await expect(page.getByRole('tab',{name:'Outside',exact:true,includeHidden:true})).toHaveAttribute('aria-selected','true');await fit(page);await page.getByRole('button',{name:'Next round',exact:true}).click();await expect(page.locator('[data-phase]')).toHaveAttribute('data-result-hold','false');await expect(page.locator('[data-phase]')).toHaveAttribute('data-wheel-focus','false');await expect(page.getByRole('tab',{name:'Outside',exact:true})).toHaveAttribute('aria-selected','true');await fit(page);
+ f.advance(1000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','betting');await page.getByRole('tab',{name:'Outside',exact:true}).click();await placed(page,'red',1000);await page.emulateMedia({reducedMotion:'reduce'});f.arrange(0);f.advance(15000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','spinning');await expect(board(page)).toBeHidden();f.advance(8000);await expect(page.getByRole('heading',{name:'Ball settling'})).toBeVisible();await expect(nextSpin).toHaveCount(0);f.advance(ROULETTE_LANDING_BUDGET_MS);await expect(page.locator('[data-phase]')).toHaveAttribute('data-result-hold','true');await expect(page.getByRole('group',{name:'Winning number 0 green',exact:true})).toBeVisible();await expect(spinOutcome(page)).toContainText('You lost');await expect(spinOutcome(page)).toContainText('-10 chips');await expect(page.getByRole('tab',{name:'Outside',exact:true,includeHidden:true})).toHaveAttribute('aria-selected','true');await fit(page);await page.getByRole('button',{name:'Next round',exact:true}).click();await expect(page.locator('[data-phase]')).toHaveAttribute('data-result-hold','false');await expect(page.locator('[data-phase]')).toHaveAttribute('data-wheel-focus','false');await expect(page.getByRole('tab',{name:'Outside',exact:true})).toHaveAttribute('aria-selected','true');await fit(page);
+});
+test('Replay bet restores the last spin after reload and Undo removes it as one edit',async({page},info)=>{
+ const f=await rouletteFixture(page,{players:8});
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await open(page);
+ if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});
+ const replay=page.getByRole('button',{name:'Replay bet',exact:true});
+ await page.getByRole('button',{name:'Start rounds'}).click();
+ await expect(replay).toBeDisabled();
+ await placed(page,'straight-0',1000);
+ await page.getByRole('tab',{name:'Outside',exact:true}).click();
+ await chip(page,100);
+ await placed(page,'red',10000);
+ const previous=f.state().players[0]!.wager;
+ f.arrange(1);f.finish();
+ await page.getByRole('button',{name:'Next round',exact:true}).click();
+ await expect(replay).toBeEnabled();
+ await page.reload();
+ await expect(replay).toBeEnabled();
+ await fit(page);
+ f.holdCommands();
+ const before=f.receivedBets();
+ await replay.click();
+ await expect(replay).toBeDisabled();
+ await expect(tile(page,'straight-0')).toHaveAttribute('data-amount','1000');
+ await expect.poll(()=>f.pendingCommands()).toBe(1);
+ f.releaseCommands();
+ await expect(board(page)).toHaveAttribute('data-pending','false');
+ expect(f.receivedBets()).toBe(before+1);
+ expect(f.state().players[0]!.wager).toEqual(previous);
+ await expect(replay).toBeDisabled();
+ await page.getByRole('button',{name:'Undo',exact:true}).click();
+ await expect(replay).toBeEnabled();
+ expect(f.state().players[0]!.wager).toEqual([]);
+ await fit(page);
 });
 test('Numbers view places chips on exact corners and lines, previews covered numbers and keeps compact ranges usable',async({page},info)=>{
  const f=await rouletteFixture(page,{players:8});await open(page);if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});await page.getByRole('button',{name:'Start rounds'}).click();
@@ -60,10 +117,12 @@ test('Numbers view places chips on exact corners and lines, previews covered num
  await spot('split-1-2').click();await expect(spot('split-1-2')).toHaveAttribute('data-amount','1000');await expect(board(page)).toHaveAttribute('data-pending','false');await spot('split-0-2').click();await expect(spot('split-0-2')).toHaveAttribute('data-amount','1000');await expect(board(page)).toHaveAttribute('data-pending','false');
  if(compact)await mode.selectOption('street');await spot('street-0-1-2').click();await expect(spot('street-0-1-2')).toHaveAttribute('data-amount','1000');await expect(board(page)).toHaveAttribute('data-pending','false');if(compact)await mode.selectOption('corner');await spot('corner-0-1-2-3').click();await expect(spot('corner-0-1-2-3')).toHaveAttribute('data-amount','1000');await expect(board(page)).toHaveAttribute('data-pending','false');
  if(compact)await mode.selectOption('six-line');await spot('six-line-1-2-3-4-5-6').click();await expect(spot('six-line-1-2-3-4-5-6')).toHaveAttribute('data-amount','1000');await expect(board(page)).toHaveAttribute('data-pending','false');await fit(page);
- await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await expect(spot('corner-1-2-4-5')).toHaveAttribute('data-amount','1000');await expect(spot('split-0-2')).toHaveAttribute('data-amount','1000');await fit(page);f.arrange(0);f.finish();await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');await expect(spot('corner-0-1-2-3')).toHaveAttribute('data-winning','true');await fit(page);
+ await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await expect(spot('corner-1-2-4-5')).toHaveAttribute('data-amount','1000');await expect(spot('split-0-2')).toHaveAttribute('data-amount','1000');await fit(page);f.arrange(0);f.finish();f.advance(ROULETTE_WHEEL_RESULT_MS);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');await expect(spot('corner-0-1-2-3')).toHaveAttribute('data-winning','true');await fit(page);
 });
 async function open(page:Page,saved=false,buyIn=1000){await page.goto('./#/games/roulette');if(saved){await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.getByRole('button',{name:'Continue with Google'}).click();await expect(page.getByRole('button',{name:'Account menu for Roulette pilot'})).toBeVisible();}await page.getByRole('button',{name:'Create a table',exact:true}).click();if(!saved)await page.getByLabel('What should we call you?').fill('Pilot');if(saved&&buyIn!==1000)await page.getByLabel('Buy-in (chips)').fill(String(buyIn));await page.getByRole('button',{name:'Create table',exact:true}).click();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');}
 const board=(page:Page)=>page.getByRole('region',{name:'Roulette betting table',exact:true});
+const startPrompt=(page:Page)=>page.getByRole('region',{name:'Roulette round status',exact:true});
+const spinOutcome=(page:Page)=>page.getByRole('region',{name:'Roulette game',exact:true}).getByRole('status');
 const tile=(page:Page,id:string)=>page.locator(`[data-bet-tile="${id}"]`).filter({visible:true});
 async function placed(page:Page,id:string,units:number){await tile(page,id).click();await expect(tile(page,id)).toHaveAttribute('data-amount',String(units));await expect(board(page)).toHaveAttribute('data-pending','false');}
 async function chip(page:Page,value:number){await page.getByRole('button',{name:`Select ${value.toLocaleString('en')} chips`,exact:true}).click();}
@@ -82,17 +141,18 @@ test('chip stacking, Undo, Clear, group and outside bets, spin and win fit deskt
  const f=await rouletteFixture(page,{players:8});await open(page);if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});await fit(page);await page.screenshot({path:info.outputPath('roulette-numbers.png')});await page.getByRole('button',{name:'Start rounds'}).click();await expect(page.getByRole('timer',{name:'Betting countdown'})).toContainText('15s');await placed(page,'straight-0',1000);await placed(page,'straight-0',2000);await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(tile(page,'straight-0')).toHaveAttribute('data-amount','1000');await expect(board(page)).toHaveAttribute('data-pending','false');
  await page.getByRole('tab',{name:'Group bets',exact:true}).click();await fit(page);await placed(page,'split-1-2',1000);await page.getByRole('button',{name:'Street',exact:true}).click();await placed(page,'street-1-2-3',1000);await page.getByRole('button',{name:'Corner',exact:true}).click();await placed(page,'corner-1-2-4-5',1000);await page.getByRole('button',{name:'Six-line',exact:true}).click();await placed(page,'six-line-1-2-3-4-5-6',1000);await fit(page);
  await page.getByRole('tab',{name:'Outside',exact:true}).click();await placed(page,'red',1000);await placed(page,'black',1000);await fit(page);await page.getByRole('button',{name:'Clear bets',exact:true}).click();await expect.poll(()=>f.state().players[0]!.wager.length).toBe(0);await expect(board(page)).toHaveAttribute('data-pending','false');await page.getByRole('button',{name:'Undo',exact:true}).click();await expect.poll(()=>f.state().players[0]!.wager.length).toBe(7);await expect(board(page)).toHaveAttribute('data-pending','false');
- f.arrange(0);f.advance(15000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','spinning');expect(f.state().winner).toBeNull();await fit(page);await expect(page.getByRole('img',{name:'Roulette wheel spinning'})).toBeVisible();f.advance(8000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');await expect(page.getByRole('region',{name:'Game controls'})).toContainText('Won · +290 chips');await expect(page.getByRole('img',{name:'Roulette wheel, winning number 0'})).toBeVisible();await expect.poll(async()=>page.getByRole('img',{name:'Roulette wheel, winning number 0'}).evaluate(el=>{const a=Number(el.getAttribute('data-ball-angle'))-Number(el.getAttribute('data-wheel-angle'));return Math.abs((a%360+360)%360)<.01||Math.abs((a%360+360)%360-360)<.01;})).toBe(true);await fit(page);await page.screenshot({path:info.outputPath('roulette-win.png')});
+ f.arrange(0);f.advance(15000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','spinning');expect(f.state().winner).toBeNull();await fit(page);await expect(page.getByRole('img',{name:'Roulette wheel spinning'})).toBeVisible();f.advance(8000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');f.advance(ROULETTE_LANDING_BUDGET_MS);await expect(spinOutcome(page)).toContainText('You won');await expect(spinOutcome(page)).toContainText('+290 chips');await expect(page.getByRole('img',{name:'Roulette wheel, winning number 0'})).toBeVisible();await expect.poll(async()=>page.getByRole('img',{name:'Roulette wheel, winning number 0'}).evaluate(el=>{const a=Number(el.getAttribute('data-ball-angle'))-Number(el.getAttribute('data-wheel-angle'));return Math.abs((a%360+360)%360)<.01||Math.abs((a%360+360)%360-360)<.01;})).toBe(true);await fit(page);await page.screenshot({path:info.outputPath('roulette-win.png')});
  await page.getByRole('button',{name:'Table options',exact:true}).click();const options=page.getByRole('dialog',{name:'Roulette table options'});await options.getByRole('tab',{name:'Players',exact:true}).click();await expect(options.getByRole('article')).toHaveCount(8);await expect(options.getByRole('article',{name:'Seat 1: Pilot'})).toHaveAttribute('data-outcome','won');await options.getByRole('tab',{name:'History & stats',exact:true}).click();await expect(options).toContainText('1 completed spins');await expect(options.getByRole('listitem')).toHaveCount(1);await expect(options.getByRole('tabpanel')).toContainText('zero1');await options.getByRole('button',{name:'Close table options'}).click();await page.getByRole('button',{name:'Next round',exact:true}).click();await expect.poll(()=>f.state().players[0]!.wager.length).toBe(0);
  await page.getByRole('tab',{name:'Numbers',exact:true}).click();await fit(page);if(info.project.name==='desktop')for(const size of [{width:1280,height:720},{width:1024,height:768}]){await page.setViewportSize(size);await fit(page);}
 });
 test('saved chips allow multiple capped bets above 1,000 total and return the saved win after reload',async({page})=>{
- const f=await rouletteFixture(page,{saved:true});await open(page,true,5000);expect(f.wallet().availableUnits).toBe(500000);await page.getByRole('button',{name:'Start rounds'}).click();await chip(page,1000);await placed(page,'straight-0',100000);await page.getByRole('tab',{name:'Outside',exact:true}).click();await placed(page,'red',100000);expect(f.state().players[0]!.balanceUnits).toBe(300000);await tile(page,'red').click();await expect(page.getByRole('alert')).toContainText('1,000 chips maximum');expect(f.state().players[0]!.wager).toHaveLength(2);f.arrange(0);f.finish();await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await expect(page.getByRole('region',{name:'Game controls'})).toContainText('Won · +34,000 chips');await expect(page.getByRole('button',{name:'Refill temporary chips'})).toHaveCount(0);await fit(page);await page.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('heading',{name:'Take your pick.'})).toBeVisible();expect(f.wallet()).toMatchObject({availableUnits:4400000,atTablesUnits:0});expect(f.returns()).toBe(1);
+ const f=await rouletteFixture(page,{saved:true});await open(page,true,5000);expect(f.wallet().availableUnits).toBe(500000);await page.getByRole('button',{name:'Start rounds'}).click();await chip(page,1000);await placed(page,'straight-0',100000);await page.getByRole('tab',{name:'Outside',exact:true}).click();await placed(page,'red',100000);expect(f.state().players[0]!.balanceUnits).toBe(300000);await tile(page,'red').click();await expect(page.getByRole('alert')).toContainText('1,000 chips maximum');expect(f.state().players[0]!.wager).toHaveLength(2);f.arrange(0);f.finish();await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await expect(spinOutcome(page)).toContainText('You won');await expect(spinOutcome(page)).toContainText('+34,000 chips');await expect(page.getByRole('button',{name:'Refill temporary chips'})).toHaveCount(0);await fit(page);await page.getByRole('button',{name:'Leave table',exact:true}).click();await expect(page.getByRole('heading',{name:'Take your pick.'})).toBeVisible();expect(f.wallet()).toMatchObject({availableUnits:4400000,atTablesUnits:0});expect(f.returns()).toBe(1);
 });
 test('twenty-number history, cumulative lobby counts and empty-window pause survive reload',async({page},info)=>{
  const f=await rouletteFixture(page,{players:8});await page.emulateMedia({reducedMotion:'reduce'});await open(page);if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});await page.getByRole('button',{name:'Start rounds'}).click();await page.getByRole('tab',{name:'Outside',exact:true}).click();
  for(let i=0;i<22;i++){await placed(page,'red',1000);f.arrange(i%2?0:1);f.finish();await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');if(i<21)await page.getByRole('button',{name:'Next round',exact:true}).click();}
  await page.reload();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await page.getByRole('button',{name:'Table options',exact:true}).click();const options=page.getByRole('dialog',{name:'Roulette table options'});await options.getByRole('tab',{name:'History & stats',exact:true}).click();await expect(options).toContainText('22 completed spins');await expect(options.getByRole('listitem')).toHaveCount(20);await expect(options.getByRole('tabpanel')).toContainText('red11');await expect(options.getByRole('tabpanel')).toContainText('zero11');await page.screenshot({path:info.outputPath('roulette-history.png')});await options.getByRole('button',{name:'Close table options'}).click();await fit(page);await page.getByRole('button',{name:'Next round',exact:true}).click();f.advance(15000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','waiting');expect(f.state().counts.spins).toBe(22);await fit(page);
+ await expect(startPrompt(page).getByRole('button',{name:'Start rounds'})).toBeEnabled();
  await page.getByRole('button',{name:'Start rounds'}).click();await page.getByRole('tab',{name:'Outside',exact:true}).click();await chip(page,1000);await placed(page,'red',100000);f.arrange(0);f.finish();await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','results');expect(f.state().players[0]!.balanceUnits).toBe(0);await page.getByRole('button',{name:'Next round',exact:true}).click();f.advance(15000);await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase','waiting');await page.getByRole('tab',{name:'Numbers',exact:true}).click();await expect(page.getByRole('button',{name:'Refill temporary chips',exact:true})).toBeEnabled();await fit(page);await page.screenshot({path:info.outputPath('roulette-broke.png')});await page.getByRole('button',{name:'Refill temporary chips',exact:true}).click();await expect.poll(()=>f.state().players[0]!.balanceUnits).toBe(100000);
 });
 test('rapid pending chips reconcile after rejection and closing without phantom wagers',async({page})=>{
@@ -101,9 +161,29 @@ test('rapid pending chips reconcile after rejection and closing without phantom 
 });
 test('real public lobbies share short invitations, bets, chat and reconnects and delete after everyone leaves',async({page,browser})=>{
  const context=await browser.newContext({viewport:page.viewportSize()!}),peer=await context.newPage();try{await page.goto('./#/games');await page.getByRole('article',{name:'Roulette',exact:true}).getByRole('link',{name:'Find a Table',exact:true}).click();await page.getByRole('radio',{name:'Public',exact:true}).check();await page.getByRole('button',{name:'Create a table',exact:true}).click();await page.getByLabel('What should we call you?').fill('Roulette host');await page.getByRole('button',{name:'Create table',exact:true}).click();await expect(page.locator('[data-phase]')).toHaveAttribute('data-connection','connected');const invite=new URL(page.url());invite.hash=shortRoomHash(roomIdFromHash(invite.hash)!);
-  await waitForPublicTable(page,'roulette',roomIdFromHash(invite.hash)!);await peer.goto('./#/games/roulette');await expect(peer.getByRole('link',{name:/^Join Roulette host/})).toBeVisible();await peer.goto(invite.href);await peer.getByLabel('What should we call you?').fill('Roulette peer');await peer.getByRole('button',{name:'Join table',exact:true}).click();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await peer.reload();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');
+  const prompt=startPrompt(page);
+  await expect(prompt.getByRole('button',{name:'Start rounds'})).toBeEnabled();
+  await page.getByRole('button',{name:'Invite',exact:true}).click();
+  const inviteDialog=page.getByRole('dialog',{name:'Invite friends',exact:true});
+  await expect(inviteDialog.getByLabel('Invitation link')).toHaveValue(invite.href);
+  await inviteDialog.getByRole('button',{name:'Close invitation'}).click();
+  const roomId=roomIdFromHash(invite.hash)!;
+  await waitForPublicTable(page,'roulette',roomId);
+  await peer.goto('./#/games/roulette');
+  await expect(peer.getByRole('link',{name:/^Join Roulette host/}).and(peer.locator(`a[href="#/room/${roomId}"]`))).toBeVisible();
+  await peer.goto(invite.href);await peer.getByLabel('What should we call you?').fill('Roulette peer');await peer.getByRole('button',{name:'Join table',exact:true}).click();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');await peer.reload();await expect(peer.locator('[data-phase]')).toHaveAttribute('data-connection','connected');
+  await expect(startPrompt(peer).getByRole('heading',{name:'Waiting for Host',exact:true})).toBeVisible();
+  await expect(peer.getByRole('button',{name:'Start rounds',exact:true})).toHaveCount(0);
+  for(const view of [page,peer]){
+   const box=(await startPrompt(view).boundingBox())!,viewport=view.viewportSize()!;
+   expect(Math.abs(box.x+box.width/2-viewport.width/2)).toBeLessThan(1);
+   expect(Math.abs(box.y+box.height/2-viewport.height/2)).toBeLessThan(1);
+   await expect(board(view)).not.toHaveCSS('filter','none');
+  }
   if(await page.getByRole('button',{name:/^Table chat/}).isVisible())await page.getByRole('button',{name:/^Table chat/}).click();const chat=page.getByRole('region',{name:'Table chat'}).or(page.getByRole('dialog',{name:'Table chat'}));await chat.getByRole('textbox').fill('Good luck on the wheel');await chat.getByRole('button',{name:'Send',exact:true}).click();if(await peer.getByRole('button',{name:/^Table chat/}).isVisible())await peer.getByRole('button',{name:/^Table chat/}).click();await expect(peer.getByRole('log')).toContainText('Good luck on the wheel');for(const p of [page,peer])if(await p.getByRole('button',{name:'Close table chat'}).isVisible())await p.getByRole('button',{name:'Close table chat'}).click();
-  await page.getByRole('button',{name:'Start rounds'}).click();await placed(page,'straight-0',1000);await peer.getByRole('button',{name:'Table options',exact:true}).click();const options=peer.getByRole('dialog',{name:'Roulette table options'});await options.getByRole('tab',{name:'Players',exact:true}).click();await expect(options.getByRole('article',{name:'Seat 1: Roulette host'})).toContainText('10 chips');await options.getByRole('button',{name:'Close table options'}).click();await fit(peer);await peer.getByRole('button',{name:'Leave table',exact:true}).click();await page.getByRole('button',{name:'Leave table',exact:true}).click();await peer.goto(invite.href);await expect(peer.getByRole('heading',{name:'Table expired'})).toBeVisible();
+  await prompt.getByRole('button',{name:'Start rounds'}).click();
+  for(const view of [page,peer]){await expect(startPrompt(view)).toHaveCount(0);await expect(board(view)).toHaveCSS('filter','none');}
+  await placed(page,'straight-0',1000);await peer.getByRole('button',{name:'Table options',exact:true}).click();const options=peer.getByRole('dialog',{name:'Roulette table options'});await options.getByRole('tab',{name:'Players',exact:true}).click();await expect(options.getByRole('article',{name:'Seat 1: Roulette host'})).toContainText('10 chips');await options.getByRole('button',{name:'Close table options'}).click();await fit(peer);await peer.getByRole('button',{name:'Leave table',exact:true}).click();await page.getByRole('button',{name:'Leave table',exact:true}).click();await peer.goto(invite.href);await expect(peer.getByRole('heading',{name:'Table expired'})).toBeVisible();
  }finally{await context.close();}
 });
 test('Roulette statistics and its once-only achievement rewards appear in the account profile',async({page},info)=>{

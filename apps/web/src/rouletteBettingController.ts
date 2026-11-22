@@ -6,7 +6,7 @@ export function addRouletteChip(previous:RouletteWager,tile:string,chip:Roulette
  if(!rouletteBet(tile))throw new Error('Choose a valid Roulette bet.');const next=structuredClone(previous);let leg=next.find(b=>b.betId===tile);if(!leg){leg={betId:tile,amountUnits:0};next.push(leg);}leg.amountUnits+=chip*100;
  if(leg.amountUnits>100000)throw new Error('1,000 chips maximum per bet. Choose a smaller chip or Undo.');if(rouletteWagerUnits(next)>bankrollUnits)throw new Error('Not enough table chips. Choose a smaller chip or Undo.');return next.sort((a,b)=>a.betId.localeCompare(b.betId));
 }
-export interface RouletteBettingView {wager:RouletteWager;pending:boolean;error:string;notice:string;canUndo:boolean;canClear:boolean}
+export interface RouletteBettingView {wager:RouletteWager;pending:boolean;error:string;notice:string;canUndo:boolean;canClear:boolean;canReplay:boolean}
 type Client=TableClient<RouletteSnapshot,RouletteAction>;
 /** One serialized full-wager write at a time. Rapid taps coalesce without losing their chips. */
 export class RouletteBettingController {
@@ -14,11 +14,16 @@ export class RouletteBettingController {
  private desired:RouletteWager|null=null;private history:RouletteWager[]=[];private error='';private notice='';
  private flight:{target:RouletteWager;acknowledged:boolean;generation:number}|null=null;
  private view:RouletteBettingView;
- constructor(private client:Client){this.context=this.key();this.view={wager:this.own().wager,pending:false,error:'',notice:'',canUndo:false,canClear:false};}
+ constructor(private client:Client){this.context=this.key();this.view={wager:this.own().wager,pending:false,error:'',notice:'',canUndo:false,canClear:false,canReplay:false};}
  private own(){const state=this.client.getSnapshot();return state.players.find(p=>p.id===state.you)!;}
  private key(){const s=this.client.getSnapshot();return`${s.roomId}:${s.you}:${s.roundId}`;}
  private editable(){const s=this.client.getSnapshot();const connection=this.client.getConnection();return this.active&&s.phase==='betting'&&connection.status==='connected'&&s.legalActions.includes('PlaceBet')&&s.bettingDeadline!==null&&Date.now()+(connection.clockOffsetMs??0)<s.bettingDeadline;}
- private publish(){const wager=this.desired??this.own().wager;const editable=this.editable();this.view={wager,pending:this.flight!==null||this.desired!==null,error:this.error,notice:this.notice,canUndo:editable&&this.history.length>0,canClear:editable&&rouletteWagerUnits(wager)>0};for(const listener of this.listeners)listener();}
+ private publish(){
+  const own=this.own();const wager=this.desired??own.wager;const editable=this.editable();const pending=this.flight!==null||this.desired!==null;
+  this.view={wager,pending,error:this.error,notice:this.notice,canUndo:editable&&this.history.length>0,canClear:editable&&wager.length>0,
+   canReplay:editable&&!pending&&wager.length===0&&!!own.previousWager?.length};
+  for(const listener of this.listeners)listener();
+ }
  getSnapshot=()=>this.view;
  subscribe=(listener:()=>void)=>{this.listeners.add(listener);return()=>{this.listeners.delete(listener);};};
  start(){this.active=true;const unsubscribe=this.client.subscribe(this.sync);this.sync();return()=>{unsubscribe();this.active=false;this.generation++;this.flight=null;this.desired=null;this.history=[];};}
@@ -54,4 +59,12 @@ export class RouletteBettingController {
  }
  undo(){if(!this.editable())return;const previous=this.history.pop();if(previous){this.notice='Last betting change undone.';this.replace(previous,false);}}
  clear(){this.notice='All bets cleared.';this.replace([]);}
+ replay(){
+  if(!this.view.canReplay||!this.editable())return;
+  const {previousWager,balanceUnits}=this.own();
+  if(!previousWager?.length)return;
+  if(rouletteWagerUnits(previousWager)>balanceUnits){this.error='Not enough table chips to replay that bet.';this.publish();return;}
+  this.notice='Previous bet placed.';
+  this.replace(previousWager);
+ }
 }
