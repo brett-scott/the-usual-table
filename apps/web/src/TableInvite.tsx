@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { roomIdFromHash, shortRoomHash } from '@casual/protocol';
 import s from './TableInvite.module.css';
 
-export function TableInvite() {
+export function TableInvite({ openSeats }: { openSeats?: number } = {}) {
   const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null);
   const input = useRef<HTMLInputElement>(null); const id = useId();
   const [link, setLink] = useState(''); const [copying, setCopying] = useState(false);
@@ -23,12 +23,13 @@ export function TableInvite() {
       if (dialog.current?.open) { input.current?.focus(); input.current?.select(); }
     } finally { setCopying(false); }
   }
+  const vacancies = openSeats ? `${openSeats} open ${openSeats === 1 ? 'seat' : 'seats'}` : undefined;
   return <>
-    <button ref={trigger} aria-haspopup="dialog" onClick={show}>Invite</button>
+    <button ref={trigger} className={vacancies ? s.withVacancies : undefined} aria-haspopup="dialog" aria-label="Invite" aria-description={vacancies} title={vacancies} onClick={show}>Invite{vacancies && <sup className={s.vacancies} aria-hidden="true">{openSeats}</sup>}</button>
     <dialog ref={dialog} className={s.dialog} aria-labelledby={`${id}-title`} aria-describedby={`${id}-help`}
       onClose={() => { if (document.activeElement === document.body || dialog.current?.contains(document.activeElement)) trigger.current?.focus(); }}>
       <header className={s.heading}><h2 id={`${id}-title`}>Invite friends</h2><button type="button" aria-label="Close invitation" onClick={() => dialog.current?.close()}>×</button></header>
-      <p id={`${id}-help`}>Send this link to invite friends to your table. Up to four players can take a seat.</p>
+      <p id={`${id}-help`}>Send this link to invite friends to your table. {vacancies ? `${vacancies} at this table.` : 'Up to four players can take a seat.'}</p>
       <label htmlFor={`${id}-link`}>Invitation link</label>
       <input ref={input} id={`${id}-link`} value={link} readOnly onFocus={event => event.currentTarget.select()} />
       <div className={s.actions}><button type="button" disabled={copying} onClick={() => { void copy(); }}>{copying ? 'Copying…' : 'Copy link'}</button></div>

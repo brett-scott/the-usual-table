@@ -84,6 +84,8 @@ test('insurance is offered before peek and pays with simultaneous naturals', asy
   await expect(page.getByRole('button', { name: 'Next round' })).toBeVisible();
   await expect(page.getByRole('img', { name: 'Face-down dealer card' })).not.toBeVisible();
   await expect(page.getByRole('status')).toContainText('+10 chips');
+  const insurance = page.getByRole('list', { name: 'Wager results' }).getByRole('listitem').filter({ hasText: 'Insurance' });
+  await expect(insurance).toContainText('+10');
 });
 
 test('Hit resets the 20-second clock and expiry stands automatically', async ({ page }) => {
@@ -93,7 +95,8 @@ test('Hit resets the 20-second clock and expiry stands automatically', async ({ 
   await rigShoe(page, ['2', '10', '3', '7', '2']);
   await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Timer player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Deal me in' }).click();
-  const remaining = page.getByRole('timer').locator('strong');
+  const controls = page.getByRole('region', { name: 'Game controls' });
+  const remaining = controls.getByRole('timer', { name: 'Time remaining for this hand' }).locator('strong');
   await expect(remaining).toHaveText('20s');
   await page.clock.runFor(15_000); await expect(remaining).toHaveText('5s');
   await page.getByRole('button', { name: /^Hit/ }).click(); await expect(remaining).toHaveText('20s');
@@ -124,6 +127,9 @@ test('each split hand receives its own timer and background recovery respects ex
 
 test('deal and flip order is staggered and the dealer hole card flips in place', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  if (testInfo.project.name === 'desktop') await page.setViewportSize({ width: 1280, height: 720 });
+  if (testInfo.project.name === 'iphone16') await page.setViewportSize({ width: 393, height: 659 });
+  if (testInfo.project.name === 'landscape') await page.setViewportSize({ width: 640, height: 360 });
   await rigShoe(page, ['10', '6', '8', '10', '5']);
   await openTableEntry(page); await page.getByLabel('What should we call you?').fill('Animation player'); await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Deal me in' }).click();
@@ -137,8 +143,10 @@ test('deal and flip order is staggered and the dealer hole card flips in place',
   expect(secondFlip - firstFlip).toBeGreaterThanOrEqual(320);
   const hole = await dealer.nth(1).elementHandle();
   await expect(page.getByRole('button', { name: 'Stand', exact: true })).toBeEnabled();
+  const cardBounds = await own.first().boundingBox();
   await page.screenshot({ path: testInfo.outputPath('timer-and-cards.png'), fullPage: true });
   await page.getByRole('button', { name: 'Stand', exact: true }).click();
+  expect(await own.first().boundingBox()).toEqual(cardBounds);
   expect(await hole!.evaluate(el => el.isConnected)).toBe(true);
   expect(await dealer.nth(1).getAttribute('data-deal-at')).toBe(times[3]);
   const holeFlip = Number(await dealer.nth(1).getAttribute('data-reveal-at'));
@@ -151,5 +159,6 @@ test('deal and flip order is staggered and the dealer hole card flips in place',
   });
   await page.screenshot({ path: testInfo.outputPath('dealer-flip.png'), fullPage: true });
   await expect(page.getByRole('status')).toContainText('chips');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await own.first().boundingBox()).toEqual(cardBounds);
+  await expectOneScreen(page);
 });

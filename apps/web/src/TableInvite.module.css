@@ -10,4 +10,6 @@
 .actions { display: flex; justify-content: flex-end; margin-top: 14px; }
 .actions button { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
 .dialog .feedback { min-height: 22px; margin: 12px 0 0; color: var(--text); }
+.withVacancies { position: relative; }
+.vacancies { position: absolute; inset: -4px -3px auto auto; display: grid; place-items: center; min-width: 16px; height: 16px; padding: 0 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent); color: var(--bg); font: 700 10px/1 system-ui, sans-serif; }
 @media (max-height: 500px) { .dialog { padding: 16px 20px; } .dialog p { margin-block: 8px; } .dialog label { margin-top: 10px; } .actions { margin-top: 10px; } }

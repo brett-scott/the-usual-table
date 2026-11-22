@@ -21,7 +21,7 @@ test('Max Bet, double eligibility, numeric bust totals and automatic results cou
   await page.getByRole('button', { name: /^Hit/ }).click();
   const seat = page.getByRole('region', { name: 'Your seat' });
   await expect(seat.getByText('28 · Bust', { exact: true })).toBeVisible();
-  await expect(seat.getByText('✕ Lost · -100 chips', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Round lost · −100 chips', exact: true })).toBeVisible();
   await expect(page.getByRole('timer', { name: 'Next round countdown' })).toHaveText('Next round in 5s');
   if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
   await page.screenshot({ path: testInfo.outputPath('bust-and-results.png'), fullPage: true });
@@ -41,6 +41,8 @@ test('double is unavailable on 12 and Next round can skip an unfinished dealer r
   await expect(page.getByRole('button', { name: 'Double', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Stand', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Next round' })).toBeEnabled();
+  await expect(page.getByRole('status')).toContainText('Revealing the dealer');
+  await expect(page.getByRole('timer', { name: 'Next round countdown' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Next round' }).click();
   await expect(page.getByRole('button', { name: 'Deal me in' })).toBeEnabled();
 });
@@ -74,14 +76,20 @@ test('guests see ready and waiting states, shared results and the host skipping 
     await expect(hostPrompt).toHaveCount(0);
     await expect(guestPrompt).toHaveCount(0);
     await expect(guest.getByRole('region', { name: 'Blackjack table' })).toHaveCSS('filter', 'none');
-  await page.getByRole('button', { name: 'Clear bets', exact: true }).click();
-  await page.getByRole('button', { name: 'Select 100 chips', exact: true }).click();
-  await page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();
+    await guest.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();
+    await sharedState(snapshot => snapshot.players[1]!.bet === 40);
+    await page.getByRole('button', { name: 'Clear bets', exact: true }).click();
+    await page.getByRole('button', { name: 'Select 100 chips', exact: true }).click();
+    await page.getByRole('button', { name: 'Bet on Blackjack', exact: true }).click();
 
+    const bettingClock = page.getByRole('timer', { name: 'Betting time remaining' });
+    const clockBounds = await bettingClock.boundingBox();
     await page.getByRole('button', { name: /^Ready/ }).click();
-    await expect(page.getByRole('region', { name: 'Your seat' }).getByText('✓ Ready · 100 chips', { exact: true })).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Ready · 100 chips locked');
+    await expect(page.getByRole('status')).toContainText('Waiting for 1 player to confirm');
+    expect(await bettingClock.boundingBox()).toEqual(clockBounds);
     const waiting = page.getByRole('region', { name: 'Seat 2: Guest' });
-    await expect(waiting.getByText('◷ Place your bet', { exact: true }).filter({ visible: true })).toHaveCount(1);
+    await expect(waiting.getByText('Bet set · not ready', { exact: true })).toBeVisible();
     const host = guest.getByRole('region', { name: 'Seat 1: Host' });
     await expect(host.getByText('✓ Ready · 100 chips', { exact: true }).filter({ visible: true })).toHaveCount(1);
     if (testInfo.project.name !== 'desktop') await expectOneScreen(page);
@@ -89,10 +97,13 @@ test('guests see ready and waiting states, shared results and the host skipping 
     const cancel = page.getByRole('button', { name: 'Cancel ready', exact: true });
     const mainBet = page.getByRole('button', { name: 'Bet on Blackjack', exact: true });
     const originalDeadline = latest.get(page)!.room!.bettingDeadline;
-    await expect(mainBet).toBeDisabled();
+    await expect(mainBet).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Select 100 chips', exact: true })).toHaveCount(0);
     await cancel.click();
     await sharedState(snapshot => !snapshot.players[0]!.ready && snapshot.room!.bettingDeadline === originalDeadline);
-    await expect(host.getByText('◷ Place your bet', { exact: true }).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Ready', exact: true })).toBeFocused();
+    await expect(host.getByText('Bet set · not ready', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Select 100 chips', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(mainBet).toHaveAttribute('data-amount', '200');
     await mainBet.click();
     await page.getByRole('button', { name: 'Ready', exact: true }).click();
@@ -100,6 +111,8 @@ test('guests see ready and waiting states, shared results and the host skipping 
     await guest.getByRole('button', { name: /^Ready/ }).click();
     let state = await sharedState(snapshot => snapshot.phase !== 'BETTING');
     await expect(cancel).toHaveCount(0);
+    await expect(page.getByRole('region', { name: /Seat \d empty/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Invite', exact: true })).toHaveAccessibleDescription('2 open seats');
     if (state.phase === 'INSURANCE') for (const peer of [page, guest]) {
       const revision = state.revision; const decidingPlayer = latest.get(peer)!.you;
       await peer.getByRole('button', { name: 'No insurance' }).click();
