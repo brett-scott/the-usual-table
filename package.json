@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "test": "vitest run && npm run test -w @casual/server",
     "test:e2e": "playwright test",
+    "test:e2e:ci": "node scripts/test-e2e-ci.mjs",
     "build": "npm run typecheck && npm run build -w @casual/web && npm run build -w @casual/server",
     "build:pages": "node scripts/build-pages.mjs",
     "check:api": "node scripts/check-api.mjs",

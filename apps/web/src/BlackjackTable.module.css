@@ -173,6 +173,10 @@
   .resultDetails li { font-size: 10px; gap: 3px; padding: 3px 4px; }
   .resultFooter { margin-top: 2px; }
   .table[data-round='true'] .peer[data-state='active'] .seatStatus { display: block; }
+  @container (max-height: 350px) {
+    /* Reserve space for the active opponent's status above their cards and total. */
+    .table[data-round='true'] .tableInner { --peer-row: 64px; }
+  }
   .table[data-round='true'] .hand .cards { --bj-card-height: clamp(34px, calc(100cqh - 67px), 108px); }
   .table[data-round='true'] .ownHands:has(.handTabs) .hand .cards { --bj-card-height: clamp(28px, calc(100cqh - 115px), 92px); }
 }
