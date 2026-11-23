@@ -56,3 +56,28 @@ test('each split outcome is visible beside the round net without switching cards
   await expectOneScreen(page);
   await page.screenshot({path:info.outputPath('blackjack-split-result.png')});
 });
+
+const mainBetScenarios = [
+  { result: 'push', ranks: ['10', '10', '7', '7'], heading: 'Push · stake returned', stack: '1,000', returned: 10 },
+  { result: 'win', ranks: ['10', '10', '8', '7'], heading: 'Round won · +10 chips', stack: '1,010', returned: 20 },
+  { result: 'loss', ranks: ['10', '10', '6', '7'], heading: 'Round lost · −10 chips', stack: '990', returned: 0 },
+  { result: 'blackjack', ranks: ['A', '10', 'K', '7'], heading: 'Round won · +15 chips', stack: '1,015', returned: 25 },
+];
+
+for (const { result, ranks, heading, stack, returned } of mainBetScenarios) {
+  test(`a fixed ${result} deal shows the main bet result and the returned chips`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await rigShoe(page, ranks);
+    await openTableEntry(page);
+    await page.getByLabel('What should we call you?').fill('Result player');
+    await page.keyboard.press('Enter');
+    await page.getByRole('button', { name: 'Deal me in', exact: true }).click();
+    if (result !== 'blackjack') await page.getByRole('button', { name: 'Stand', exact: true }).click();
+
+    const controls = page.getByRole('region', { name: 'Game controls', exact: true });
+    await expect(controls.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    await expect(controls).toContainText(`Table stack ${stack} chips`);
+    await expect(page.getByRole('group', { name: `Wager 10 chips, returned ${returned} chips`, exact: true })).toBeVisible();
+    await expectOneScreen(page);
+  });
+}

@@ -2,6 +2,13 @@ import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@casual/protocol';
 import { expectOneScreen } from './fixtures';
 
+const mainBetResults = {
+  blackjack: 'Round won · +15 chips',
+  win: 'Round won · +10 chips',
+  loss: 'Round lost · −10 chips',
+  push: 'Push · stake returned',
+};
+
 test('four guests share icons and a real round; a fifth is rejected and reload resumes the same seat', async ({ browser, page, baseURL }, testInfo) => {
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -92,14 +99,21 @@ test('four guests share icons and a real round; a fifth is rejected and reload r
       await peer.getByRole('button', { name: 'Stand', exact: true }).click(); await synced(revision + 1);
     }
     const final = latest.get(page)!; expect(final.phase).toBe('ROUND_COMPLETE');
-    for (const peer of pages) {
-      await expect(peer.getByRole('region', { name: 'Game controls' }).getByRole('status')).toContainText('chips');
-      expect(latest.get(peer)!.players).toEqual(final.players); expect(latest.get(peer)!.dealer).toEqual(final.dealer);
-      expect(latest.get(peer)!.shoe).toEqual(final.shoe);
+    await Promise.all(pages.map(async peer => {
+      const completed = latest.get(peer)!;
+      expect(completed.players).toEqual(final.players); expect(completed.dealer).toEqual(final.dealer);
+      expect(completed.shoe).toEqual(final.shoe);
+      const player = completed.players.find(p => p.id === completed.you);
+      expect(player?.hands).toHaveLength(1);
+      const hand = player?.hands[0];
+      expect(hand?.wager).toBe(20); // This round uses the default 10-chip main wager.
+      if (!hand?.outcome) throw new Error(`Seat ${player?.seat} is missing a settled hand outcome`);
+      const controls = peer.getByRole('region', { name: 'Game controls', exact: true });
+      await expect(controls.getByRole('heading', { name: mainBetResults[hand.outcome], exact: true })).toBeVisible();
       expect(frames.get(peer)!.join('\n')).not.toContain('credential'); expect(frames.get(peer)!.join('\n')).not.toContain('cursor');
       expect(await peer.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await fits(peer);
-    }
+    }));
     await page.screenshot({ path: testInfo.outputPath('four-player-table.png'), fullPage: true });
     await page.reload(); await expect(page.getByRole('region', { name: 'Blackjack table', exact: true })).toBeVisible(); await synced(final.revision + 1);
     expect(latest.get(page)!.you).toBe(identities[0]); expect(latest.get(page)!.players).toHaveLength(4);

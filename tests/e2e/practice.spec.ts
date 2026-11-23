@@ -158,7 +158,7 @@ test('deal and flip order is staggered and the dealer hole card flips in place',
     flip.pause(); flip.currentTime = Number(flip.effect!.getTiming().delay) + 160;
   });
   await page.screenshot({ path: testInfo.outputPath('dealer-flip.png'), fullPage: true });
-  await expect(page.getByRole('status')).toContainText('chips');
+  await expect(page.getByRole('heading', { name: 'Round lost · −10 chips', exact: true })).toBeVisible();
   expect(await own.first().boundingBox()).toEqual(cardBounds);
   await expectOneScreen(page);
 });
