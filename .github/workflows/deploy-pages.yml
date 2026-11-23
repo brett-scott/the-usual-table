@@ -58,6 +58,8 @@ jobs:
           path: apps/web/dist
   deploy:
     needs: build
+    # The Worker pipeline reuses its checks, so the Pages checks job may be skipped.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
