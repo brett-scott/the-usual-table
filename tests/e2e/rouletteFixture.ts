@@ -8,6 +8,7 @@ import { accountId,providerFixture } from './authFixture';
 export async function rouletteFixture(page:Page,{saved=false,players=1}:{saved?:boolean;players?:number}={}){
   if(saved)await providerFixture(page,'google','success','Roulette pilot');
   const roomId='b'.repeat(32);const playerId='pilot';let time=Date.now();let available=1000000;let created=false;let returns=0;
+  let clockSentAt=Date.now();
   let room:RouletteRoom=rouletteRoomAdapter.create({roomId,player:{id:playerId,name:saved?'Roulette pilot':'Pilot',seat:0},credentialHash:'c'.repeat(64),now:time,random:n=>n-1});
   const sockets=new Set<WebSocketRoute>();let holdingUpdates=false;let holdingCommands=false;let rejection:string|null=null;
   const queued:{socket:WebSocketRoute;raw:string}[]=[];let receivedBets=0;let chosen=0;
@@ -18,7 +19,12 @@ export async function rouletteFixture(page:Page,{saved=false,players=1}:{saved?:
     atTablesUnits:created?room.engine.players[0]!.balanceUnits+(['betting','spinning'].includes(room.engine.phase)?rouletteWagerUnits(room.engine.players[0]!.wager)-room.engine.players[0]!.returnedUnits:0):0,pendingReturnUnits:0});
   function snapshot(){const value=rouletteSnapshot(room,playerId,{now:time,capabilities:[ROULETTE_REPLAY_CAPABILITY,ROULETTE_RESULT_TIMING_CAPABILITY]});if(saved){value.wallet={status:'active',error:null};value.legalActions=value.legalActions.filter(a=>a!=='Refill');}return value;}
   const session={inviteId:roomId,playerId,credential:'d'.repeat(64),...(saved?{funding:'account' as const}:{})};
-  function broadcast(){if(holdingUpdates)return;for(const socket of sockets)socket.send(JSON.stringify({type:'game-snapshot',protocol:1,gameId:'roulette',adapterVersion:1,snapshot:snapshot(),serverTime:time}));}
+  const currentServerTime=()=>time+Date.now()-clockSentAt;
+  function broadcast(serverTime?:number){
+    if(holdingUpdates)return;
+    if(serverTime===undefined){clockSentAt=Date.now();serverTime=time;}
+    for(const socket of sockets)socket.send(JSON.stringify({type:'game-snapshot',protocol:1,gameId:'roulette',adapterVersion:1,snapshot:snapshot(),serverTime}));
+  }
   function commandMessage(socket:WebSocketRoute,raw:string){
     const envelope=JSON.parse(raw);expect(envelope.gameId).toBe('roulette');const command=rouletteRoomAdapter.parseCommand(envelope.command);
     if(command.action.type==='PlaceBet')receivedBets++;
@@ -48,13 +54,14 @@ export async function rouletteFixture(page:Page,{saved=false,players=1}:{saved?:
     sockets.add(socket);socket.onClose(()=>sockets.delete(socket));
     socket.send(JSON.stringify({type:'connected',controllerId:'11111111-1111-4111-8111-111111111111',serverTime:time}));broadcast();socket.send(JSON.stringify({type:'chat',messages:[]}));
     socket.onMessage(raw=>{
-      if(raw==='ping'){socket.send(JSON.stringify({type:'pong',serverTime:time}));return;}if(raw==='snapshot'){broadcast();return;}
+      if(raw==='ping'){socket.send(JSON.stringify({type:'pong',serverTime:currentServerTime()}));return;}if(raw==='snapshot'){broadcast(currentServerTime());return;}
       if(holdingCommands){queued.push({socket,raw:String(raw)});return;}commandMessage(socket,String(raw));
     });
   });
   return{wallet,returns:()=>returns,state:()=>snapshot(),
     holdCommands(){holdingCommands=true;},releaseCommands(){holdingCommands=false;for(const item of queued.splice(0))commandMessage(item.socket,item.raw);},pendingCommands:()=>queued.length,receivedBets:()=>receivedBets,rejectNextBet(message:string){rejection=message;},
     holdUpdates(){holdingUpdates=true;},resumeUpdates(){holdingUpdates=false;broadcast();},
+    resyncClock(serverTime:number){room={...room,revision:room.revision+1};broadcast(serverTime);return room.revision;},
     arrange(winner:number){chosen=winner;},
     advance(ms:number){time+=ms;room=rouletteRoomAdapter.expire(room,()=>chosen,time);broadcast();},
     finish(){

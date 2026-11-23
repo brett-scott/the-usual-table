@@ -22,14 +22,21 @@ export function RouletteTable({client,actions:{send,busy,error}}:{client:TableCl
  const controller=useMemo(()=>new RouletteBettingController(client),[client]);const bets=useSyncExternalStore(controller.subscribe,controller.getSnapshot);useEffect(()=>controller.start(),[controller]);
  const [now,setNow]=useState(Date.now()),[chip,setChip]=useState<RouletteChip>(10),[tab,setTab]=useState('numbers'),[group,setGroup]=useState<typeof groups[number]>('split'),[page,setPage]=useState(0),[menu,setMenu]=useState('rules');
  const [landscape,setLandscape]=useState(()=>window.matchMedia(SHORT_LANDSCAPE_QUERY).matches),[reduced,setReduced]=useState(()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches);
- const [landedRound,setLandedRound]=useState<number|null>(null);const options=useRef<HTMLDialogElement>(null);
+ const [landedRound,setLandedRound]=useState<number|null>(null);
+ const [resultClock,setResultClock]=useState<{roundId:number;offset:number}|null>(null);
+ const options=useRef<HTMLDialogElement>(null);
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),100);const small=window.matchMedia(SHORT_LANDSCAPE_QUERY),motion=window.matchMedia('(prefers-reduced-motion: reduce)');const change=()=>{setLandscape(small.matches);setReduced(motion.matches);};small.addEventListener('change',change);motion.addEventListener('change',change);return()=>{clearInterval(timer);small.removeEventListener('change',change);motion.removeEventListener('change',change);};},[]);
  const own=state.players.find(p=>p.id===state.you)!,connected=connection.status==='connected',result=state.phase==='results',betting=state.phase==='betting';
  const isHost=state.managerId===own.id;
  const offset=connection.clockOffsetMs;
- const serverNow=now+(offset??0);
  const landAt=state.resultsDeadline===null?null:state.landAt??state.resultsDeadline-ROULETTE_LEGACY_RESULT_HOLD_MS;
  const landed = result && landedRound === state.roundId;
+ const clockOffset = offset ?? 0;
+ const previousResultOffset = resultClock?.roundId === state.roundId ? resultClock.offset : undefined;
+ const resultOffset = Math.max(clockOffset, previousResultOffset ?? clockOffset);
+ // Clock resynchronization can advance a settled result. An older sample must not replay its wheel hold.
+ if (landed && resultOffset !== previousResultOffset) setResultClock({roundId:state.roundId,offset:resultOffset});
+ const serverNow = now + (landed ? resultOffset : clockOffset);
  const holdingResult = landed && landAt !== null && serverNow < landAt + ROULETTE_WHEEL_RESULT_MS;
  const wheelFocus = state.phase === 'spinning' || (result && (!landed || holdingResult));
  const boardWinner = landed && !holdingResult ? state.winner : null;

@@ -31,7 +31,6 @@ test('the next spin countdown starts at landing and shows the winning tiles for 
   const holdObserver=new MutationObserver(()=>{
    times.push(performance.now());
    ballObserver.disconnect();
-   if(times.length===2)holdObserver.disconnect();
   });
   holdObserver.observe(document.querySelector('[data-phase]')!,{attributes:true,attributeFilter:['data-result-hold']});
  });
@@ -58,6 +57,11 @@ test('the next spin countdown starts at landing and shows the winning tiles for 
  await expect(tile(page,'straight-1')).toHaveAttribute('data-winning','true');
  await expect(tile(page,'straight-2')).toHaveAttribute('data-winning','false');
  await expect(tile(page,'straight-1')).toBeDisabled();
+ const correctedRevision=f.resyncClock(f.state().landAt!+ROULETTE_WHEEL_RESULT_MS-750);
+ await expect(page.locator('[data-phase]')).toHaveAttribute('data-revision',String(correctedRevision));
+ expect(await page.evaluate(()=>(window as Window&{rouletteHoldTimes?:number[]}).rouletteHoldTimes)).toHaveLength(2);
+ await expect(board(page)).toBeVisible();
+ await expect(nextSpin).toContainText(/^[0-7]s/);
  await expect(page.getByRole('img',{name:'Roulette wheel, winning number 1'})).toBeVisible();await fit(page);await page.screenshot({path:info.outputPath('roulette-restored-table.png')});
  // Reopening a table during the board result keeps the shared countdown and highlights.
  f.advance(ROULETTE_RESULTS_MS-1000);await page.reload();
@@ -126,16 +130,46 @@ const spinOutcome=(page:Page)=>page.getByRole('region',{name:'Roulette game',exa
 const tile=(page:Page,id:string)=>page.locator(`[data-bet-tile="${id}"]`).filter({visible:true});
 async function placed(page:Page,id:string,units:number){await tile(page,id).click();await expect(tile(page,id)).toHaveAttribute('data-amount',String(units));await expect(board(page)).toHaveAttribute('data-pending','false');}
 async function chip(page:Page,value:number){await page.getByRole('button',{name:`Select ${value.toLocaleString('en')} chips`,exact:true}).click();}
-async function fit(page:Page){const size=page.viewportSize()!;expect(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight+1&&document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
- for(const name of ['Roulette game','Roulette betting table','Game controls']){const el=page.getByRole('region',{name,exact:true,includeHidden:true});if(name==='Roulette betting table'&&!await el.isVisible()){await expect(page.locator('[data-phase]')).toHaveAttribute('data-wheel-focus','true');continue;}const box=(await el.boundingBox())!;expect(box.x).toBeGreaterThanOrEqual(0);expect(box.y).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(size.width+1);expect(box.y+box.height).toBeLessThanOrEqual(size.height+1);const dims=await el.evaluate(e=>({h:e.clientHeight,sh:e.scrollHeight,w:e.clientWidth,sw:e.scrollWidth}));expect(dims.sh,`${name}: ${JSON.stringify(dims)}`).toBeLessThanOrEqual(dims.h+1);expect(dims.sw).toBeLessThanOrEqual(dims.w+1);}
- // Measure every visible target together so the full desktop board needs one browser round trip.
- const targets=await board(page).getByRole('button').evaluateAll(buttons=>buttons.flatMap(button=>{
-  const box=button.getBoundingClientRect(),visibility=getComputedStyle(button).visibility;if(box.width===0||box.height===0||visibility==='hidden'||visibility==='collapse')return[];
-  const small=button.hasAttribute('data-inside-spot')&&button.closest('[data-number-layout]')?.getAttribute('data-number-layout')==='wide';
-  return[{name:button.getAttribute('aria-label')??button.textContent?.trim(),height:box.height,bottom:box.bottom,minimum:small?18:44}];
- }));
- for(const target of targets){expect(target.height,`${target.name}: betting controls retain usable targets`).toBeGreaterThanOrEqual(target.minimum);expect(target.bottom,`${target.name}: betting control fits the screen`).toBeLessThanOrEqual(size.height+1);}
- const wheel=page.getByRole('img',{name:/Roulette wheel|European single-zero/});const bounds=(await wheel.boundingBox())!;expect(bounds.width).toBeGreaterThanOrEqual(45);expect(bounds.height).toBeGreaterThanOrEqual(45);
+async function fit(page:Page) {
+ const layout = await page.evaluate(() => {
+  const table = document.querySelector('[data-game-table="roulette"]');
+  if (!table) throw new Error('Roulette table is missing');
+  const regions = ['Roulette game','Roulette betting table','Game controls'].map(name => {
+   const element = table.querySelector(`section[aria-label="${name}"]`);
+   if (!element) throw new Error(`${name} is missing`);
+   const { x, y, right, bottom, width, height } = element.getBoundingClientRect();
+   return { name, bounds: { x, y, right, bottom }, visible: width > 0 && height > 0 && getComputedStyle(element).visibility === 'visible',
+    width: element.clientWidth, scrollWidth: element.scrollWidth, height: element.clientHeight, scrollHeight: element.scrollHeight };
+  });
+  const targets = [...table.querySelectorAll('section[aria-label="Roulette betting table"] button')].flatMap(button => {
+   const bounds = button.getBoundingClientRect();
+   if (!bounds.width || !bounds.height || getComputedStyle(button).visibility !== 'visible') return [];
+   const small = button.hasAttribute('data-inside-spot') && button.closest('[data-number-layout]')?.getAttribute('data-number-layout') === 'wide';
+   return [{ name: button.getAttribute('aria-label') ?? button.textContent?.trim(), height: bounds.height, bottom: bounds.bottom, minimum: small ? 18 : 44 }];
+  });
+  const wheel = table.querySelector('svg[role="img"][aria-label*="Roulette wheel"]')?.getBoundingClientRect();
+  return { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight,
+   wheelFocus: table.getAttribute('data-wheel-focus') === 'true', regions, targets, wheel: wheel ? { width: wheel.width, height: wheel.height } : null };
+ });
+ expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width+1);
+ expect(layout.scrollHeight).toBeLessThanOrEqual(layout.height+1);
+ for (const region of layout.regions) {
+  const hidden = region.name === 'Roulette betting table' && layout.wheelFocus;
+  expect(region.visible, `${region.name} visibility in ${layout.wheelFocus ? 'wheel' : 'table'} view`).toBe(!hidden);
+  if (hidden) continue;
+  expect(region.bounds.x).toBeGreaterThanOrEqual(0);
+  expect(region.bounds.y).toBeGreaterThanOrEqual(0);
+  expect(region.bounds.right).toBeLessThanOrEqual(layout.width+1);
+  expect(region.bounds.bottom).toBeLessThanOrEqual(layout.height+1);
+  expect(region.scrollHeight, `${region.name}: ${JSON.stringify(region)}`).toBeLessThanOrEqual(region.height+1);
+  expect(region.scrollWidth).toBeLessThanOrEqual(region.width+1);
+ }
+ for (const target of layout.targets) {
+  expect(target.height, `${target.name}: betting controls retain usable targets`).toBeGreaterThanOrEqual(target.minimum);
+  expect(target.bottom, `${target.name}: betting control fits the screen`).toBeLessThanOrEqual(layout.height+1);
+ }
+ expect(layout.wheel?.width, 'Roulette wheel width').toBeGreaterThanOrEqual(45);
+ expect(layout.wheel?.height, 'Roulette wheel height').toBeGreaterThanOrEqual(45);
 }
 test('chip stacking, Undo, Clear, group and outside bets, spin and win fit desktop and compact screens',async({page},info)=>{
  const f=await rouletteFixture(page,{players:8});await open(page);if(info.project.name==='iphone16')await page.setViewportSize({width:393,height:659});await fit(page);await page.screenshot({path:info.outputPath('roulette-numbers.png')});await page.getByRole('button',{name:'Start rounds'}).click();await expect(page.getByRole('timer',{name:'Betting countdown'})).toContainText('15s');await placed(page,'straight-0',1000);await placed(page,'straight-0',2000);await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(tile(page,'straight-0')).toHaveAttribute('data-amount','1000');await expect(board(page)).toHaveAttribute('data-pending','false');
